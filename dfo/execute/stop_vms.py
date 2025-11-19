@@ -1,0 +1,1 @@
+"""VM stop/deallocate executor stub."""

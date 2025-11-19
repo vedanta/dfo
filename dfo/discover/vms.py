@@ -1,0 +1,1 @@
+"""VM discovery orchestrator stub."""

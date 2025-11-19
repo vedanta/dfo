@@ -1,0 +1,1 @@
+"""Idle VM analyzer stub."""

@@ -1,0 +1,21 @@
+name: dfo
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.10
+  - duckdb
+  - pip
+  - pip:
+      - typer[all]
+      - rich
+      - python-dotenv
+      - pydantic
+      - pydantic-settings
+      - azure-identity
+      - azure-mgmt-compute
+      - azure-mgmt-resource
+      - azure-mgmt-resourcegraph
+      - azure-mgmt-costmanagement
+      - azure-mgmt-monitor
+      - azure-mgmt-advisor
