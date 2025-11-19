@@ -32,16 +32,58 @@ Copy `.env.example` to `.env` and configure:
 
 ### Running the CLI
 
-```bash
-# The CLI entry point is defined in pyproject.toml as 'dfo'
-dfo
+You can run the CLI in three ways:
 
-# Future commands (per architecture):
-dfo azure discover vms
-dfo azure analyze idle-vms
-dfo azure report idle-vms
-dfo azure execute stop-idle-vms
+```bash
+# 1. Using the wrapper script (easiest from root directory)
+./dfo.sh version
+./dfo.sh db init
+
+# 2. Using Python module directly
+python -m dfo.cli version
+python -m dfo.cli db init
+
+# 3. After pip install -e . (CLI entry point: dfo.cli:run)
+dfo version
+dfo db init
 ```
+
+### CLI Commands
+
+```bash
+# Top-level commands
+./dfo.sh version                 # Show version
+./dfo.sh config                  # Show configuration
+./dfo.sh config --show-secrets   # Show config with unmasked secrets
+
+# Database commands
+./dfo.sh db init                 # Initialize database
+./dfo.sh db refresh              # Drop and recreate tables
+./dfo.sh db refresh --yes        # Skip confirmation
+./dfo.sh db info                 # Show database stats
+
+# Azure commands (to be implemented in Milestone 2)
+./dfo.sh azure discover
+./dfo.sh azure analyze
+./dfo.sh azure report
+./dfo.sh azure report --format json
+./dfo.sh azure execute
+./dfo.sh azure execute --no-dry-run
+```
+
+### CLI Organization Principles
+
+The CLI follows a modular organization pattern:
+
+1. **Separate Files**: Each command group has its own file in `cmd/`
+2. **Comprehensive Help**: All commands include detailed docstrings with examples
+3. **Main Assembly**: `cli.py` imports and registers all command modules
+4. **Consistent Testing**: Each command module has a corresponding test file
+
+**Adding New Commands:**
+1. Create command file in `dfo/cmd/new_command.py`
+2. Import and register in `dfo/cli.py`
+3. Create test file `dfo/tests/test_cmd_new_command.py`
 
 ### Testing
 
@@ -77,7 +119,12 @@ Each stage is isolated, testable, and writes to DuckDB tables. Stages never dire
 
 ```
 dfo/
-  cli/            – Typer CLI commands and entrypoints
+  cli.py          – Main CLI entry point (assembles all commands)
+  cmd/            – CLI command modules (modular organization)
+    version.py    – Version command
+    config.py     – Config command
+    db.py         – Database management commands (init, refresh, info)
+    azure.py      – Azure commands (discover, analyze, report, execute)
   core/           – config, auth, shared models
   providers/      – cloud provider SDK integrations
     azure/        – Azure SDK wrappers (compute, monitor, cost, advisor, resource_graph)
@@ -86,7 +133,7 @@ dfo/
   report/         – console/JSON reporting (reads from vm_idle_analysis)
   execute/        – remediation execution (writes to vm_actions table)
   db/             – DuckDB engine, schema.sql, connection helpers
-  tests/          – pytest test suite
+  tests/          – pytest test suite (one test file per module)
 ```
 
 ### DuckDB Tables
@@ -169,12 +216,80 @@ The project follows a phased roadmap:
 - **Phase 4**: Pipeline & automation (YAML pipelines, scheduling, notifications)
 - **Phase 5**: Platform layer (web dashboard, REST API, LLM assistant)
 
-Currently in Phase 1 implementation.
+### Current Status: Phase 1 (MVP)
+
+Phase 1 is broken into 7 incremental milestones (see MVP.md for full details):
+
+1. **Foundation & Infrastructure** - Config, DuckDB, models, CLI skeleton
+2. **Authentication & Azure Provider** - Azure auth, client factory
+3. **Discovery Layer** - VM discovery, CPU metrics, DuckDB storage
+4. **Analysis Layer** - Idle detection, savings calculation
+5. **Reporting Layer** - Console and JSON reports
+6. **Execution Layer** - Safe VM stop/deallocate with dry-run
+7. **Polish & Documentation** - Testing, error handling, documentation
+
+Each milestone has clear deliverables, testing requirements, and exit criteria.
+
+## Code Style & Standards
+
+**All code MUST follow the standards defined in CODE_STYLE.md.**
+
+### Key Principles
+- **Explicit > Implicit**: No hidden magic or side effects
+- **Small modules** (≤ 250 lines) and **small functions** (≤ 40 lines)
+- **Rule of One**: Each module has exactly one responsibility
+- **No circular imports**: Follow dependency direction (core → providers → discover → analyze → report → execute → cli)
+- **Strong typing**: All functions have type hints; all cross-layer data uses Pydantic models
+
+### Naming Conventions
+- **Files/Modules**: `snake_case.py` (e.g., `idle_vms.py`)
+- **Classes**: `CamelCase` (e.g., `VMInventory`, `DuckDBManager`)
+- **Functions**: `snake_case` verbs (e.g., `list_vms()`, `get_cpu_metrics()`)
+- **Environment Variables**: `ALL_CAPS` with `DFO_` prefix (e.g., `DFO_IDLE_CPU_THRESHOLD`)
+
+### Import Order
+```python
+# Standard library
+import os
+from pathlib import Path
+
+# Third-party
+import typer
+from pydantic import BaseModel
+
+# Internal (dfo modules)
+from dfo.core.config import get_settings
+from dfo.db.duck import get_db
+```
+
+### Error Handling
+- **Fail fast** with actionable messages
+- **Never swallow exceptions**
+- Tell users what to do: `"Database not found. Run 'dfo db init' to create it."`
+
+### Layer Responsibilities
+
+| Layer | Must Do | Must NOT Do |
+|-------|---------|-------------|
+| `core` | Config, auth, models | No provider calls, no DB writes |
+| `providers` | Call cloud SDKs only | No analysis, no DB writes |
+| `discover` | Collect raw data → DuckDB | No analysis logic |
+| `analyze` | Pure FinOps logic | No cloud calls, no DB writes directly |
+| `report` | Render outputs | No analysis, no cloud calls |
+| `execute` | Apply actions → DuckDB | No discovery |
+| `db` | Read/write DuckDB only | No cloud logic, no analysis |
+| `cli/cmd` | Orchestrate commands | No business logic |
+
+See CODE_STYLE.md for complete specifications.
 
 ## Important Notes
 
 - All file paths in code must use absolute paths or paths relative to the project root
-- DuckDB file path is configured via `DUCKDB_FILE` environment variable
+- DuckDB file path is configured via `DFO_DUCKDB_FILE` environment variable
+- **All DFO-specific environment variables use `DFO_` prefix** (e.g., `DFO_IDLE_CPU_THRESHOLD`, `DFO_DUCKDB_FILE`)
+- External SDK variables (e.g., `AZURE_TENANT_ID`) keep their standard names
 - The CLI uses Typer with cloud-first grouping (`dfo azure ...`)
 - JSON fields in DuckDB store complex data (tags, CPU timeseries)
 - The system is designed to be local-first (no external infrastructure required)
+- Use Python `logging` module (not `print()`) in all modules except CLI commands
+- CLI commands use Rich console for output

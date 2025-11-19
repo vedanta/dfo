@@ -4,4 +4,4 @@ version="0.0.2"
 requires-python=">=3.10"
 
 [project.scripts]
-dfo="dfo.cli.main:run"
+dfo="dfo.cli:run"
