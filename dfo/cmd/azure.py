@@ -13,6 +13,16 @@ def discover(
     resource: str = typer.Argument(
         ...,
         help="Resource type to discover (e.g., 'vms')"
+    ),
+    refresh: bool = typer.Option(
+        True,
+        "--refresh/--no-refresh",
+        help="Clear existing inventory before discovery"
+    ),
+    subscription_id: str = typer.Option(
+        None,
+        "--subscription",
+        help="Azure subscription ID (uses config default if not specified)"
     )
 ):
     """Discover Azure resources and store in database.
@@ -23,13 +33,79 @@ def discover(
     Supported resource types:
     - vms: Virtual machines with CPU metrics
 
-    This command will be implemented in Milestone 3.
-
     Example:
         dfo azure discover vms
+        dfo azure discover vms --no-refresh
+        dfo azure discover vms --subscription abc-123
     """
-    console.print(f"[yellow]TODO:[/yellow] Discover Azure {resource}")
-    console.print("This command will be implemented in Milestone 3")
+    if resource != "vms":
+        console.print(f"[red]Error:[/red] Unsupported resource type: {resource}")
+        console.print("Supported types: vms")
+        raise typer.Exit(1)
+
+    try:
+        from rich.progress import Progress, SpinnerColumn, TextColumn
+        from rich.table import Table
+        from rich.panel import Panel
+        from dfo.discovery.vms import discover_vms
+        from dfo.rules import get_rule_engine
+
+        # Show rule context
+        engine = get_rule_engine()
+        idle_rule = engine.get_rule_by_type("Idle VM Detection")
+
+        console.print("\n[cyan]Starting VM discovery...[/cyan]")
+        console.print(f"[dim]Using rule:[/dim] {idle_rule.type}")
+        console.print(f"[dim]Collection period:[/dim] {idle_rule.period_days} days")
+        console.print(f"[dim]Metric:[/dim] {idle_rule.providers['azure']}\n")
+
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            console=console
+        ) as progress:
+            task = progress.add_task("Discovering VMs...", total=None)
+
+            # Run discovery
+            inventory = discover_vms(
+                subscription_id=subscription_id,
+                refresh=refresh
+            )
+
+            progress.update(task, description="✓ Discovery complete")
+
+        # Display summary
+        summary = Table.grid(padding=(0, 2))
+        summary.add_column(style="cyan", justify="right")
+        summary.add_column(style="green")
+
+        summary.add_row("VMs discovered:", str(len(inventory)))
+        summary.add_row(
+            "VMs with metrics:",
+            str(sum(1 for vm in inventory if vm.cpu_timeseries))
+        )
+        summary.add_row(
+            "VMs without metrics:",
+            str(sum(1 for vm in inventory if not vm.cpu_timeseries))
+        )
+        summary.add_row(
+            "Lookback period:",
+            f"{idle_rule.period_days} days"
+        )
+
+        console.print("\n")
+        console.print(Panel(
+            summary,
+            title="[bold]Discovery Summary[/bold]",
+            border_style="green"
+        ))
+        console.print("\n[green]✓[/green] VM inventory updated in database\n")
+
+    except Exception as e:
+        console.print(f"\n[red]✗ Discovery failed:[/red] {e}\n")
+        import traceback
+        traceback.print_exc()
+        raise typer.Exit(1)
 
 
 @app.command()

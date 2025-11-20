@@ -8,6 +8,7 @@ Per CODE_STYLE.md:
 - No business logic
 """
 from typing import List, Dict, Any
+from datetime import datetime, timedelta
 
 # Third-party
 from azure.mgmt.monitor import MonitorManagementClient
@@ -23,15 +24,42 @@ def get_cpu_metrics(
     Args:
         client: MonitorManagementClient instance.
         resource_id: Full Azure resource ID of the VM.
-        days: Number of days of metrics to retrieve.
+        days: Number of days of metrics to retrieve (default 14).
 
     Returns:
-        List of metric data points with timestamps and values.
+        List of metric dictionaries:
+        - timestamp: ISO format timestamp
+        - average: Average CPU percentage (0-100)
+        - minimum: Minimum CPU percentage (optional)
+        - maximum: Maximum CPU percentage (optional)
 
-    Note:
-        This is a stub implementation for Milestone 2.
-        Full implementation in Milestone 3.
+    Raises:
+        Exception: If Azure API call fails or no metrics available.
     """
-    # Stub: return empty list
-    # Milestone 3 will implement actual metric retrieval
-    return []
+    # Calculate time range
+    end_time = datetime.utcnow()
+    start_time = end_time - timedelta(days=days)
+
+    # Query CPU metrics
+    metrics_data = client.metrics.list(
+        resource_uri=resource_id,
+        timespan=f"{start_time.isoformat()}/{end_time.isoformat()}",
+        interval='PT1H',  # 1-hour granularity
+        metricnames='Percentage CPU',
+        aggregation='Average,Minimum,Maximum'
+    )
+
+    # Transform to simple dict format
+    results = []
+    for metric in metrics_data.value:
+        for timeseries in metric.timeseries:
+            for data in timeseries.data:
+                if data.average is not None:  # Skip null data points
+                    results.append({
+                        "timestamp": data.time_stamp.isoformat(),
+                        "average": data.average,
+                        "minimum": data.minimum,
+                        "maximum": data.maximum
+                    })
+
+    return results

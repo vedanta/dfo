@@ -20,15 +20,55 @@ def list_vms(client: ComputeManagementClient) -> List[Dict[str, Any]]:
         client: ComputeManagementClient instance.
 
     Returns:
-        List of VM dictionaries with basic metadata.
+        List of VM dictionaries with metadata:
+        - vm_id: Full Azure resource ID
+        - name: VM name
+        - resource_group: Resource group name
+        - location: Azure region
+        - size: VM size (e.g., "Standard_D2s_v3")
+        - power_state: Current power state (running/stopped/deallocated/unknown)
+        - tags: Resource tags dict
 
-    Note:
-        This is a stub implementation for Milestone 2.
-        Full implementation in Milestone 3.
+    Raises:
+        Exception: If Azure API call fails.
     """
-    # Stub: return empty list
-    # Milestone 3 will implement actual VM listing
-    return []
+    vms = []
+
+    # List all VMs across subscription
+    for vm in client.virtual_machines.list_all():
+        # Extract resource group from resource ID
+        # Format: /subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.Compute/virtualMachines/{name}
+        resource_group = vm.id.split('/')[4]
+
+        # Get instance view for power state
+        try:
+            instance_view = client.virtual_machines.instance_view(
+                resource_group_name=resource_group,
+                vm_name=vm.name
+            )
+
+            # Extract power state from statuses
+            power_state = "unknown"
+            if instance_view.statuses:
+                for status in instance_view.statuses:
+                    if status.code and status.code.startswith('PowerState/'):
+                        power_state = status.code.split('/')[-1].lower()
+                        break
+        except Exception:
+            # If instance view fails, continue with unknown power state
+            power_state = "unknown"
+
+        vms.append({
+            "vm_id": vm.id,
+            "name": vm.name,
+            "resource_group": resource_group,
+            "location": vm.location,
+            "size": vm.hardware_profile.vm_size,
+            "power_state": power_state,
+            "tags": vm.tags or {}
+        })
+
+    return vms
 
 
 def stop_vm(
