@@ -1,1 +1,1 @@
-"""MVP scaffold: dfo.providers.azure"""
+"""Azure provider package."""
