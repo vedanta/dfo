@@ -2,6 +2,7 @@
 
 CREATE TABLE IF NOT EXISTS vm_inventory (
     vm_id TEXT,
+    subscription_id TEXT,
     name TEXT,
     resource_group TEXT,
     location TEXT,

@@ -45,6 +45,7 @@ def test_vm_inventory_to_db_record():
     """Test VMInventory serialization to DB record."""
     inventory = VMInventory(
         vm_id="test-id",
+        subscription_id="test-subscription",
         name="test-vm",
         resource_group="test-rg",
         location="eastus",
@@ -56,6 +57,7 @@ def test_vm_inventory_to_db_record():
 
     record = inventory.to_db_record()
     assert record["vm_id"] == "test-id"
+    assert record["subscription_id"] == "test-subscription"
     assert record["name"] == "test-vm"
     assert "tags" in record
     assert "cpu_timeseries" in record
@@ -145,6 +147,7 @@ def test_vm_inventory_default_discovered_at():
     """Test that discovered_at has a default value."""
     inventory = VMInventory(
         vm_id="test-id",
+        subscription_id="test-subscription",
         name="test-vm",
         resource_group="test-rg",
         location="eastus",

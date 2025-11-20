@@ -35,6 +35,7 @@ def test_azure_discover_vms_success(setup_env):
     mock_inventory = [
         VMInventory(
             vm_id="/subscriptions/sub1/resourceGroups/rg1/providers/Microsoft.Compute/virtualMachines/vm1",
+            subscription_id="sub1",
             name="vm1",
             resource_group="rg1",
             location="eastus",
@@ -46,6 +47,7 @@ def test_azure_discover_vms_success(setup_env):
         ),
         VMInventory(
             vm_id="/subscriptions/sub1/resourceGroups/rg1/providers/Microsoft.Compute/virtualMachines/vm2",
+            subscription_id="sub1",
             name="vm2",
             resource_group="rg1",
             location="eastus",
@@ -183,6 +185,7 @@ def test_azure_discover_no_refresh(setup_env):
     mock_inventory = [
         VMInventory(
             vm_id="/subscriptions/sub1/resourceGroups/rg1/providers/Microsoft.Compute/virtualMachines/vm1",
+            subscription_id="sub1",
             name="vm1",
             resource_group="rg1",
             location="eastus",
@@ -223,6 +226,7 @@ def test_azure_discover_custom_subscription(setup_env):
     mock_inventory = [
         VMInventory(
             vm_id="/subscriptions/custom-sub/resourceGroups/rg1/providers/Microsoft.Compute/virtualMachines/vm1",
+            subscription_id="custom-sub",
             name="vm1",
             resource_group="rg1",
             location="westus",

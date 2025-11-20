@@ -65,6 +65,7 @@ def test_insert_and_fetch(test_db):
     records = [
         {
             "vm_id": "vm1",
+            "subscription_id": "test-sub",
             "name": "test-vm-1",
             "resource_group": "rg1",
             "location": "eastus",
@@ -76,6 +77,7 @@ def test_insert_and_fetch(test_db):
         },
         {
             "vm_id": "vm2",
+            "subscription_id": "test-sub",
             "name": "test-vm-2",
             "resource_group": "rg1",
             "location": "westus",
@@ -93,7 +95,7 @@ def test_insert_and_fetch(test_db):
 
     results = test_db.fetch_all("SELECT * FROM vm_inventory ORDER BY name")
     assert len(results) == 2
-    assert results[0][1] == "test-vm-1"  # name column
+    assert results[0][2] == "test-vm-1"  # name column (shifted by 1 due to subscription_id)
 
 
 def test_clear_table(test_db):
@@ -101,6 +103,7 @@ def test_clear_table(test_db):
     records = [
         {
             "vm_id": "vm1",
+            "subscription_id": "test-sub",
             "name": "test-vm",
             "resource_group": "rg1",
             "location": "eastus",
@@ -124,6 +127,7 @@ def test_schema_refresh(test_db):
     # Insert some data
     records = [{
         "vm_id": "vm1",
+        "subscription_id": "test-sub",
         "name": "test-vm",
         "resource_group": "rg1",
         "location": "eastus",

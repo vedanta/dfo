@@ -60,6 +60,7 @@ class VM(BaseModel):
 class VMInventory(BaseModel):
     """VM inventory with metrics for storage in DuckDB."""
     vm_id: str
+    subscription_id: str
     name: str
     resource_group: str
     location: str
@@ -78,6 +79,7 @@ class VMInventory(BaseModel):
         import json
         return {
             "vm_id": self.vm_id,
+            "subscription_id": self.subscription_id,
             "name": self.name,
             "resource_group": self.resource_group,
             "location": self.location,

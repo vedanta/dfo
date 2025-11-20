@@ -57,6 +57,7 @@ def test_full_setup_flow(integration_env):
     # 4. Insert test data using models
     inventory = VMInventory(
         vm_id="test-vm-1",
+        subscription_id="test-sub",
         name="integration-test-vm",
         resource_group="test-rg",
         location="eastus",
@@ -86,6 +87,7 @@ def test_full_analysis_flow(integration_env):
     # 1. Insert VM inventory
     inventory = VMInventory(
         vm_id="vm-idle-1",
+        subscription_id="test-sub",
         name="idle-vm",
         resource_group="test-rg",
         location="eastus",
@@ -131,6 +133,7 @@ def test_multiple_records_workflow(integration_env):
     inventories = [
         VMInventory(
             vm_id=f"vm-{i}",
+            subscription_id="test-sub",
             name=f"test-vm-{i}",
             resource_group="test-rg",
             location="eastus",
@@ -165,6 +168,7 @@ def test_schema_refresh_workflow(integration_env):
     # Insert data
     inventory = VMInventory(
         vm_id="test-vm",
+        subscription_id="test-sub",
         name="test",
         resource_group="rg",
         location="eastus",

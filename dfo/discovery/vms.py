@@ -83,6 +83,7 @@ def discover_vms(
             # Create VMInventory model
             vm_inventory = VMInventory(
                 vm_id=vm_data["vm_id"],
+                subscription_id=sub_id,
                 name=vm_data["name"],
                 resource_group=vm_data["resource_group"],
                 location=vm_data["location"],
@@ -103,6 +104,7 @@ def discover_vms(
             # Still add VM without metrics
             vm_inventory = VMInventory(
                 vm_id=vm_data["vm_id"],
+                subscription_id=sub_id,
                 name=vm_data["name"],
                 resource_group=vm_data["resource_group"],
                 location=vm_data["location"],
