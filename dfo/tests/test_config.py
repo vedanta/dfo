@@ -24,10 +24,16 @@ def test_settings_defaults():
     assert settings.dfo_log_level == "INFO"
 
 
-def test_settings_validation():
+def test_settings_validation(monkeypatch):
     """Test that missing required fields raise errors."""
+    # Clear Azure env vars to ensure validation fails
+    monkeypatch.delenv("AZURE_TENANT_ID", raising=False)
+    monkeypatch.delenv("AZURE_CLIENT_ID", raising=False)
+    monkeypatch.delenv("AZURE_CLIENT_SECRET", raising=False)
+    monkeypatch.delenv("AZURE_SUBSCRIPTION_ID", raising=False)
+
     with pytest.raises(ValidationError) as exc_info:
-        Settings(dfo_duckdb_file="test.db")
+        Settings(dfo_duckdb_file="test.db", _env_file=None)
 
     # Should complain about missing azure_* fields
     assert "azure_tenant_id" in str(exc_info.value)

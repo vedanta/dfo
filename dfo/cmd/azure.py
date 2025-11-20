@@ -143,3 +143,63 @@ def execute(
     console.print(f"[yellow]Mode:[/yellow] {'DRY RUN' if dry_run else 'LIVE'}")
     console.print(f"[yellow]Min Severity:[/yellow] {min_severity}")
     console.print("This command will be implemented in Milestone 6")
+
+
+@app.command(name="test-auth")
+def test_auth():
+    """Test Azure authentication and client creation.
+
+    This command verifies that:
+    - Azure credentials are configured correctly
+    - Authentication succeeds
+    - SDK clients can be instantiated
+
+    Useful for validating Milestone 2 setup.
+
+    Example:
+        ./dfo.sh azure test-auth
+    """
+    from dfo.core.config import get_settings
+    from dfo.core.auth import get_azure_credential, AzureAuthError
+    from dfo.providers.azure.client import get_compute_client, get_monitor_client
+    from rich.panel import Panel
+
+    try:
+        # Get settings
+        console.print("\n[cyan]1/4[/cyan] Loading configuration...")
+        settings = get_settings()
+        console.print(f"[green]✓[/green] Subscription: {settings.azure_subscription_id}")
+
+        # Test authentication
+        console.print("\n[cyan]2/4[/cyan] Authenticating to Azure...")
+        credential = get_azure_credential()
+        console.print("[green]✓[/green] Authentication successful")
+
+        # Test compute client
+        console.print("\n[cyan]3/4[/cyan] Creating Compute client...")
+        compute_client = get_compute_client(settings.azure_subscription_id, credential)
+        console.print("[green]✓[/green] Compute client created")
+
+        # Test monitor client
+        console.print("\n[cyan]4/4[/cyan] Creating Monitor client...")
+        monitor_client = get_monitor_client(settings.azure_subscription_id, credential)
+        console.print("[green]✓[/green] Monitor client created")
+
+        # Success summary
+        console.print("\n")
+        console.print(Panel(
+            "[bold green]Authentication test passed![/bold green]\n\n"
+            "All Azure clients initialized successfully.\n"
+            "You are ready to proceed with VM discovery.",
+            title="Success",
+            border_style="green"
+        ))
+
+    except AzureAuthError as e:
+        console.print("\n[red]✗[/red] Authentication failed:\n")
+        console.print(Panel(str(e), title="Authentication Error", border_style="red"))
+        raise typer.Exit(1)
+
+    except Exception as e:
+        console.print(f"\n[red]✗[/red] Unexpected error: {e}")
+        raise typer.Exit(1)

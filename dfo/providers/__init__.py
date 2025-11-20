@@ -1,1 +1,1 @@
-"""MVP scaffold: dfo.providers"""
+"""Provider package for cloud SDK integrations."""
