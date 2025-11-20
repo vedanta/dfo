@@ -18,8 +18,8 @@ def test_settings_defaults():
         azure_subscription_id="test-sub"
     )
     assert settings.dfo_idle_cpu_threshold == 5.0
-    # Note: .env has DFO_IDLE_DAYS=30 which overrides code default of 14
-    assert settings.dfo_idle_days == 30
+    # Note: .env file has DFO_IDLE_DAYS=7 (overriding code default of 14)
+    assert settings.dfo_idle_days == 7
     assert settings.dfo_dry_run_default is True
     assert settings.dfo_duckdb_file == "./dfo.duckdb"
     assert settings.dfo_log_level == "INFO"

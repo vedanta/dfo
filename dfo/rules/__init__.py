@@ -170,6 +170,14 @@ class RuleEngine:
 
             # Add more overrides as needed...
 
+    def get_all_rules(self) -> List[OptimizationRule]:
+        """Get all rules (enabled and disabled).
+
+        Returns:
+            List of all rules.
+        """
+        return self._rules
+
     def get_rules_by_layer(self, layer: int) -> List[OptimizationRule]:
         """Get all rules for a specific layer.
 

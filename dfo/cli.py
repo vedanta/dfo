@@ -12,7 +12,7 @@ Per CODE_STYLE.md:
 import typer
 
 # Internal
-from dfo.cmd import version, config, db, azure
+from dfo.cmd import version, config, db, azure, rules
 
 # Create main app
 app = typer.Typer(
@@ -29,6 +29,7 @@ app.command(name="config", help="Display configuration")(config.config_command)
 # Register subcommand groups
 app.add_typer(db.app, name="db")
 app.add_typer(azure.app, name="azure")
+app.add_typer(rules.app, name="rules")
 
 
 def run():
