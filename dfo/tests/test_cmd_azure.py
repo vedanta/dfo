@@ -120,6 +120,60 @@ def test_azure_discover_failure(setup_env):
         assert "Azure API error" in result.stdout
 
 
+def test_azure_discover_authorization_error(setup_env):
+    """Test discover command with Azure authorization error."""
+    from unittest.mock import patch, Mock
+    from azure.core.exceptions import HttpResponseError
+
+    with patch('dfo.discovery.vms.discover_vms') as mock_discover, \
+         patch('dfo.rules.get_rule_engine') as mock_engine:
+
+        # Mock rule engine
+        mock_rule = Mock()
+        mock_rule.type = "Idle VM Detection"
+        mock_rule.period_days = 7
+        mock_rule.providers = {"azure": "Percentage CPU"}
+        mock_engine.return_value.get_rule_by_type.return_value = mock_rule
+
+        # Simulate authorization error
+        error = HttpResponseError("AuthorizationFailed")
+        mock_discover.side_effect = error
+
+        result = runner.invoke(app, ["azure", "discover", "vms"])
+
+        assert result.exit_code == 1
+        assert "Discovery failed" in result.stdout
+        assert "Permission Denied" in result.stdout
+        assert "Reader" in result.stdout
+
+
+def test_azure_discover_authentication_error(setup_env):
+    """Test discover command with authentication error."""
+    from unittest.mock import patch, Mock
+    from azure.core.exceptions import ClientAuthenticationError
+
+    with patch('dfo.discovery.vms.discover_vms') as mock_discover, \
+         patch('dfo.rules.get_rule_engine') as mock_engine:
+
+        # Mock rule engine
+        mock_rule = Mock()
+        mock_rule.type = "Idle VM Detection"
+        mock_rule.period_days = 7
+        mock_rule.providers = {"azure": "Percentage CPU"}
+        mock_engine.return_value.get_rule_by_type.return_value = mock_rule
+
+        # Simulate authentication error
+        error = ClientAuthenticationError("Invalid credentials")
+        mock_discover.side_effect = error
+
+        result = runner.invoke(app, ["azure", "discover", "vms"])
+
+        assert result.exit_code == 1
+        assert "Discovery failed" in result.stdout
+        assert "Authentication Failed" in result.stdout
+        assert "test-auth" in result.stdout
+
+
 def test_azure_discover_no_refresh(setup_env):
     """Test discover with --no-refresh flag."""
     from unittest.mock import Mock, patch

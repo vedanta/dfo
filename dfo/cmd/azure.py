@@ -47,6 +47,7 @@ def discover(
         from rich.progress import Progress, SpinnerColumn, TextColumn
         from rich.table import Table
         from rich.panel import Panel
+        from azure.core.exceptions import HttpResponseError, ClientAuthenticationError
         from dfo.discovery.vms import discover_vms
         from dfo.rules import get_rule_engine
 
@@ -101,10 +102,106 @@ def discover(
         ))
         console.print("\n[green]✓[/green] VM inventory updated in database\n")
 
+    except ClientAuthenticationError as e:
+        console.print(f"\n[red]✗ Discovery failed:[/red] Authentication error\n")
+        console.print(Panel(
+            "[bold red]Authentication Failed[/bold red]\n\n"
+            "Unable to authenticate with Azure using your credentials.\n\n"
+            "[bold]To fix this:[/bold]\n"
+            "1. Verify your .env file has correct values:\n"
+            "   - AZURE_TENANT_ID\n"
+            "   - AZURE_CLIENT_ID\n"
+            "   - AZURE_CLIENT_SECRET\n"
+            "   - AZURE_SUBSCRIPTION_ID\n\n"
+            "2. Run: [cyan]./dfo.sh azure test-auth[/cyan] to test your credentials\n\n"
+            "3. If using DefaultAzureCredential, run: [cyan]az login[/cyan]\n\n"
+            f"[dim]Error details: {str(e)}[/dim]",
+            title="🔐 Authentication Error",
+            border_style="red"
+        ))
+        raise typer.Exit(1)
+
+    except HttpResponseError as e:
+        console.print(f"\n[red]✗ Discovery failed:[/red] Azure API error\n")
+
+        # Check for specific error codes
+        if "AuthorizationFailed" in str(e):
+            console.print(Panel(
+                "[bold red]Permission Denied[/bold red]\n\n"
+                "Your service principal doesn't have permission to read VMs.\n\n"
+                "[bold]To fix this:[/bold]\n"
+                "1. Go to Azure Portal → Subscriptions\n"
+                "2. Select your subscription\n"
+                "3. Go to 'Access control (IAM)'\n"
+                "4. Click 'Add' → 'Add role assignment'\n"
+                "5. Select '[cyan]Reader[/cyan]' role\n"
+                "6. Search for your service principal and assign\n\n"
+                "[dim]Tip: Reader role provides read-only access for discovery.\n"
+                "For execute actions, you'll need Contributor role.[/dim]",
+                title="🔒 Azure Permissions Required",
+                border_style="red"
+            ))
+        elif "SubscriptionNotFound" in str(e):
+            console.print(Panel(
+                "[bold red]Subscription Not Found[/bold red]\n\n"
+                "The subscription ID in your configuration doesn't exist or isn't accessible.\n\n"
+                "[bold]To fix this:[/bold]\n"
+                "1. Run: [cyan]az account list[/cyan] to see available subscriptions\n"
+                "2. Update your .env file with correct AZURE_SUBSCRIPTION_ID\n"
+                "3. Or use: [cyan]--subscription YOUR_SUB_ID[/cyan]",
+                title="❌ Invalid Subscription",
+                border_style="red"
+            ))
+        else:
+            console.print(Panel(
+                f"[bold]Error Code:[/bold] {e.error.code if hasattr(e, 'error') else 'Unknown'}\n"
+                f"[bold]Message:[/bold] {e.message if hasattr(e, 'message') else str(e)}\n\n"
+                "[dim]Run with more details: Check Azure Portal for service health.[/dim]",
+                title="Azure API Error",
+                border_style="red"
+            ))
+        raise typer.Exit(1)
+
+    except FileNotFoundError as e:
+        console.print(f"\n[red]✗ Discovery failed:[/red] Missing file\n")
+        if "vm_rules.json" in str(e):
+            console.print(Panel(
+                "[bold red]Rules File Missing[/bold red]\n\n"
+                "The VM optimization rules file is missing.\n\n"
+                "[bold]Expected location:[/bold] dfo/rules/vm_rules.json\n\n"
+                "[dim]This is likely a development environment issue.[/dim]",
+                title="📄 Missing Configuration",
+                border_style="red"
+            ))
+        else:
+            console.print(Panel(
+                f"[bold]Missing file:[/bold] {str(e)}\n\n"
+                "[dim]Please ensure all required files are present.[/dim]",
+                title="File Not Found",
+                border_style="red"
+            ))
+        raise typer.Exit(1)
+
     except Exception as e:
-        console.print(f"\n[red]✗ Discovery failed:[/red] {e}\n")
-        import traceback
-        traceback.print_exc()
+        console.print(f"\n[red]✗ Discovery failed:[/red] Unexpected error\n")
+        console.print(Panel(
+            f"[bold]Error:[/bold] {str(e)}\n\n"
+            "[bold]What to do:[/bold]\n"
+            "1. Check your Azure subscription is active\n"
+            "2. Verify network connectivity\n"
+            "3. Try running: [cyan]./dfo.sh azure test-auth[/cyan]\n\n"
+            "[dim]If the issue persists, please report it with the error details.[/dim]",
+            title="❌ Unexpected Error",
+            border_style="red"
+        ))
+
+        # Only show traceback for truly unexpected errors
+        import os
+        if os.getenv("DFO_DEBUG"):
+            import traceback
+            console.print("\n[dim]Debug traceback:[/dim]")
+            traceback.print_exc()
+
         raise typer.Exit(1)
 
 
