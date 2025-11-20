@@ -64,3 +64,7 @@ Thumbs.db
 *.zip
 *.log
 *.bak
+
+# misc binaries
+*.xlsx
+
