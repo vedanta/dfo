@@ -25,15 +25,17 @@ class AzureAuthError(Exception):
 
 
 def get_azure_credential() -> TokenCredential:
-    """Get Azure credential using DefaultAzureCredential.
+    """Get Azure credential using service principal or DefaultAzureCredential.
 
     Authentication flow:
-    1. Try DefaultAzureCredential (supports multiple methods):
-       - Environment variables (AZURE_CLIENT_ID, AZURE_TENANT_ID, etc.)
-       - Managed Identity (if running in Azure)
+    1. If service principal credentials are in .env, use ClientSecretCredential
+       - Clean output, no noisy DefaultAzureCredential errors
+       - Fastest path for configured environments
+    2. Otherwise, fall back to DefaultAzureCredential:
        - Azure CLI credentials (if az login is active)
+       - Managed Identity (if running in Azure)
        - Visual Studio Code credentials
-    2. Fallback to explicit ClientSecretCredential using settings
+       - Other Azure SDK credential methods
 
     Returns:
         TokenCredential: Azure credential object.
@@ -43,22 +45,15 @@ def get_azure_credential() -> TokenCredential:
     """
     settings = get_settings()
 
-    try:
-        # Try DefaultAzureCredential first (recommended approach)
-        credential = DefaultAzureCredential(
-            additionally_allowed_tenants=['*'],
-            exclude_interactive_browser_credential=True,  # Non-interactive
-            exclude_shared_token_cache_credential=True    # More predictable
-        )
+    # Check if we have complete service principal credentials
+    has_sp_creds = all([
+        settings.azure_tenant_id,
+        settings.azure_client_id,
+        settings.azure_client_secret
+    ])
 
-        # Validate credential by attempting to get a token
-        # Using management scope as a test
-        _validate_credential(credential)
-
-        return credential
-
-    except Exception as default_error:
-        # Fallback to explicit service principal from env vars
+    # Try service principal first if configured in .env
+    if has_sp_creds:
         try:
             credential = ClientSecretCredential(
                 tenant_id=settings.azure_tenant_id,
@@ -70,18 +65,35 @@ def get_azure_credential() -> TokenCredential:
             return credential
 
         except Exception as sp_error:
-            raise AzureAuthError(
-                "Azure authentication failed. Please check:\n"
-                "1. Environment variables are set correctly:\n"
-                "   - AZURE_TENANT_ID\n"
-                "   - AZURE_CLIENT_ID\n"
-                "   - AZURE_CLIENT_SECRET\n"
-                "   - AZURE_SUBSCRIPTION_ID\n"
-                "2. Service principal has required permissions\n"
-                "3. Or run 'az login' for CLI-based authentication\n"
-                f"\nDefault credential error: {default_error}\n"
-                f"Service principal error: {sp_error}"
-            )
+            # If service principal fails, we'll try DefaultAzureCredential as fallback
+            # This handles cases where .env has partial/invalid credentials
+            pass
+
+    # Fallback to DefaultAzureCredential (for az login, managed identity, etc.)
+    try:
+        credential = DefaultAzureCredential(
+            additionally_allowed_tenants=['*'],
+            exclude_interactive_browser_credential=True,  # Non-interactive
+            exclude_shared_token_cache_credential=True    # More predictable
+        )
+
+        _validate_credential(credential)
+        return credential
+
+    except Exception as default_error:
+        # Both methods failed - provide helpful error message
+        raise AzureAuthError(
+            "Azure authentication failed. Please check:\n"
+            "1. Service Principal (recommended):\n"
+            "   - Set AZURE_TENANT_ID in .env\n"
+            "   - Set AZURE_CLIENT_ID in .env\n"
+            "   - Set AZURE_CLIENT_SECRET in .env\n"
+            "   - Ensure service principal has required permissions\n"
+            "2. OR use Azure CLI:\n"
+            "   - Run: az login\n"
+            "   - Then retry dfo command\n"
+            f"\nError: {default_error}"
+        )
 
 
 def _validate_credential(credential: TokenCredential) -> None:

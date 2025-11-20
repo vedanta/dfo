@@ -33,29 +33,9 @@ def mock_env(monkeypatch):
     monkeypatch.setenv("AZURE_SUBSCRIPTION_ID", "test-subscription")
 
 
-def test_get_credential_with_default_credential(mock_env):
-    """Test successful authentication with DefaultAzureCredential."""
-    with patch('dfo.core.auth.DefaultAzureCredential') as mock_default:
-        mock_cred = Mock()
-        mock_cred.get_token.return_value = Mock(token="test-token")
-        mock_default.return_value = mock_cred
-
-        credential = get_azure_credential()
-
-        assert credential is not None
-        mock_default.assert_called_once()
-        mock_cred.get_token.assert_called_once()
-
-
-def test_get_credential_fallback_to_service_principal(mock_env):
-    """Test fallback to ClientSecretCredential when DefaultAzureCredential fails."""
-    with patch('dfo.core.auth.DefaultAzureCredential') as mock_default, \
-         patch('dfo.core.auth.ClientSecretCredential') as mock_sp:
-
-        # Make DefaultAzureCredential fail
-        mock_default.return_value.get_token.side_effect = ClientAuthenticationError("Failed")
-
-        # Make ClientSecretCredential succeed
+def test_get_credential_with_service_principal(mock_env):
+    """Test successful authentication with ClientSecretCredential (prioritized when .env configured)."""
+    with patch('dfo.core.auth.ClientSecretCredential') as mock_sp:
         mock_cred = Mock()
         mock_cred.get_token.return_value = Mock(token="test-token")
         mock_sp.return_value = mock_cred
@@ -63,11 +43,59 @@ def test_get_credential_fallback_to_service_principal(mock_env):
         credential = get_azure_credential()
 
         assert credential is not None
+        # Should use service principal when credentials are configured
         mock_sp.assert_called_once_with(
             tenant_id="test-tenant-id",
             client_id="test-client-id",
             client_secret="test-secret"
         )
+        mock_cred.get_token.assert_called_once()
+
+
+def test_get_credential_fallback_to_default(mock_env):
+    """Test fallback to DefaultAzureCredential when ClientSecretCredential fails."""
+    with patch('dfo.core.auth.ClientSecretCredential') as mock_sp, \
+         patch('dfo.core.auth.DefaultAzureCredential') as mock_default:
+
+        # Make ClientSecretCredential fail
+        mock_sp.return_value.get_token.side_effect = ClientAuthenticationError("SP Failed")
+
+        # Make DefaultAzureCredential succeed
+        mock_cred = Mock()
+        mock_cred.get_token.return_value = Mock(token="test-token")
+        mock_default.return_value = mock_cred
+
+        credential = get_azure_credential()
+
+        assert credential is not None
+        # Should try service principal first, then fall back to default
+        mock_sp.assert_called_once()
+        mock_default.assert_called_once()
+
+
+def test_get_credential_uses_default_when_no_sp_configured(monkeypatch):
+    """Test that DefaultAzureCredential is used when service principal is not configured."""
+    # Provide only partial credentials (missing client_id and client_secret)
+    # Set empty strings to override .env file values
+    monkeypatch.setenv("AZURE_TENANT_ID", "test-tenant-id")
+    monkeypatch.setenv("AZURE_CLIENT_ID", "")
+    monkeypatch.setenv("AZURE_CLIENT_SECRET", "")
+    monkeypatch.setenv("AZURE_SUBSCRIPTION_ID", "test-subscription")
+
+    with patch('dfo.core.auth.DefaultAzureCredential') as mock_default, \
+         patch('dfo.core.auth.ClientSecretCredential') as mock_sp:
+
+        # Make DefaultAzureCredential succeed
+        mock_cred = Mock()
+        mock_cred.get_token.return_value = Mock(token="test-token")
+        mock_default.return_value = mock_cred
+
+        credential = get_azure_credential()
+
+        assert credential is not None
+        # Should skip service principal and go straight to DefaultAzureCredential
+        mock_sp.assert_not_called()
+        mock_default.assert_called_once()
 
 
 def test_get_credential_both_methods_fail(mock_env):
@@ -110,42 +138,42 @@ def test_validate_credential_failure():
 
 def test_cached_credential_singleton(mock_env):
     """Test that cached credential returns same instance."""
-    with patch('dfo.core.auth.DefaultAzureCredential') as mock_default:
+    with patch('dfo.core.auth.ClientSecretCredential') as mock_sp:
         mock_cred = Mock()
         mock_cred.get_token.return_value = Mock(token="test-token")
-        mock_default.return_value = mock_cred
+        mock_sp.return_value = mock_cred
 
         cred1 = get_cached_credential()
         cred2 = get_cached_credential()
 
         assert cred1 is cred2
-        # DefaultAzureCredential should only be called once
-        assert mock_default.call_count == 1
+        # ClientSecretCredential should only be called once (singleton)
+        assert mock_sp.call_count == 1
 
 
 def test_reset_credential(mock_env):
     """Test that reset_credential clears the singleton."""
-    with patch('dfo.core.auth.DefaultAzureCredential') as mock_default:
+    with patch('dfo.core.auth.ClientSecretCredential') as mock_sp:
         mock_cred1 = Mock()
         mock_cred1.get_token.return_value = Mock(token="test-token")
         mock_cred2 = Mock()
         mock_cred2.get_token.return_value = Mock(token="test-token")
-        mock_default.side_effect = [mock_cred1, mock_cred2]
+        mock_sp.side_effect = [mock_cred1, mock_cred2]
 
         cred1 = get_cached_credential()
         reset_credential()
         cred2 = get_cached_credential()
 
         assert cred1 is not cred2
-        assert mock_default.call_count == 2
+        assert mock_sp.call_count == 2
 
 
 def test_get_credential_validates_token_scope(mock_env):
     """Test that credential validation uses correct scope."""
-    with patch('dfo.core.auth.DefaultAzureCredential') as mock_default:
+    with patch('dfo.core.auth.ClientSecretCredential') as mock_sp:
         mock_cred = Mock()
         mock_cred.get_token.return_value = Mock(token="test-token")
-        mock_default.return_value = mock_cred
+        mock_sp.return_value = mock_cred
 
         get_azure_credential()
 
