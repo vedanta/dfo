@@ -61,6 +61,8 @@ cp .env.example .env
 ./dfo.sh db init
 ```
 
+> **Note:** If you're updating from a previous version with schema changes, run `./dfo.sh db refresh --yes` instead. See [MIGRATIONS.md](MIGRATIONS.md) for details.
+
 ### 4. Test your Azure connection
 
 ```bash
@@ -126,6 +128,7 @@ The `dfo.sh` wrapper script allows you to run commands from the root directory:
 ## Documentation
 
 - **[USER_GUIDE.md](USER_GUIDE.md)** - Complete user guide with workflow, examples, and troubleshooting
+- **[MIGRATIONS.md](MIGRATIONS.md)** - Database schema changes and upgrade instructions
 - **[CLAUDE.md](CLAUDE.md)** - Architecture and development guidelines for Claude Code
 - **[CODE_STYLE.md](CODE_STYLE.md)** - Code standards and conventions
 - **[MVP.md](MVP.md)** - Milestone breakdown and implementation plan
