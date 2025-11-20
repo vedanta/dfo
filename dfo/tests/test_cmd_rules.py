@@ -199,3 +199,158 @@ def test_rules_list_empty_filter(setup_env):
 
     assert result.exit_code == 0
     assert "No rules found matching your criteria" in result.stdout
+
+
+def test_rules_enable_command(setup_env, tmp_path, monkeypatch):
+    """Test enable command updates rule status."""
+    import json
+    from pathlib import Path
+
+    # Create a temporary rules file
+    temp_rules_file = tmp_path / "vm_rules.json"
+    rules_data = {
+        "optimizations": [
+            {
+                "layer": 1,
+                "sub_layer": "Test",
+                "type": "Test Rule",
+                "metric": "test",
+                "threshold": "0",
+                "period": "7d",
+                "unit": "percent",
+                "enabled": False,
+                "providers": {"azure": "test"}
+            }
+        ]
+    }
+    with open(temp_rules_file, 'w') as f:
+        json.dump(rules_data, f)
+
+    # Monkeypatch the rules file path
+    from dfo import rules
+    original_init = rules.RuleEngine.__init__
+
+    def patched_init(self, rules_file="vm_rules.json"):
+        self.rules_path = temp_rules_file
+        self._rules = []
+        self._load_rules()
+        self._apply_config_overrides()
+
+    monkeypatch.setattr(rules.RuleEngine, "__init__", patched_init)
+    reset_rule_engine()
+
+    result = runner.invoke(app, ["rules", "enable", "Test Rule"])
+
+    assert result.exit_code == 0
+    assert "Enabled rule: Test Rule" in result.stdout
+    assert "Updated vm_rules.json" in result.stdout
+
+    # Verify file was updated
+    with open(temp_rules_file) as f:
+        updated_data = json.load(f)
+    assert updated_data["optimizations"][0]["enabled"] is True
+
+    # Restore
+    monkeypatch.setattr(rules.RuleEngine, "__init__", original_init)
+    reset_rule_engine()
+
+
+def test_rules_disable_command(setup_env, tmp_path, monkeypatch):
+    """Test disable command updates rule status."""
+    import json
+    from pathlib import Path
+
+    # Create a temporary rules file
+    temp_rules_file = tmp_path / "vm_rules.json"
+    rules_data = {
+        "optimizations": [
+            {
+                "layer": 1,
+                "sub_layer": "Test",
+                "type": "Test Rule",
+                "metric": "test",
+                "threshold": "0",
+                "period": "7d",
+                "unit": "percent",
+                "enabled": True,
+                "providers": {"azure": "test"}
+            }
+        ]
+    }
+    with open(temp_rules_file, 'w') as f:
+        json.dump(rules_data, f)
+
+    # Monkeypatch the rules file path
+    from dfo import rules
+    original_init = rules.RuleEngine.__init__
+
+    def patched_init(self, rules_file="vm_rules.json"):
+        self.rules_path = temp_rules_file
+        self._rules = []
+        self._load_rules()
+        self._apply_config_overrides()
+
+    monkeypatch.setattr(rules.RuleEngine, "__init__", patched_init)
+    reset_rule_engine()
+
+    result = runner.invoke(app, ["rules", "disable", "Test Rule"])
+
+    assert result.exit_code == 0
+    assert "Disabled rule: Test Rule" in result.stdout
+    assert "Updated vm_rules.json" in result.stdout
+
+    # Verify file was updated
+    with open(temp_rules_file) as f:
+        updated_data = json.load(f)
+    assert updated_data["optimizations"][0]["enabled"] is False
+
+    # Restore
+    monkeypatch.setattr(rules.RuleEngine, "__init__", original_init)
+    reset_rule_engine()
+
+
+def test_rules_enable_already_enabled(setup_env):
+    """Test enabling a rule that's already enabled."""
+    result = runner.invoke(app, ["rules", "enable", "Idle VM Detection"])
+
+    assert result.exit_code == 0
+    assert "already enabled" in result.stdout
+
+
+def test_rules_disable_already_disabled(setup_env):
+    """Test disabling a rule that's already disabled."""
+    # Family Optimization should be disabled by default
+    result = runner.invoke(app, ["rules", "disable", "Family Optimization"])
+
+    assert result.exit_code == 0
+    assert "already disabled" in result.stdout
+
+
+def test_rules_enable_nonexistent(setup_env):
+    """Test enabling a rule that doesn't exist."""
+    result = runner.invoke(app, ["rules", "enable", "Nonexistent Rule"])
+
+    assert result.exit_code == 1
+    assert "not found" in result.stdout
+
+
+def test_rules_disable_nonexistent(setup_env):
+    """Test disabling a rule that doesn't exist."""
+    result = runner.invoke(app, ["rules", "disable", "Nonexistent Rule"])
+
+    assert result.exit_code == 1
+    assert "not found" in result.stdout
+
+
+def test_dfo_disable_rules_env_var(setup_env, monkeypatch):
+    """Test that DFO_DISABLE_RULES environment variable disables rules."""
+    # Set env var to disable Idle VM Detection
+    monkeypatch.setenv("DFO_DISABLE_RULES", "Idle VM Detection,Right-Sizing (CPU)")
+    reset_settings()
+    reset_rule_engine()
+
+    result = runner.invoke(app, ["rules", "show", "Idle VM Detection"])
+
+    assert result.exit_code == 0
+    # The rule should show as disabled due to env override
+    assert "Disabled" in result.stdout

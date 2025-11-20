@@ -279,3 +279,102 @@ def show_mvp():
         console.print(f"  Status: [green]✓ Active[/green]\n")
 
     console.print(f"[dim]Rules deferred to Phase 2: {len(all_rules) - 1}[/dim]\n")
+
+
+@app.command("enable")
+def enable_rule(
+    rule_type: str = typer.Argument(
+        ...,
+        help="Rule type to enable (e.g., 'Idle VM Detection')"
+    )
+):
+    """Enable a specific rule.
+
+    Updates the rule's enabled status in vm_rules.json.
+    The rule will be active for all future operations.
+
+    Example:
+        dfo rules enable "Idle VM Detection"
+        dfo rules enable "Right-Sizing (CPU)"
+    """
+    try:
+        from dfo.rules import reset_rule_engine
+
+        engine = get_rule_engine()
+
+        # Check if rule exists
+        rule = engine.get_rule_by_type(rule_type)
+        if not rule:
+            console.print(f"[red]Error:[/red] Rule type '{rule_type}' not found")
+            console.print("\n[dim]Use 'dfo rules list' to see available rules[/dim]")
+            raise typer.Exit(1)
+
+        # Check if already enabled
+        if rule.enabled:
+            console.print(f"[yellow]Rule '{rule_type}' is already enabled[/yellow]")
+            return
+
+        # Enable and save
+        engine.enable_rule(rule_type)
+        engine.save_rules()
+
+        console.print(f"[green]✓[/green] Enabled rule: [bold]{rule_type}[/bold]")
+        console.print(f"[dim]Updated vm_rules.json[/dim]\n")
+
+        # Reset singleton so next command loads fresh data
+        reset_rule_engine()
+
+    except Exception as e:
+        console.print(f"[red]Error:[/red] {e}")
+        raise typer.Exit(1)
+
+
+@app.command("disable")
+def disable_rule(
+    rule_type: str = typer.Argument(
+        ...,
+        help="Rule type to disable (e.g., 'Idle VM Detection')"
+    )
+):
+    """Disable a specific rule.
+
+    Updates the rule's enabled status in vm_rules.json.
+    The rule will not be active for future operations.
+
+    Note: You can also disable rules via .env file:
+      DFO_DISABLE_RULES="Rule 1,Rule 2"
+
+    Example:
+        dfo rules disable "Idle VM Detection"
+        dfo rules disable "Right-Sizing (CPU)"
+    """
+    try:
+        from dfo.rules import reset_rule_engine
+
+        engine = get_rule_engine()
+
+        # Check if rule exists
+        rule = engine.get_rule_by_type(rule_type)
+        if not rule:
+            console.print(f"[red]Error:[/red] Rule type '{rule_type}' not found")
+            console.print("\n[dim]Use 'dfo rules list' to see available rules[/dim]")
+            raise typer.Exit(1)
+
+        # Check if already disabled
+        if not rule.enabled:
+            console.print(f"[yellow]Rule '{rule_type}' is already disabled[/yellow]")
+            return
+
+        # Disable and save
+        engine.disable_rule(rule_type)
+        engine.save_rules()
+
+        console.print(f"[green]✓[/green] Disabled rule: [bold]{rule_type}[/bold]")
+        console.print(f"[dim]Updated vm_rules.json[/dim]\n")
+
+        # Reset singleton so next command loads fresh data
+        reset_rule_engine()
+
+    except Exception as e:
+        console.print(f"[red]Error:[/red] {e}")
+        raise typer.Exit(1)

@@ -152,11 +152,21 @@ class RuleEngine:
         """Apply user configuration overrides to rules.
 
         Allows users to customize rule thresholds/periods via .env file.
+        Also applies DFO_DISABLE_RULES to disable specific rules.
         """
         settings = get_settings()
 
+        # Parse disabled rules list
+        disabled_rules = []
+        if settings.dfo_disable_rules:
+            disabled_rules = [r.strip() for r in settings.dfo_disable_rules.split(",") if r.strip()]
+
         # Map config to specific rules
         for rule in self._rules:
+            # Apply disable overrides first
+            if rule.type in disabled_rules:
+                rule.enabled = False
+
             # Idle VM Detection: Override with DFO_IDLE_CPU_THRESHOLD and DFO_IDLE_DAYS
             if rule.type == "Idle VM Detection":
                 rule.threshold_value = settings.dfo_idle_cpu_threshold
@@ -231,6 +241,64 @@ class RuleEngine:
             "Shutdown Detection"
         ]
         return [r for r in self._rules if r.type in mvp_types and r.enabled]
+
+    def enable_rule(self, rule_type: str) -> bool:
+        """Enable a specific rule by type.
+
+        Args:
+            rule_type: Rule type to enable.
+
+        Returns:
+            True if rule was found and enabled, False otherwise.
+        """
+        for rule in self._rules:
+            if rule.type == rule_type:
+                rule.enabled = True
+                return True
+        return False
+
+    def disable_rule(self, rule_type: str) -> bool:
+        """Disable a specific rule by type.
+
+        Args:
+            rule_type: Rule type to disable.
+
+        Returns:
+            True if rule was found and disabled, False otherwise.
+        """
+        for rule in self._rules:
+            if rule.type == rule_type:
+                rule.enabled = False
+                return True
+        return False
+
+    def save_rules(self) -> None:
+        """Save current rules state back to JSON file.
+
+        This persists any enable/disable changes made via enable_rule/disable_rule.
+        """
+        # Build output structure
+        rules_data = []
+        for rule in self._rules:
+            rule_dict = {
+                "layer": rule.layer,
+                "sub_layer": rule.sub_layer,
+                "type": rule.type,
+                "metric": rule.metric,
+                "threshold": rule.threshold,
+                "period": rule.period,
+                "unit": rule.unit,
+                "enabled": rule.enabled,
+                "providers": rule.providers
+            }
+            rules_data.append(rule_dict)
+
+        output = {"optimizations": rules_data}
+
+        # Write to file
+        with open(self.rules_path, 'w') as f:
+            json.dump(output, f, indent=2)
+            f.write('\n')  # Add trailing newline
 
 
 # Singleton instance

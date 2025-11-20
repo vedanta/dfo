@@ -38,6 +38,7 @@ class Settings(BaseSettings):
     dfo_idle_cpu_threshold: float = 5.0
     dfo_idle_days: int = 14
     dfo_dry_run_default: bool = True
+    dfo_disable_rules: str = ""  # Comma-separated list of rule types to disable
 
     # DuckDB Configuration (DFO_ prefix)
     dfo_duckdb_file: str = "./dfo.duckdb"
