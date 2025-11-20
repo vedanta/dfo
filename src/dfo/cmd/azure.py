@@ -113,7 +113,7 @@ def discover(
             "   - AZURE_CLIENT_ID\n"
             "   - AZURE_CLIENT_SECRET\n"
             "   - AZURE_SUBSCRIPTION_ID\n\n"
-            "2. Run: [cyan]./dfo.sh azure test-auth[/cyan] to test your credentials\n\n"
+            "2. Run: [cyan]./dfo azure test-auth[/cyan] to test your credentials\n\n"
             "3. If using DefaultAzureCredential, run: [cyan]az login[/cyan]\n\n"
             f"[dim]Error details: {str(e)}[/dim]",
             title="🔐 Authentication Error",
@@ -189,7 +189,7 @@ def discover(
             "[bold]What to do:[/bold]\n"
             "1. Check your Azure subscription is active\n"
             "2. Verify network connectivity\n"
-            "3. Try running: [cyan]./dfo.sh azure test-auth[/cyan]\n\n"
+            "3. Try running: [cyan]./dfo azure test-auth[/cyan]\n\n"
             "[dim]If the issue persists, please report it with the error details.[/dim]",
             title="❌ Unexpected Error",
             border_style="red"
@@ -330,7 +330,7 @@ def test_auth():
     Useful for validating Milestone 2 setup.
 
     Example:
-        ./dfo.sh azure test-auth
+        ./dfo azure test-auth
     """
     from dfo.core.config import get_settings
     from dfo.core.auth import get_azure_credential, AzureAuthError

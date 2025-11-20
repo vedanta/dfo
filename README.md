@@ -30,7 +30,7 @@ dfo is a command-line tool that discovers Azure VMs, analyzes their CPU usage, i
 - ✓ Azure authentication (DefaultAzureCredential + service principal)
 - ✓ Azure SDK client management (Compute & Monitor)
 - ✓ VM discovery with CPU metrics collection (rules-driven)
-- ✓ CLI commands: `./dfo.sh azure test-auth`, `./dfo.sh azure discover vms`
+- ✓ CLI commands: `./dfo azure test-auth`, `./dfo azure discover vms`
 
 ## Quick Start
 
@@ -58,15 +58,15 @@ cp .env.example .env
 
 ```bash
 # Use the wrapper script from root directory
-./dfo.sh db init
+./dfo db init
 ```
 
-> **Note:** If you're updating from a previous version with schema changes, run `./dfo.sh db refresh --yes` instead. See [MIGRATIONS.md](MIGRATIONS.md) for details.
+> **Note:** If you're updating from a previous version with schema changes, run `./dfo db refresh --yes` instead. See [MIGRATIONS.md](MIGRATIONS.md) for details.
 
 ### 4. Test your Azure connection
 
 ```bash
-./dfo.sh azure test-auth
+./dfo azure test-auth
 ```
 
 **Expected output:**
@@ -93,36 +93,36 @@ You're ready! 🎉
 
 ## Usage
 
-The `dfo.sh` wrapper script allows you to run commands from the root directory:
+The `dfo` wrapper script allows you to run commands from the root directory:
 
 ```bash
 # Show version
-./dfo.sh version
+./dfo version
 
 # Display configuration (secrets masked)
-./dfo.sh config
+./dfo config
 
 # Database commands
-./dfo.sh db info
-./dfo.sh db refresh --yes
+./dfo db info
+./dfo db refresh --yes
 
 # Test Azure authentication
-./dfo.sh azure test-auth
+./dfo azure test-auth
 
 # Discover VMs with metrics (✓ Available now - M3)
-./dfo.sh azure discover vms         # Discover VMs with CPU metrics
-./dfo.sh azure discover vms --no-refresh  # Append to existing data
-./dfo.sh azure discover vms --subscription SUB_ID  # Custom subscription
+./dfo azure discover vms         # Discover VMs with CPU metrics
+./dfo azure discover vms --no-refresh  # Append to existing data
+./dfo azure discover vms --subscription SUB_ID  # Custom subscription
 
 # Coming soon in Milestones 4-6:
-./dfo.sh azure analyze idle-vms     # Analyze for idle VMs
-./dfo.sh azure report idle-vms      # Generate cost report
-./dfo.sh azure execute stop-idle-vms  # Take action (dry-run default)
+./dfo azure analyze idle-vms     # Analyze for idle VMs
+./dfo azure report idle-vms      # Generate cost report
+./dfo azure execute stop-idle-vms  # Take action (dry-run default)
 
 # Get help
-./dfo.sh --help
-./dfo.sh db --help
-./dfo.sh azure --help
+./dfo --help
+./dfo db --help
+./dfo azure --help
 ```
 
 ## Documentation
@@ -139,48 +139,50 @@ The `dfo.sh` wrapper script allows you to run commands from the root directory:
 ### Monthly Cost Review
 ```bash
 # Discover current state
-./dfo.sh azure discover vms
+./dfo azure discover vms
 
 # Analyze for idle VMs
-./dfo.sh azure analyze idle-vms
+./dfo azure analyze idle-vms
 
 # View findings
-./dfo.sh azure report idle-vms
+./dfo azure report idle-vms
 
 # Generate JSON report for management
-./dfo.sh azure report idle-vms --format json --output monthly-review-2025-01.json
+./dfo azure report idle-vms --format json --output monthly-review-2025-01.json
 ```
 
 ### Automated Cost Optimization
 ```bash
 # Discover and analyze
-./dfo.sh azure discover vms
-./dfo.sh azure analyze idle-vms
+./dfo azure discover vms
+./dfo azure analyze idle-vms
 
 # Stop critical idle VMs (>$500/month savings)
-./dfo.sh azure execute stop-idle-vms --no-dry-run --yes --min-severity critical
+./dfo azure execute stop-idle-vms --no-dry-run --yes --min-severity critical
 
 # Generate audit log
-./dfo.sh azure report idle-vms --format json --output executed-actions.json
+./dfo azure report idle-vms --format json --output executed-actions.json
 ```
 
 ## Project Structure
 
 ```
 dfo/
-├── dfo.sh              # Wrapper script for CLI
-├── dfo/                # Source code directory
-│   ├── core/           # Configuration and data models
-│   │   ├── config.py   # Pydantic Settings ✓
-│   │   ├── auth.py     # Azure authentication ✓ M2
-│   │   └── models.py   # Data models ✓
-│   ├── db/             # DuckDB integration ✓
-│   ├── providers/      # Cloud provider SDKs ✓ M2
-│   │   └── azure/      # Azure SDK clients ✓ M2
-│   ├── cmd/            # CLI command modules ✓
-│   ├── cli.py          # Main CLI entry point ✓
-│   ├── discovery/      # VM discovery orchestration ✓ M3
-│   └── tests/          # Test suite (95 tests, 97% coverage) ✓
+├── dfo                 # Wrapper script for CLI (executable)
+├── src/                # Source code root
+│   └── dfo/            # Main package directory
+│       ├── core/       # Configuration and data models
+│       │   ├── config.py   # Pydantic Settings ✓
+│       │   ├── auth.py     # Azure authentication ✓ M2
+│       │   └── models.py   # Data models ✓
+│       ├── db/         # DuckDB integration ✓
+│       ├── providers/  # Cloud provider SDKs ✓ M2
+│       │   └── azure/  # Azure SDK clients ✓ M2
+│       ├── cmd/        # CLI command modules ✓
+│       ├── cli.py      # Main CLI entry point ✓
+│       ├── discovery/  # VM discovery orchestration ✓ M3
+│       ├── rules/      # Optimization rules engine ✓ M3
+│       └── tests/      # Test suite (119 tests passing) ✓
 ├── environment.yml     # Conda environment
 ├── .env                # Environment configuration (create from .env.example)
 ├── dfo.duckdb         # DuckDB database (created on init)
@@ -192,12 +194,12 @@ dfo/
 ### Run Tests
 ```bash
 # All tests
-pytest dfo/tests/ -v
+PYTHONPATH=src pytest src/dfo/tests/ -v
 
 # With coverage
-pytest --cov=dfo dfo/tests/
+PYTHONPATH=src pytest --cov=dfo src/dfo/tests/
 
-# Current status: 95 tests passing, 97% coverage
+# Current status: 119 tests passing
 ```
 
 ### Code Quality

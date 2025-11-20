@@ -36,8 +36,8 @@ You can run the CLI in three ways:
 
 ```bash
 # 1. Using the wrapper script (easiest from root directory)
-./dfo.sh version
-./dfo.sh db init
+./dfo version
+./dfo db init
 
 # 2. Using Python module directly
 python -m dfo.cli version
@@ -52,23 +52,23 @@ dfo db init
 
 ```bash
 # Top-level commands
-./dfo.sh version                 # Show version
-./dfo.sh config                  # Show configuration
-./dfo.sh config --show-secrets   # Show config with unmasked secrets
+./dfo version                 # Show version
+./dfo config                  # Show configuration
+./dfo config --show-secrets   # Show config with unmasked secrets
 
 # Database commands
-./dfo.sh db init                 # Initialize database
-./dfo.sh db refresh              # Drop and recreate tables
-./dfo.sh db refresh --yes        # Skip confirmation
-./dfo.sh db info                 # Show database stats
+./dfo db init                 # Initialize database
+./dfo db refresh              # Drop and recreate tables
+./dfo db refresh --yes        # Skip confirmation
+./dfo db info                 # Show database stats
 
 # Azure commands (to be implemented in Milestone 2)
-./dfo.sh azure discover
-./dfo.sh azure analyze
-./dfo.sh azure report
-./dfo.sh azure report --format json
-./dfo.sh azure execute
-./dfo.sh azure execute --no-dry-run
+./dfo azure discover
+./dfo azure analyze
+./dfo azure report
+./dfo azure report --format json
+./dfo azure execute
+./dfo azure execute --no-dry-run
 ```
 
 ### CLI Organization Principles

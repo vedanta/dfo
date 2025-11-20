@@ -1,3 +1,7 @@
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name="dfo"
 version="0.0.2"
@@ -5,3 +9,6 @@ requires-python=">=3.10"
 
 [project.scripts]
 dfo="dfo.cli:run"
+
+[tool.setuptools.packages.find]
+where = ["src"]

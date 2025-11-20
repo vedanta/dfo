@@ -39,7 +39,7 @@ CREATE TABLE vm_inventory (
 
 **How to Apply:**
 ```bash
-./dfo.sh db refresh --yes
+./dfo db refresh --yes
 ```
 
 **Breaking Change:** Yes - existing databases will need to be refreshed (data will be cleared)
@@ -67,7 +67,7 @@ Initial database schema creation for MVP.
 
 **How to Apply:**
 ```bash
-./dfo.sh db init
+./dfo db init
 ```
 
 ---
@@ -102,7 +102,7 @@ To see your current schema structure:
 
 ```bash
 # View all tables
-./dfo.sh db info
+./dfo db info
 
 # View specific table schema
 python3 << 'EOF'
