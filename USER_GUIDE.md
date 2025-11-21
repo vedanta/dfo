@@ -42,12 +42,12 @@ conda activate dfo
 
 4. Initialize the database:
 ```bash
-./dfo.sh db init
+./dfo db init
 ```
 
 5. Test your Azure connection:
 ```bash
-./dfo.sh azure test-auth
+./dfo azure test-auth
 ```
 
 You're ready to start optimizing! 🎉
@@ -106,14 +106,14 @@ DFO_LOG_LEVEL=INFO                # DEBUG, INFO, WARNING, ERROR
 
 Check that your configuration is loaded correctly:
 ```bash
-./dfo.sh config
+./dfo config
 ```
 
 This shows all settings (with secrets masked for security).
 
 To see unmasked values:
 ```bash
-./dfo.sh config --show-secrets
+./dfo config --show-secrets
 ```
 
 ---
@@ -124,10 +124,10 @@ To see unmasked values:
 
 ```bash
 # Initialize the database
-./dfo.sh db init
+./dfo db init
 
 # Test Azure authentication
-./dfo.sh azure test-auth
+./dfo azure test-auth
 ```
 
 **Expected output:**
@@ -160,7 +160,7 @@ To see unmasked values:
 Scan your Azure subscription for VMs and collect CPU metrics:
 
 ```bash
-./dfo.sh azure discover vms
+./dfo azure discover vms
 ```
 
 **What happens:**
@@ -170,7 +170,7 @@ Scan your Azure subscription for VMs and collect CPU metrics:
 
 **Check what was discovered:**
 ```bash
-./dfo.sh db info
+./dfo db info
 ```
 
 ### 3. Analyze (Coming in Milestone 4)
@@ -178,7 +178,7 @@ Scan your Azure subscription for VMs and collect CPU metrics:
 Analyze VMs to identify idle resources:
 
 ```bash
-./dfo.sh azure analyze idle-vms
+./dfo azure analyze idle-vms
 ```
 
 **What happens:**
@@ -194,7 +194,7 @@ View cost optimization opportunities:
 
 ```bash
 # Console report (Rich formatted table)
-./dfo.sh azure report idle-vms
+./dfo azure report idle-vms
 ```
 
 **Example output:**
@@ -213,7 +213,7 @@ Total Potential Savings: $1,045/month
 
 **Export to JSON:**
 ```bash
-./dfo.sh azure report idle-vms --format json --output results.json
+./dfo azure report idle-vms --format json --output results.json
 ```
 
 ### 5. Execute (Coming in Milestone 6)
@@ -222,16 +222,16 @@ Take action to reduce costs:
 
 ```bash
 # Dry-run (see what would happen - NO changes made)
-./dfo.sh azure execute stop-idle-vms
+./dfo azure execute stop-idle-vms
 
 # Actually stop VMs (requires confirmation)
-./dfo.sh azure execute stop-idle-vms --no-dry-run
+./dfo azure execute stop-idle-vms --no-dry-run
 
 # Auto-confirm for automation/CI-CD
-./dfo.sh azure execute stop-idle-vms --no-dry-run --yes
+./dfo azure execute stop-idle-vms --no-dry-run --yes
 
 # Only act on critical and high severity VMs
-./dfo.sh azure execute stop-idle-vms --no-dry-run --min-severity high
+./dfo azure execute stop-idle-vms --no-dry-run --min-severity high
 ```
 
 **Safety features:**
@@ -250,15 +250,15 @@ Take action to reduce costs:
 Display version information.
 
 ```bash
-./dfo.sh version
+./dfo version
 ```
 
 #### `dfo config`
 Display current configuration.
 
 ```bash
-./dfo.sh config              # Masked secrets
-./dfo.sh config --show-secrets  # Show actual values
+./dfo config              # Masked secrets
+./dfo config --show-secrets  # Show actual values
 ```
 
 ---
@@ -269,7 +269,7 @@ Display current configuration.
 Initialize the database schema. Creates a new DuckDB file with required tables.
 
 ```bash
-./dfo.sh db init
+./dfo db init
 ```
 
 **When to use:** First time setup, or after deleting the database file.
@@ -283,7 +283,7 @@ Initialize the database schema. Creates a new DuckDB file with required tables.
 Show database statistics.
 
 ```bash
-./dfo.sh db info
+./dfo db info
 ```
 
 **Output:** Table names, record counts, database size.
@@ -292,8 +292,8 @@ Show database statistics.
 Drop and recreate all tables (⚠️ deletes all data).
 
 ```bash
-./dfo.sh db refresh         # Requires confirmation
-./dfo.sh db refresh --yes   # Skip confirmation
+./dfo db refresh         # Requires confirmation
+./dfo db refresh --yes   # Skip confirmation
 ```
 
 **When to use:**
@@ -309,7 +309,7 @@ Drop and recreate all tables (⚠️ deletes all data).
 Test Azure authentication and SDK client creation.
 
 ```bash
-./dfo.sh azure test-auth
+./dfo azure test-auth
 ```
 
 **What it does:**
@@ -329,7 +329,7 @@ Test Azure authentication and SDK client creation.
 Discover Azure resources and store in database.
 
 ```bash
-./dfo.sh azure discover vms
+./dfo azure discover vms
 ```
 
 **What it does:**
@@ -349,7 +349,7 @@ Discover Azure resources and store in database.
 Analyze resources for optimization opportunities.
 
 ```bash
-./dfo.sh azure analyze idle-vms
+./dfo azure analyze idle-vms
 ```
 
 **What it does:**
@@ -371,7 +371,7 @@ Analyze resources for optimization opportunities.
 Generate reports from analysis results.
 
 ```bash
-./dfo.sh azure report idle-vms [OPTIONS]
+./dfo azure report idle-vms [OPTIONS]
 ```
 
 **Options:**
@@ -381,13 +381,13 @@ Generate reports from analysis results.
 **Examples:**
 ```bash
 # Console report (default)
-./dfo.sh azure report idle-vms
+./dfo azure report idle-vms
 
 # JSON output to stdout
-./dfo.sh azure report idle-vms --format json
+./dfo azure report idle-vms --format json
 
 # Save to file
-./dfo.sh azure report idle-vms --format json --output report-$(date +%Y%m%d).json
+./dfo azure report idle-vms --format json --output report-$(date +%Y%m%d).json
 ```
 
 ---
@@ -396,7 +396,7 @@ Generate reports from analysis results.
 Execute remediation actions on Azure resources.
 
 ```bash
-./dfo.sh azure execute stop-idle-vms [OPTIONS]
+./dfo azure execute stop-idle-vms [OPTIONS]
 ```
 
 **Options:**
@@ -413,16 +413,16 @@ Execute remediation actions on Azure resources.
 **Examples:**
 ```bash
 # See what would happen (dry-run)
-./dfo.sh azure execute stop-idle-vms
+./dfo azure execute stop-idle-vms
 
 # Actually stop VMs (with confirmation)
-./dfo.sh azure execute stop-idle-vms --no-dry-run
+./dfo azure execute stop-idle-vms --no-dry-run
 
 # Stop only critical VMs without prompting
-./dfo.sh azure execute stop-idle-vms --no-dry-run --yes --min-severity critical
+./dfo azure execute stop-idle-vms --no-dry-run --yes --min-severity critical
 
 # Automation-friendly (use in scripts)
-./dfo.sh azure execute stop-idle-vms --no-dry-run --yes --min-severity high
+./dfo azure execute stop-idle-vms --no-dry-run --yes --min-severity high
 ```
 
 **Actions performed:**
@@ -439,13 +439,13 @@ Run this monthly to identify optimization opportunities:
 
 ```bash
 # Discover current state
-./dfo.sh azure discover vms
+./dfo azure discover vms
 
 # Analyze for idle VMs
-./dfo.sh azure analyze idle-vms
+./dfo azure analyze idle-vms
 
 # Generate report
-./dfo.sh azure report idle-vms --format json --output monthly-review-$(date +%Y-%m).json
+./dfo azure report idle-vms --format json --output monthly-review-$(date +%Y-%m).json
 
 # Review the report and decide on actions
 ```
@@ -462,17 +462,17 @@ cd /path/to/dfo
 source activate dfo
 
 # Discover and analyze
-./dfo.sh azure discover vms
-./dfo.sh azure analyze idle-vms
+./dfo azure discover vms
+./dfo azure analyze idle-vms
 
 # Stop critical idle VMs (>$500/month savings)
-./dfo.sh azure execute stop-idle-vms \
+./dfo azure execute stop-idle-vms \
   --no-dry-run \
   --yes \
   --min-severity critical
 
 # Generate report
-./dfo.sh azure report idle-vms --format json --output /var/log/dfo/report-$(date +%Y%m%d).json
+./dfo azure report idle-vms --format json --output /var/log/dfo/report-$(date +%Y%m%d).json
 ```
 
 ### Use Case 3: Development Environment Cleanup
@@ -481,14 +481,14 @@ Stop all idle dev/test VMs at end of week:
 
 ```bash
 # Discover and analyze
-./dfo.sh azure discover vms
-./dfo.sh azure analyze idle-vms
+./dfo azure discover vms
+./dfo azure analyze idle-vms
 
 # Review findings
-./dfo.sh azure report idle-vms
+./dfo azure report idle-vms
 
 # Stop ALL idle VMs (not just critical)
-./dfo.sh azure execute stop-idle-vms --no-dry-run --min-severity low
+./dfo azure execute stop-idle-vms --no-dry-run --min-severity low
 ```
 
 ### Use Case 4: Cost Report for Management
@@ -501,9 +501,9 @@ Generate a monthly cost optimization report:
 
 DATE=$(date +%Y-%m)
 
-./dfo.sh azure discover vms
-./dfo.sh azure analyze idle-vms
-./dfo.sh azure report idle-vms --format json --output cost-report-$DATE.json
+./dfo azure discover vms
+./dfo azure analyze idle-vms
+./dfo azure report idle-vms --format json --output cost-report-$DATE.json
 
 # Upload to S3/Azure Blob/etc for dashboard
 # aws s3 cp cost-report-$DATE.json s3://finops-reports/
@@ -560,7 +560,7 @@ Savings are estimated based on:
 **Solutions:**
 1. Check `.env` file has correct credentials:
    ```bash
-   ./dfo.sh config --show-secrets
+   ./dfo config --show-secrets
    ```
 
 2. Verify service principal exists and has permissions:
@@ -570,13 +570,13 @@ Savings are estimated based on:
 
 3. Test authentication:
    ```bash
-   ./dfo.sh azure test-auth
+   ./dfo azure test-auth
    ```
 
 4. Try Azure CLI authentication:
    ```bash
    az login
-   ./dfo.sh azure test-auth
+   ./dfo azure test-auth
    ```
 
 ---
@@ -588,10 +588,10 @@ Savings are estimated based on:
 **Solution:**
 ```bash
 # If you want to keep data, check what's there:
-./dfo.sh db info
+./dfo db info
 
 # If you want to start fresh:
-./dfo.sh db refresh --yes
+./dfo db refresh --yes
 ```
 
 ---
@@ -600,7 +600,7 @@ Savings are estimated based on:
 
 **Solution:**
 ```bash
-./dfo.sh db init
+./dfo db init
 ```
 
 ---
@@ -647,13 +647,13 @@ az role assignment list --assignee $AZURE_CLIENT_ID
 ### 1. Start with Dry-Run
 Always test with dry-run first:
 ```bash
-./dfo.sh azure execute stop-idle-vms  # See what would happen
+./dfo azure execute stop-idle-vms  # See what would happen
 ```
 
 ### 2. Use Severity Filtering
 Start with critical VMs only:
 ```bash
-./dfo.sh azure execute stop-idle-vms --no-dry-run --min-severity critical
+./dfo azure execute stop-idle-vms --no-dry-run --min-severity critical
 ```
 
 ### 3. Regular Cadence
@@ -671,7 +671,7 @@ cp dfo.duckdb backups/dfo-$(date +%Y%m%d).duckdb
 ### 5. Monitor Action Logs
 Review executed actions:
 ```bash
-./dfo.sh db info  # Check vm_actions table
+./dfo db info  # Check vm_actions table
 ```
 
 ### 6. Adjust Thresholds
@@ -777,9 +777,9 @@ Use with caution in production. Test thoroughly in dev/test environments first.
 ### Documentation
 - **User Guide**: This file
 - **Developer Guide**: `CLAUDE.md`
-- **Architecture**: `ARCHITECTURE.md`
-- **Code Style**: `CODE_STYLE.md`
-- **Milestones**: `MVP.md`
+- **Architecture**: `docs/ARCHITECTURE.md`
+- **Code Style**: `docs/CODE_STYLE.md`
+- **Milestones**: `docs/MVP.md`
 
 ### Support
 - Report issues: Create an issue in the repository

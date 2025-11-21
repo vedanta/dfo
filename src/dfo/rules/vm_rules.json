@@ -1,0 +1,439 @@
+{
+  "optimizations": [
+    {
+      "layer": 1,
+      "sub_layer": "Self-Contained VM",
+      "type": "Right-Sizing (CPU)",
+      "metric": "CPU utilization",
+      "threshold": "<20%",
+      "period": "14d",
+      "unit": "percent",
+      "enabled": true,
+      "providers": {
+        "azure": "Azure Monitor: Percentage CPU",
+        "aws": "AWS: CPUUtilization",
+        "gcp": "GCP: cpu/utilization"
+      }
+    },
+    {
+      "layer": 1,
+      "sub_layer": "Self-Contained VM",
+      "type": "Right-Sizing (Memory)",
+      "metric": "Memory utilization",
+      "threshold": "<30%",
+      "period": "14d",
+      "unit": "percent",
+      "enabled": false,
+      "providers": {
+        "azure": "Azure Monitor: Memory Percent Used",
+        "aws": "AWS: mem_used_percent",
+        "gcp": "GCP: memory/percent_used"
+      }
+    },
+    {
+      "layer": 1,
+      "sub_layer": "Self-Contained VM",
+      "type": "Idle VM Detection",
+      "metric": "CPU/RAM <5%",
+      "threshold": "<5%",
+      "period": "7d",
+      "unit": "percent",
+      "enabled": true,
+      "providers": {
+        "azure": "CPU% + RAM% time series",
+        "aws": "AWS: CPUUtilization + mem_used_percent",
+        "gcp": "GCP: low CPU+RAM"
+      }
+    },
+    {
+      "layer": 1,
+      "sub_layer": "Self-Contained VM",
+      "type": "Shutdown Detection",
+      "metric": "Powered-off days",
+      "threshold": "0",
+      "period": "30d",
+      "unit": "days",
+      "enabled": true,
+      "providers": {
+        "azure": "Azure powerState timeline",
+        "aws": "AWS: EC2 state transition",
+        "gcp": "GCP: stopped timestamp"
+      }
+    },
+    {
+      "layer": 1,
+      "sub_layer": "Self-Contained VM",
+      "type": "Family Optimization",
+      "metric": "CPU/mem fit",
+      "threshold": "mismatch>30%",
+      "period": "na",
+      "unit": "ratio",
+      "enabled": false,
+      "providers": {
+        "azure": "Azure SKU API",
+        "aws": "AWS instance types",
+        "gcp": "GCP machine types"
+      }
+    },
+    {
+      "layer": 1,
+      "sub_layer": "Self-Contained VM",
+      "type": "Generation Upgrade",
+      "metric": "Price/performance",
+      "threshold": "improve",
+      "period": "na",
+      "unit": "index",
+      "enabled": false,
+      "providers": {
+        "azure": "Azure Retail API",
+        "aws": "AWS Pricing API",
+        "gcp": "GCP Catalog"
+      }
+    },
+    {
+      "layer": 1,
+      "sub_layer": "Self-Contained VM",
+      "type": "Reserved Instance Optimization",
+      "metric": "Commit coverage",
+      "threshold": "<70%",
+      "period": "30d",
+      "unit": "percent",
+      "enabled": false,
+      "providers": {
+        "azure": "Azure Reservation Utilization",
+        "aws": "AWS RI/SP utilization",
+        "gcp": "GCP CUD report"
+      }
+    },
+    {
+      "layer": 1,
+      "sub_layer": "Self-Contained VM",
+      "type": "Spot Optimization",
+      "metric": "Interruption rate",
+      "threshold": ">10%",
+      "period": "na",
+      "unit": "percent",
+      "enabled": false,
+      "providers": {
+        "azure": "Azure Spot eviction API",
+        "aws": "AWS spot interruption",
+        "gcp": "GCP preemptible events"
+      }
+    },
+    {
+      "layer": 1,
+      "sub_layer": "Self-Contained VM",
+      "type": "OS Cost Optimization",
+      "metric": "Linux vs Windows delta",
+      "threshold": "linux>30%cheaper",
+      "period": "na",
+      "unit": "usd/hr",
+      "enabled": false,
+      "providers": {
+        "azure": "Azure Retail API",
+        "aws": "AWS Pricing",
+        "gcp": "GCP Catalog"
+      }
+    },
+    {
+      "layer": 1,
+      "sub_layer": "Self-Contained VM",
+      "type": "License Optimization",
+      "metric": "Cost per core",
+      "threshold": "high",
+      "period": "na",
+      "unit": "usd/core",
+      "enabled": false,
+      "providers": {
+        "azure": "Core count + license model",
+        "aws": "AWS SQL/Windows licensing",
+        "gcp": "GCP vCPU license"
+      }
+    },
+    {
+      "layer": 2,
+      "sub_layer": "Adjacent",
+      "type": "Disk Tiering",
+      "metric": "IOPS vs provisioned",
+      "threshold": "<20%",
+      "period": "na",
+      "unit": "iops",
+      "enabled": false,
+      "providers": {
+        "azure": "Azure Disk IOPS",
+        "aws": "AWS VolumeReadOps",
+        "gcp": "GCP PD IOPS"
+      }
+    },
+    {
+      "layer": 2,
+      "sub_layer": "Adjacent",
+      "type": "Disk Size Reduction",
+      "metric": "Disk utilization",
+      "threshold": "<40%",
+      "period": "na",
+      "unit": "percent",
+      "enabled": false,
+      "providers": {
+        "azure": "Azure guest metrics",
+        "aws": "AWS disk_used_percent",
+        "gcp": "GCP disk used"
+      }
+    },
+    {
+      "layer": 2,
+      "sub_layer": "Adjacent",
+      "type": "Orphaned Disk Cleanup",
+      "metric": "Days unattached",
+      "threshold": ">0",
+      "period": "14d",
+      "unit": "days",
+      "enabled": false,
+      "providers": {
+        "azure": "Azure unattached disks",
+        "aws": "AWS EBS state=available",
+        "gcp": "GCP unattached PD"
+      }
+    },
+    {
+      "layer": 2,
+      "sub_layer": "Adjacent",
+      "type": "Public IP Cleanup",
+      "metric": "Unattached IPs",
+      "threshold": ">0",
+      "period": "7d",
+      "unit": "count",
+      "enabled": false,
+      "providers": {
+        "azure": "Azure ip null config",
+        "aws": "AWS EIP no AssociationId",
+        "gcp": "GCP unbound IP"
+      }
+    },
+    {
+      "layer": 2,
+      "sub_layer": "Adjacent",
+      "type": "Load Balancer Tier Optimization",
+      "metric": "LB throughput vs SKU",
+      "threshold": "<20%",
+      "period": "na",
+      "unit": "bytes/sec",
+      "enabled": false,
+      "providers": {
+        "azure": "Azure ByteCount/FlowCount",
+        "aws": "AWS BytesProcessed",
+        "gcp": "GCP LB bytes"
+      }
+    },
+    {
+      "layer": 2,
+      "sub_layer": "Adjacent",
+      "type": "Network Throughput Optimization",
+      "metric": "NIC throughput",
+      "threshold": "low",
+      "period": "na",
+      "unit": "bytes",
+      "enabled": false,
+      "providers": {
+        "azure": "Azure Network In/Out",
+        "aws": "AWS NetworkIn/Out",
+        "gcp": "GCP network bytes"
+      }
+    },
+    {
+      "layer": 2,
+      "sub_layer": "Adjacent",
+      "type": "Redundancy Optimization",
+      "metric": "Active vs required nodes",
+      "threshold": "excess>20%",
+      "period": "na",
+      "unit": "count",
+      "enabled": false,
+      "providers": {
+        "azure": "Azure VMSS capacity",
+        "aws": "AWS ASG desired/util",
+        "gcp": "GCP MIG count"
+      }
+    },
+    {
+      "layer": 2,
+      "sub_layer": "Adjacent",
+      "type": "Region Optimization",
+      "metric": "Regional cost variance",
+      "threshold": ">20%",
+      "period": "na",
+      "unit": "usd/hr",
+      "enabled": false,
+      "providers": {
+        "azure": "Azure pricing",
+        "aws": "AWS pricing",
+        "gcp": "GCP pricing"
+      }
+    },
+    {
+      "layer": 2,
+      "sub_layer": "Adjacent",
+      "type": "Zonal Optimization",
+      "metric": "AZ cost/egress",
+      "threshold": "high",
+      "period": "na",
+      "unit": "gb",
+      "enabled": false,
+      "providers": {
+        "azure": "Azure inter-AZ metrics",
+        "aws": "AWS InterZoneIn/Out",
+        "gcp": "GCP inter-zone transfer"
+      }
+    },
+    {
+      "layer": 2,
+      "sub_layer": "Adjacent",
+      "type": "Unattached Resource Cleanup",
+      "metric": "Days unattached",
+      "threshold": ">0",
+      "period": "7d",
+      "unit": "days",
+      "enabled": false,
+      "providers": {
+        "azure": "Azure RG asset delta",
+        "aws": "AWS Config inventory",
+        "gcp": "GCP Asset Inventory"
+      }
+    },
+    {
+      "layer": 3,
+      "sub_layer": "Architecture",
+      "type": "Non-Prod Scheduling",
+      "metric": "Runtime hours",
+      "threshold": "<50%",
+      "period": "7d",
+      "unit": "hours",
+      "enabled": false,
+      "providers": {
+        "azure": "Azure activity logs",
+        "aws": "AWS CloudTrail",
+        "gcp": "GCP ops logs"
+      }
+    },
+    {
+      "layer": 3,
+      "sub_layer": "Architecture",
+      "type": "Autoscaling Optimization",
+      "metric": "Scaling vs load",
+      "threshold": "mismatch>25%",
+      "period": "na",
+      "unit": "ratio",
+      "enabled": false,
+      "providers": {
+        "azure": "Azure VMSS autoscale",
+        "aws": "AWS ASG scaling",
+        "gcp": "GCP MIG autoscaler"
+      }
+    },
+    {
+      "layer": 3,
+      "sub_layer": "Architecture",
+      "type": "Zero Usage Shutdown",
+      "metric": "No CPU/Net/IO",
+      "threshold": "0",
+      "period": "7d",
+      "unit": "composite",
+      "enabled": false,
+      "providers": {
+        "azure": "Azure composite metric",
+        "aws": "AWS composite",
+        "gcp": "GCP composite"
+      }
+    },
+    {
+      "layer": 3,
+      "sub_layer": "Architecture",
+      "type": "Containerization",
+      "metric": "Node utilization",
+      "threshold": "<30%",
+      "period": "na",
+      "unit": "percent",
+      "enabled": false,
+      "providers": {
+        "azure": "AKS node metrics",
+        "aws": "EKS node metrics",
+        "gcp": "GKE node metrics"
+      }
+    },
+    {
+      "layer": 3,
+      "sub_layer": "Architecture",
+      "type": "Serverless Shift",
+      "metric": "VM vs FaaS cost",
+      "threshold": "faas_cheaper",
+      "period": "na",
+      "unit": "usd",
+      "enabled": false,
+      "providers": {
+        "azure": "Azure Functions",
+        "aws": "AWS Lambda",
+        "gcp": "GCP Cloud Functions"
+      }
+    },
+    {
+      "layer": 3,
+      "sub_layer": "Architecture",
+      "type": "Stateless Architecture",
+      "metric": "Session externalization",
+      "threshold": "externalized",
+      "period": "na",
+      "unit": "count",
+      "enabled": false,
+      "providers": {
+        "azure": "Azure Redis",
+        "aws": "AWS Elasticache",
+        "gcp": "GCP Memorystore"
+      }
+    },
+    {
+      "layer": 3,
+      "sub_layer": "Architecture",
+      "type": "Horizontal Scaling",
+      "metric": "Requests per instance",
+      "threshold": "low",
+      "period": "na",
+      "unit": "requests",
+      "enabled": false,
+      "providers": {
+        "azure": "Azure App Gateway",
+        "aws": "AWS ALB",
+        "gcp": "GCP LB"
+      }
+    },
+    {
+      "layer": 3,
+      "sub_layer": "Architecture",
+      "type": "Compute Storage Co-location",
+      "metric": "Cross-region GB",
+      "threshold": "high",
+      "period": "na",
+      "unit": "gb",
+      "enabled": false,
+      "providers": {
+        "azure": "Azure egress",
+        "aws": "AWS bytes out",
+        "gcp": "GCP egress"
+      }
+    },
+    {
+      "layer": 3,
+      "sub_layer": "Architecture",
+      "type": "Caching Optimization",
+      "metric": "Cache hit ratio",
+      "threshold": "<70%",
+      "period": "na",
+      "unit": "percent",
+      "enabled": false,
+      "providers": {
+        "azure": "Azure Redis hits",
+        "aws": "AWS Elasticache hits",
+        "gcp": "GCP Memorystore hits"
+      }
+    }
+  ]
+}
