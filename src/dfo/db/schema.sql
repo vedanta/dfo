@@ -33,3 +33,13 @@ CREATE TABLE IF NOT EXISTS vm_actions (
     executed_at TIMESTAMP,
     notes TEXT
 );
+
+CREATE TABLE IF NOT EXISTS vm_pricing_cache (
+    vm_size TEXT,
+    region TEXT,
+    os_type TEXT,
+    hourly_price DOUBLE,
+    currency TEXT,
+    fetched_at TIMESTAMP,
+    PRIMARY KEY (vm_size, region, os_type)
+);

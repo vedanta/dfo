@@ -34,6 +34,10 @@ class Settings(BaseSettings):
     azure_client_secret: str
     azure_subscription_id: str
 
+    # Azure Pricing API Configuration (DFO_ prefix)
+    dfo_azure_pricing_api_url: str = "https://prices.azure.com/api/retail/prices"
+    dfo_pricing_cache_ttl_days: int = 7
+
     # Analysis Configuration (DFO_ prefix)
     dfo_idle_cpu_threshold: float = 5.0
     dfo_idle_days: int = 14
