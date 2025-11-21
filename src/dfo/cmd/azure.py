@@ -231,10 +231,50 @@ def list_resources(
         "--size", "-s",
         help="Filter by VM size"
     ),
+    tag: str = typer.Option(
+        None,
+        "--tag",
+        help="Filter by tag (key=value or key)"
+    ),
+    tag_key: str = typer.Option(
+        None,
+        "--tag-key",
+        help="Filter by tag key exists"
+    ),
+    discovered_after: str = typer.Option(
+        None,
+        "--discovered-after",
+        help="Filter by discovery date (YYYY-MM-DD)"
+    ),
+    discovered_before: str = typer.Option(
+        None,
+        "--discovered-before",
+        help="Filter by discovery date (YYYY-MM-DD)"
+    ),
+    sort: str = typer.Option(
+        None,
+        "--sort",
+        help="Sort by field (name, resource_group, location, size, power_state, discovered_at)"
+    ),
+    order: str = typer.Option(
+        "asc",
+        "--order",
+        help="Sort order: asc or desc"
+    ),
     limit: int = typer.Option(
         None,
         "--limit",
         help="Limit number of results"
+    ),
+    format: str = typer.Option(
+        "table",
+        "--format", "-f",
+        help="Output format: table, json, csv"
+    ),
+    output: str = typer.Option(
+        None,
+        "--output", "-o",
+        help="Output file path (stdout if not specified)"
     )
 ):
     """List discovered resources from local database.
@@ -245,15 +285,26 @@ def list_resources(
     Supported resource types:
     - vms: Virtual machines
 
+    Output formats:
+    - table: Rich formatted table (default)
+    - json: JSON output
+    - csv: CSV output
+
     Example:
         dfo azure list vms
         dfo azure list vms --resource-group production-rg
-        dfo azure list vms --power-state running
-        dfo azure list vms --location eastus
+        dfo azure list vms --power-state running --format json
+        dfo azure list vms --format csv --output inventory.csv
     """
     if resource != "vms":
         console.print(f"[red]Error:[/red] Unsupported resource type: {resource}")
         console.print("Supported types: vms")
+        raise typer.Exit(1)
+
+    # Validate format
+    if format not in ["table", "json", "csv"]:
+        console.print(f"[red]Error:[/red] Unsupported format: {format}")
+        console.print("Supported formats: table, json, csv")
         raise typer.Exit(1)
 
     try:
@@ -264,6 +315,7 @@ def list_resources(
             get_vm_count_by_power_state,
             get_vm_count_by_location
         )
+        from dfo.inventory.formatters import format_vms_as_json, format_vms_as_csv
 
         # Query VMs with filters
         vms = get_vms_filtered(
@@ -271,12 +323,99 @@ def list_resources(
             location=location,
             power_state=power_state,
             size=size,
+            tag=tag,
+            tag_key=tag_key,
+            discovered_after=discovered_after,
+            discovered_before=discovered_before,
+            sort=sort,
+            order=order,
             limit=limit
         )
 
         if not vms:
-            console.print("\n[yellow]No VMs found in inventory.[/yellow]")
-            console.print("[dim]Run './dfo azure discover vms' to discover VMs from Azure.[/dim]\n")
+            if format == "table":
+                console.print("\n[yellow]No VMs found in inventory.[/yellow]")
+                console.print("[dim]Run './dfo azure discover vms' to discover VMs from Azure.[/dim]\n")
+            elif format == "json":
+                filters_applied = {}
+                if resource_group:
+                    filters_applied["resource_group"] = resource_group
+                if location:
+                    filters_applied["location"] = location
+                if power_state:
+                    filters_applied["power_state"] = power_state
+                if size:
+                    filters_applied["size"] = size
+                if tag:
+                    filters_applied["tag"] = tag
+                if tag_key:
+                    filters_applied["tag_key"] = tag_key
+                if discovered_after:
+                    filters_applied["discovered_after"] = discovered_after
+                if discovered_before:
+                    filters_applied["discovered_before"] = discovered_before
+                if limit:
+                    filters_applied["limit"] = limit
+
+                result = format_vms_as_json([], filters_applied)
+                if output:
+                    with open(output, 'w') as f:
+                        f.write(result)
+                    console.print(f"[green]✓[/green] Output written to {output}")
+                else:
+                    print(result)
+            elif format == "csv":
+                result = format_vms_as_csv([])
+                if output:
+                    with open(output, 'w') as f:
+                        f.write(result)
+                    console.print(f"[green]✓[/green] Output written to {output}")
+                else:
+                    print(result)
+            return
+
+        # Handle JSON output
+        if format == "json":
+            filters_applied = {}
+            if resource_group:
+                filters_applied["resource_group"] = resource_group
+            if location:
+                filters_applied["location"] = location
+            if power_state:
+                filters_applied["power_state"] = power_state
+            if size:
+                filters_applied["size"] = size
+            if tag:
+                filters_applied["tag"] = tag
+            if tag_key:
+                filters_applied["tag_key"] = tag_key
+            if discovered_after:
+                filters_applied["discovered_after"] = discovered_after
+            if discovered_before:
+                filters_applied["discovered_before"] = discovered_before
+            if limit:
+                filters_applied["limit"] = limit
+
+            result = format_vms_as_json(vms, filters_applied)
+
+            if output:
+                with open(output, 'w') as f:
+                    f.write(result)
+                console.print(f"[green]✓[/green] JSON output written to {output}")
+            else:
+                print(result)
+            return
+
+        # Handle CSV output
+        if format == "csv":
+            result = format_vms_as_csv(vms)
+
+            if output:
+                with open(output, 'w') as f:
+                    f.write(result)
+                console.print(f"[green]✓[/green] CSV output written to {output}")
+            else:
+                print(result)
             return
 
         # Create table
@@ -365,6 +504,16 @@ def show_resource(
         False,
         "--metrics",
         help="Show detailed metrics information"
+    ),
+    format: str = typer.Option(
+        "table",
+        "--format", "-f",
+        help="Output format: table, json"
+    ),
+    output: str = typer.Option(
+        None,
+        "--output", "-o",
+        help="Output file path (stdout if not specified)"
     )
 ):
     """Show detailed information about a specific resource.
@@ -375,13 +524,25 @@ def show_resource(
     Supported resource types:
     - vm: Virtual machine
 
+    Output formats:
+    - table: Rich formatted panel (default)
+    - json: JSON output
+
     Example:
         dfo azure show vm prod-web-01
         dfo azure show vm prod-web-01 --metrics
+        dfo azure show vm prod-web-01 --format json
+        dfo azure show vm prod-web-01 --format json --output vm-details.json
     """
     if resource != "vm":
         console.print(f"[red]Error:[/red] Unsupported resource type: {resource}")
         console.print("Supported types: vm")
+        raise typer.Exit(1)
+
+    # Validate format
+    if format not in ["table", "json"]:
+        console.print(f"[red]Error:[/red] Unsupported format: {format}")
+        console.print("Supported formats: table, json")
         raise typer.Exit(1)
 
     try:
@@ -389,6 +550,7 @@ def show_resource(
         from rich.panel import Panel
         from rich.syntax import Syntax
         from dfo.inventory.queries import get_vm_by_name
+        from dfo.inventory.formatters import format_vm_detail_as_json
         import json
 
         # Get VM
@@ -398,6 +560,18 @@ def show_resource(
             console.print(f"\n[red]Error:[/red] VM '{name}' not found in inventory")
             console.print("[dim]Run './dfo azure list vms' to see available VMs[/dim]\n")
             raise typer.Exit(1)
+
+        # Handle JSON output
+        if format == "json":
+            result = format_vm_detail_as_json(vm)
+
+            if output:
+                with open(output, 'w') as f:
+                    f.write(result)
+                console.print(f"[green]✓[/green] JSON output written to {output}")
+            else:
+                print(result)
+            return
 
         # Build detail view
         details = []
@@ -491,6 +665,200 @@ def show_resource(
                 border_style="yellow"
             ))
 
+        console.print()
+
+    except Exception as e:
+        console.print(f"[red]Error:[/red] {e}")
+        import os
+        if os.getenv("DFO_DEBUG"):
+            import traceback
+            traceback.print_exc()
+        raise typer.Exit(1)
+
+
+@app.command(name="search")
+def search_resources(
+    resource: str = typer.Argument(
+        ...,
+        help="Resource type to search (e.g., 'vms')"
+    ),
+    query: str = typer.Argument(
+        ...,
+        help="Search query (supports * wildcard)"
+    ),
+    resource_group: str = typer.Option(
+        None,
+        "--resource-group", "-g",
+        help="Filter by resource group"
+    ),
+    location: str = typer.Option(
+        None,
+        "--location", "-l",
+        help="Filter by location"
+    ),
+    power_state: str = typer.Option(
+        None,
+        "--power-state", "-p",
+        help="Filter by power state"
+    ),
+    size: str = typer.Option(
+        None,
+        "--size", "-s",
+        help="Filter by VM size"
+    ),
+    limit: int = typer.Option(
+        None,
+        "--limit",
+        help="Limit number of results"
+    ),
+    format: str = typer.Option(
+        "table",
+        "--format", "-f",
+        help="Output format: table, json, csv"
+    ),
+    output: str = typer.Option(
+        None,
+        "--output", "-o",
+        help="Output file path (stdout if not specified)"
+    )
+):
+    """Search for resources in local inventory.
+
+    Performs case-insensitive search across resource names, resource groups,
+    and tags. Supports wildcard patterns using * character.
+
+    Supported resource types:
+    - vms: Virtual machines
+
+    Example:
+        dfo azure search vms "prod*"
+        dfo azure search vms "web" --power-state running
+        dfo azure search vms "production" --format json
+    """
+    if resource != "vms":
+        console.print(f"[red]Error:[/red] Unsupported resource type: {resource}")
+        console.print("Supported types: vms")
+        raise typer.Exit(1)
+
+    # Validate format
+    if format not in ["table", "json", "csv"]:
+        console.print(f"[red]Error:[/red] Unsupported format: {format}")
+        console.print("Supported formats: table, json, csv")
+        raise typer.Exit(1)
+
+    try:
+        from rich.table import Table
+        from dfo.inventory.queries import search_vms, get_vm_count_by_power_state, get_vm_count_by_location
+        from dfo.inventory.formatters import format_vms_as_json, format_vms_as_csv
+
+        # Search VMs
+        vms = search_vms(
+            query=query,
+            resource_group=resource_group,
+            location=location,
+            power_state=power_state,
+            size=size,
+            limit=limit
+        )
+
+        if not vms:
+            if format == "table":
+                console.print(f"\n[yellow]No VMs found matching '{query}'[/yellow]")
+                console.print("[dim]Try a different search term or pattern[/dim]\n")
+            elif format == "json":
+                result = format_vms_as_json([], {"query": query})
+                if output:
+                    with open(output, 'w') as f:
+                        f.write(result)
+                    console.print(f"[green]✓[/green] Output written to {output}")
+                else:
+                    print(result)
+            elif format == "csv":
+                result = format_vms_as_csv([])
+                if output:
+                    with open(output, 'w') as f:
+                        f.write(result)
+                    console.print(f"[green]✓[/green] Output written to {output}")
+                else:
+                    print(result)
+            return
+
+        # Handle JSON output
+        if format == "json":
+            filters_applied = {"query": query}
+            if resource_group:
+                filters_applied["resource_group"] = resource_group
+            if location:
+                filters_applied["location"] = location
+            if power_state:
+                filters_applied["power_state"] = power_state
+            if size:
+                filters_applied["size"] = size
+            if limit:
+                filters_applied["limit"] = limit
+
+            result = format_vms_as_json(vms, filters_applied)
+
+            if output:
+                with open(output, 'w') as f:
+                    f.write(result)
+                console.print(f"[green]✓[/green] JSON output written to {output}")
+            else:
+                print(result)
+            return
+
+        # Handle CSV output
+        if format == "csv":
+            result = format_vms_as_csv(vms)
+
+            if output:
+                with open(output, 'w') as f:
+                    f.write(result)
+                console.print(f"[green]✓[/green] CSV output written to {output}")
+            else:
+                print(result)
+            return
+
+        # Table output (default)
+        table = Table(
+            title=f"Search Results: '{query}' ({len(vms)} VMs)",
+            show_header=True,
+            header_style="bold cyan"
+        )
+
+        table.add_column("Name", style="bold", width=25)
+        table.add_column("Resource Group", style="dim", width=20)
+        table.add_column("Location", style="blue", width=12)
+        table.add_column("Size", style="yellow", width=15)
+        table.add_column("Power State", style="magenta", width=12)
+        table.add_column("Metrics", style="green", justify="center", width=8)
+
+        for vm in vms:
+            # Determine power state color
+            power_state_display = vm["power_state"]
+            if vm["power_state"] == "running":
+                power_state_display = f"[green]{vm['power_state']}[/green]"
+            elif vm["power_state"] == "stopped":
+                power_state_display = f"[yellow]{vm['power_state']}[/yellow]"
+            elif vm["power_state"] == "deallocated":
+                power_state_display = f"[dim]{vm['power_state']}[/dim]"
+
+            # Check if metrics exist
+            has_metrics = len(vm.get("cpu_timeseries", [])) > 0
+            metrics_icon = "✓" if has_metrics else "✗"
+            metrics_display = f"[green]{metrics_icon}[/green]" if has_metrics else f"[dim]{metrics_icon}[/dim]"
+
+            table.add_row(
+                vm["name"],
+                vm["resource_group"],
+                vm["location"],
+                vm["size"],
+                power_state_display,
+                metrics_display
+            )
+
+        console.print()
+        console.print(table)
         console.print()
 
     except Exception as e:
