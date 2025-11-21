@@ -16,6 +16,8 @@ def test_list_vms_success():
     mock_vm.location = "eastus"
     mock_vm.hardware_profile.vm_size = "Standard_D2s_v3"
     mock_vm.tags = {"env": "prod"}
+    mock_vm.priority = "Regular"
+    mock_vm.storage_profile.os_disk.os_type = "Linux"
 
     # Mock instance view
     mock_instance_view = Mock()
@@ -34,6 +36,8 @@ def test_list_vms_success():
     assert vms[0]["location"] == "eastus"
     assert vms[0]["size"] == "Standard_D2s_v3"
     assert vms[0]["power_state"] == "running"
+    assert vms[0]["os_type"] == "Linux"
+    assert vms[0]["priority"] == "Regular"
     assert vms[0]["tags"] == {"env": "prod"}
 
 
@@ -47,6 +51,8 @@ def test_list_vms_no_tags():
     mock_vm.location = "eastus"
     mock_vm.hardware_profile.vm_size = "Standard_B2s"
     mock_vm.tags = None  # No tags
+    mock_vm.priority = "Regular"
+    mock_vm.storage_profile.os_disk.os_type = "Windows"
 
     mock_instance_view = Mock()
     mock_instance_view.statuses = []  # No power state
@@ -59,6 +65,8 @@ def test_list_vms_no_tags():
     assert len(vms) == 1
     assert vms[0]["tags"] == {}
     assert vms[0]["power_state"] == "unknown"
+    assert vms[0]["os_type"] == "Windows"
+    assert vms[0]["priority"] == "Regular"
 
 
 def test_list_vms_multiple_states():
@@ -71,6 +79,8 @@ def test_list_vms_multiple_states():
     mock_vm.location = "eastus"
     mock_vm.hardware_profile.vm_size = "Standard_D2s_v3"
     mock_vm.tags = {}
+    mock_vm.priority = "Regular"
+    mock_vm.storage_profile.os_disk.os_type = "Linux"
 
     # Test different power states
     for power_state in ["running", "stopped", "deallocated"]:
@@ -96,6 +106,8 @@ def test_list_vms_instance_view_failure():
     mock_vm.location = "eastus"
     mock_vm.hardware_profile.vm_size = "Standard_D2s_v3"
     mock_vm.tags = {}
+    mock_vm.priority = "Regular"
+    mock_vm.storage_profile.os_disk.os_type = "Linux"
 
     mock_client.virtual_machines.list_all.return_value = [mock_vm]
     mock_client.virtual_machines.instance_view.side_effect = Exception("API error")
@@ -105,6 +117,65 @@ def test_list_vms_instance_view_failure():
     # Should still return VM with unknown power state
     assert len(vms) == 1
     assert vms[0]["power_state"] == "unknown"
+    assert vms[0]["os_type"] == "Linux"
+    assert vms[0]["priority"] == "Regular"
+
+
+def test_list_vms_missing_os_type():
+    """Test VM listing when storage_profile is None."""
+    mock_client = Mock()
+
+    mock_vm = Mock()
+    mock_vm.id = "/subscriptions/sub1/resourceGroups/rg1/providers/Microsoft.Compute/virtualMachines/vm1"
+    mock_vm.name = "vm1"
+    mock_vm.location = "eastus"
+    mock_vm.hardware_profile.vm_size = "Standard_D2s_v3"
+    mock_vm.tags = {}
+    mock_vm.priority = "Regular"
+    mock_vm.storage_profile = None  # Missing storage profile
+
+    mock_instance_view = Mock()
+    mock_status = Mock()
+    mock_status.code = "PowerState/running"
+    mock_instance_view.statuses = [mock_status]
+
+    mock_client.virtual_machines.list_all.return_value = [mock_vm]
+    mock_client.virtual_machines.instance_view.return_value = mock_instance_view
+
+    vms = list_vms(mock_client)
+
+    # Should still return VM with None os_type
+    assert len(vms) == 1
+    assert vms[0]["os_type"] is None
+    assert vms[0]["priority"] == "Regular"
+
+
+def test_list_vms_spot_priority():
+    """Test VM listing with Spot priority."""
+    mock_client = Mock()
+
+    mock_vm = Mock()
+    mock_vm.id = "/subscriptions/sub1/resourceGroups/rg1/providers/Microsoft.Compute/virtualMachines/vm1"
+    mock_vm.name = "spot-vm1"
+    mock_vm.location = "eastus"
+    mock_vm.hardware_profile.vm_size = "Standard_D2s_v3"
+    mock_vm.tags = {}
+    mock_vm.priority = "Spot"
+    mock_vm.storage_profile.os_disk.os_type = "Linux"
+
+    mock_instance_view = Mock()
+    mock_status = Mock()
+    mock_status.code = "PowerState/running"
+    mock_instance_view.statuses = [mock_status]
+
+    mock_client.virtual_machines.list_all.return_value = [mock_vm]
+    mock_client.virtual_machines.instance_view.return_value = mock_instance_view
+
+    vms = list_vms(mock_client)
+
+    assert len(vms) == 1
+    assert vms[0]["priority"] == "Spot"
+    assert vms[0]["os_type"] == "Linux"
 
 
 def test_list_vms_empty_subscription():

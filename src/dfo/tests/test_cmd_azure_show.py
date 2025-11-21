@@ -48,6 +48,8 @@ def sample_vm(setup_env):
         "location": "eastus",
         "size": "Standard_B1s",
         "power_state": "running",
+        "os_type": "Linux",
+        "priority": "Regular",
         "tags": json.dumps({"env": "test", "owner": "team1"}),
         "cpu_timeseries": json.dumps([
             {"timestamp": "2025-01-01T00:00:00Z", "average": 10.5, "minimum": 5.0, "maximum": 15.0},
@@ -126,6 +128,8 @@ def test_show_vm_without_metrics(setup_env):
         "location": "eastus",
         "size": "Standard_B1s",
         "power_state": "stopped",
+        "os_type": "Linux",
+        "priority": "Regular",
         "tags": json.dumps({}),
         "cpu_timeseries": json.dumps([]),
         "discovered_at": datetime.utcnow()
