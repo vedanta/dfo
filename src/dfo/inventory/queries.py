@@ -131,6 +131,82 @@ def get_vm_count_by_location() -> Dict[str, int]:
     return {row[0]: row[1] for row in rows}
 
 
+def search_vms(
+    query: str,
+    resource_group: Optional[str] = None,
+    location: Optional[str] = None,
+    power_state: Optional[str] = None,
+    size: Optional[str] = None,
+    limit: Optional[int] = None
+) -> List[Dict[str, Any]]:
+    """Search VMs by name, resource group, or tags.
+
+    Performs case-insensitive search across VM fields. Supports
+    wildcard patterns with * character.
+
+    Args:
+        query: Search query string (supports * wildcard).
+        resource_group: Optional filter by resource group.
+        location: Optional filter by location.
+        power_state: Optional filter by power state.
+        size: Optional filter by VM size.
+        limit: Maximum number of results.
+
+    Returns:
+        List of matching VM records.
+    """
+    db = DuckDBManager()
+
+    # Convert wildcard pattern (* to %)
+    search_pattern = query.replace('*', '%').lower()
+
+    # Build search conditions (case-insensitive LIKE)
+    search_conditions = [
+        "LOWER(name) LIKE ?",
+        "LOWER(resource_group) LIKE ?",
+        "LOWER(tags) LIKE ?"
+    ]
+
+    # Build additional filter conditions
+    filter_conditions = []
+    params = []
+
+    # Add search pattern for each field
+    for _ in search_conditions:
+        params.append(f"%{search_pattern}%")
+
+    if resource_group:
+        filter_conditions.append("resource_group = ?")
+        params.append(resource_group)
+
+    if location:
+        filter_conditions.append("location = ?")
+        params.append(location)
+
+    if power_state:
+        filter_conditions.append("power_state = ?")
+        params.append(power_state)
+
+    if size:
+        filter_conditions.append("size = ?")
+        params.append(size)
+
+    # Build final query
+    sql = "SELECT * FROM vm_inventory WHERE "
+    sql += "(" + " OR ".join(search_conditions) + ")"
+
+    if filter_conditions:
+        sql += " AND " + " AND ".join(filter_conditions)
+
+    sql += " ORDER BY name"
+
+    if limit:
+        sql += f" LIMIT {limit}"
+
+    rows = db.query(sql, params)
+    return _deserialize_vm_records(rows)
+
+
 def _deserialize_vm_records(rows: List[tuple]) -> List[Dict[str, Any]]:
     """Deserialize JSON fields in VM records.
 
