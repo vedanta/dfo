@@ -1007,6 +1007,16 @@ def analyze(
     analysis_type: str = typer.Argument(
         ...,
         help="Analysis type (e.g., 'idle-vms')"
+    ),
+    threshold: float = typer.Option(
+        None,
+        "--threshold",
+        help="CPU threshold percentage (default: from config)"
+    ),
+    min_days: int = typer.Option(
+        None,
+        "--min-days",
+        help="Minimum days of data required (default: from config)"
     )
 ):
     """Analyze Azure resources for optimization opportunities.
@@ -1017,13 +1027,184 @@ def analyze(
     Supported analysis types:
     - idle-vms: Detect underutilized virtual machines
 
-    This command will be implemented in Milestone 4.
-
     Example:
         dfo azure analyze idle-vms
+        dfo azure analyze idle-vms --threshold 10.0
+        dfo azure analyze idle-vms --min-days 7
     """
-    console.print(f"[yellow]TODO:[/yellow] Analyze {analysis_type}")
-    console.print("This command will be implemented in Milestone 4")
+    if analysis_type != "idle-vms":
+        console.print(f"[red]Error:[/red] Unsupported analysis type: {analysis_type}")
+        console.print("Supported types: idle-vms")
+        raise typer.Exit(1)
+
+    try:
+        from rich.progress import Progress, SpinnerColumn, TextColumn
+        from rich.table import Table
+        from rich.panel import Panel
+        from rich.columns import Columns
+        from dfo.analysis.idle_vms import analyze_idle_vms, get_idle_vm_summary, get_idle_vms
+        from dfo.core.config import get_settings
+        from dfo.common.visualizations import metric_panel
+
+        settings = get_settings()
+
+        # Display configuration
+        cpu_threshold = threshold if threshold is not None else settings.dfo_idle_cpu_threshold
+        required_days = min_days if min_days is not None else settings.dfo_idle_days
+
+        console.print("\n[cyan]Starting idle VM analysis...[/cyan]")
+        console.print(f"[dim]CPU threshold:[/dim] {cpu_threshold}%")
+        console.print(f"[dim]Minimum days:[/dim] {required_days}\n")
+
+        # Run analysis
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            console=console
+        ) as progress:
+            task = progress.add_task("Analyzing VMs for idle resources...", total=None)
+
+            idle_count = analyze_idle_vms(threshold=cpu_threshold, min_days=required_days)
+
+            progress.update(task, description="✓ Analysis complete")
+
+        if idle_count == 0:
+            console.print("\n[green]✓[/green] No idle VMs detected")
+            console.print("[dim]All VMs are being utilized efficiently.[/dim]\n")
+            return
+
+        # Get summary statistics
+        summary = get_idle_vm_summary()
+
+        # Display summary metrics
+        console.print("\n[bold cyan]═══ Analysis Summary ═══[/bold cyan]\n")
+
+        metrics = [
+            metric_panel(
+                "Idle VMs",
+                summary["total_idle_vms"],
+                color="yellow"
+            ),
+            metric_panel(
+                "Potential Savings",
+                f"${summary['total_potential_savings']:.2f}",
+                subtitle="per month",
+                color="green"
+            )
+        ]
+        console.print(Columns(metrics, equal=True, expand=True))
+        console.print()
+
+        # Breakdown by severity
+        if summary["by_severity"]:
+            console.print("[bold]Breakdown by Severity[/bold]")
+
+            severity_table = Table(show_header=True, header_style="bold cyan")
+            severity_table.add_column("Severity", style="bold")
+            severity_table.add_column("Count", justify="right")
+            severity_table.add_column("Monthly Savings", justify="right")
+
+            # Order by severity
+            severity_order = ["Critical", "High", "Medium", "Low"]
+            for severity in severity_order:
+                if severity in summary["by_severity"]:
+                    data = summary["by_severity"][severity]
+
+                    # Color code severity
+                    if severity == "Critical":
+                        severity_display = f"[red]{severity}[/red]"
+                    elif severity == "High":
+                        severity_display = f"[yellow]{severity}[/yellow]"
+                    elif severity == "Medium":
+                        severity_display = f"[blue]{severity}[/blue]"
+                    else:
+                        severity_display = f"[dim]{severity}[/dim]"
+
+                    severity_table.add_row(
+                        severity_display,
+                        str(data["count"]),
+                        f"${data['savings']:.2f}"
+                    )
+
+            console.print(severity_table)
+            console.print()
+
+        # Breakdown by recommended action
+        if summary["by_action"]:
+            console.print("[bold]Breakdown by Recommended Action[/bold]")
+
+            action_table = Table(show_header=True, header_style="bold cyan")
+            action_table.add_column("Action", style="bold")
+            action_table.add_column("Count", justify="right")
+            action_table.add_column("Monthly Savings", justify="right")
+
+            for action, data in summary["by_action"].items():
+                action_table.add_row(
+                    action,
+                    str(data["count"]),
+                    f"${data['savings']:.2f}"
+                )
+
+            console.print(action_table)
+            console.print()
+
+        # Show top idle VMs (limit to 10)
+        top_idle_vms = get_idle_vms(limit=10)
+
+        if top_idle_vms:
+            console.print("[bold]Top 10 Idle VMs (by Savings)[/bold]")
+
+            idle_table = Table(show_header=True, header_style="bold cyan")
+            idle_table.add_column("VM Name", style="cyan", width=25)
+            idle_table.add_column("Location", width=12)
+            idle_table.add_column("Size", width=15)
+            idle_table.add_column("Avg CPU", justify="right", width=10)
+            idle_table.add_column("Savings/mo", justify="right", width=12)
+            idle_table.add_column("Severity", width=10)
+            idle_table.add_column("Action", width=12)
+
+            for vm in top_idle_vms:
+                # Color code severity
+                severity = vm["severity"]
+                if severity == "Critical":
+                    severity_display = f"[red]{severity}[/red]"
+                elif severity == "High":
+                    severity_display = f"[yellow]{severity}[/yellow]"
+                elif severity == "Medium":
+                    severity_display = f"[blue]{severity}[/blue]"
+                else:
+                    severity_display = f"[dim]{severity}[/dim]"
+
+                idle_table.add_row(
+                    vm["name"],
+                    vm["location"],
+                    vm["size"],
+                    f"{vm['cpu_avg']:.1f}%",
+                    f"${vm['estimated_monthly_savings']:.2f}",
+                    severity_display,
+                    vm["recommended_action"]
+                )
+
+            console.print(idle_table)
+            console.print()
+
+        # Next steps
+        console.print("[dim]💡 Next steps:[/dim]")
+        console.print("[dim]   • ./dfo azure show vm <name> - View VM details[/dim]")
+        console.print("[dim]   • Query vm_idle_analysis table for full results[/dim]\n")
+
+        console.print(f"[green]✓[/green] Analysis complete: {idle_count} idle VMs identified\n")
+
+    except Exception as e:
+        console.print(f"\n[red]✗ Analysis failed:[/red] {e}")
+
+        import os
+        if os.getenv("DFO_DEBUG"):
+            import traceback
+            console.print("\n[dim]Debug traceback:[/dim]")
+            traceback.print_exc()
+
+        raise typer.Exit(1)
 
 
 @app.command()
