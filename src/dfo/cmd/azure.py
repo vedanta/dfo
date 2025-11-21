@@ -231,6 +231,36 @@ def list_resources(
         "--size", "-s",
         help="Filter by VM size"
     ),
+    tag: str = typer.Option(
+        None,
+        "--tag",
+        help="Filter by tag (key=value or key)"
+    ),
+    tag_key: str = typer.Option(
+        None,
+        "--tag-key",
+        help="Filter by tag key exists"
+    ),
+    discovered_after: str = typer.Option(
+        None,
+        "--discovered-after",
+        help="Filter by discovery date (YYYY-MM-DD)"
+    ),
+    discovered_before: str = typer.Option(
+        None,
+        "--discovered-before",
+        help="Filter by discovery date (YYYY-MM-DD)"
+    ),
+    sort: str = typer.Option(
+        None,
+        "--sort",
+        help="Sort by field (name, resource_group, location, size, power_state, discovered_at)"
+    ),
+    order: str = typer.Option(
+        "asc",
+        "--order",
+        help="Sort order: asc or desc"
+    ),
     limit: int = typer.Option(
         None,
         "--limit",
@@ -293,6 +323,12 @@ def list_resources(
             location=location,
             power_state=power_state,
             size=size,
+            tag=tag,
+            tag_key=tag_key,
+            discovered_after=discovered_after,
+            discovered_before=discovered_before,
+            sort=sort,
+            order=order,
             limit=limit
         )
 
@@ -301,13 +337,27 @@ def list_resources(
                 console.print("\n[yellow]No VMs found in inventory.[/yellow]")
                 console.print("[dim]Run './dfo azure discover vms' to discover VMs from Azure.[/dim]\n")
             elif format == "json":
-                result = format_vms_as_json([], {
-                    "resource_group": resource_group,
-                    "location": location,
-                    "power_state": power_state,
-                    "size": size,
-                    "limit": limit
-                })
+                filters_applied = {}
+                if resource_group:
+                    filters_applied["resource_group"] = resource_group
+                if location:
+                    filters_applied["location"] = location
+                if power_state:
+                    filters_applied["power_state"] = power_state
+                if size:
+                    filters_applied["size"] = size
+                if tag:
+                    filters_applied["tag"] = tag
+                if tag_key:
+                    filters_applied["tag_key"] = tag_key
+                if discovered_after:
+                    filters_applied["discovered_after"] = discovered_after
+                if discovered_before:
+                    filters_applied["discovered_before"] = discovered_before
+                if limit:
+                    filters_applied["limit"] = limit
+
+                result = format_vms_as_json([], filters_applied)
                 if output:
                     with open(output, 'w') as f:
                         f.write(result)
@@ -335,6 +385,14 @@ def list_resources(
                 filters_applied["power_state"] = power_state
             if size:
                 filters_applied["size"] = size
+            if tag:
+                filters_applied["tag"] = tag
+            if tag_key:
+                filters_applied["tag_key"] = tag_key
+            if discovered_after:
+                filters_applied["discovered_after"] = discovered_after
+            if discovered_before:
+                filters_applied["discovered_before"] = discovered_before
             if limit:
                 filters_applied["limit"] = limit
 

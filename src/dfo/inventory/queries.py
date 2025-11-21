@@ -48,6 +48,12 @@ def get_vms_filtered(
     location: Optional[str] = None,
     power_state: Optional[str] = None,
     size: Optional[str] = None,
+    tag: Optional[str] = None,
+    tag_key: Optional[str] = None,
+    discovered_after: Optional[str] = None,
+    discovered_before: Optional[str] = None,
+    sort: Optional[str] = None,
+    order: Optional[str] = None,
     limit: Optional[int] = None
 ) -> List[Dict[str, Any]]:
     """Get filtered VMs from inventory.
@@ -57,6 +63,12 @@ def get_vms_filtered(
         location: Filter by location.
         power_state: Filter by power state.
         size: Filter by VM size.
+        tag: Filter by tag (key=value format).
+        tag_key: Filter by tag key exists.
+        discovered_after: Filter by discovery date (YYYY-MM-DD format).
+        discovered_before: Filter by discovery date (YYYY-MM-DD format).
+        sort: Sort by field (name, resource_group, location, size, power_state, discovered_at).
+        order: Sort order (asc or desc). Default: asc.
         limit: Maximum number of results.
 
     Returns:
@@ -84,11 +96,51 @@ def get_vms_filtered(
         conditions.append("size = ?")
         params.append(size)
 
+    # Tag filtering (key=value)
+    if tag:
+        if "=" in tag:
+            tag_key_part, tag_value = tag.split("=", 1)
+            # DuckDB JSON extraction: json_extract(tags, '$.key') = 'value'
+            conditions.append(f"json_extract_string(tags, '$.{tag_key_part}') = ?")
+            params.append(tag_value)
+        else:
+            # If no =, treat as tag key exists check
+            conditions.append(f"json_extract_string(tags, '$.{tag}') IS NOT NULL")
+
+    # Tag key filtering (key exists)
+    if tag_key:
+        conditions.append(f"json_extract_string(tags, '$.{tag_key}') IS NOT NULL")
+
+    # Date filtering
+    if discovered_after:
+        conditions.append("DATE(discovered_at) >= ?")
+        params.append(discovered_after)
+
+    if discovered_before:
+        conditions.append("DATE(discovered_at) <= ?")
+        params.append(discovered_before)
+
     query = "SELECT * FROM vm_inventory"
     if conditions:
         query += " WHERE " + " AND ".join(conditions)
 
-    query += " ORDER BY name"
+    # Sorting
+    valid_sort_fields = ["name", "resource_group", "location", "size", "power_state", "discovered_at"]
+    sort_field = "name"  # default
+    sort_order = "ASC"  # default
+
+    if sort:
+        if sort in valid_sort_fields:
+            sort_field = sort
+        else:
+            # Invalid sort field, use default
+            sort_field = "name"
+
+    if order:
+        if order.lower() in ["asc", "desc"]:
+            sort_order = order.upper()
+
+    query += f" ORDER BY {sort_field} {sort_order}"
 
     if limit:
         query += f" LIMIT {limit}"
