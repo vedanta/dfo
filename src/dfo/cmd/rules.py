@@ -21,6 +21,11 @@ def list_rules(
         "--layer", "-l",
         help="Filter by layer (1, 2, or 3)"
     ),
+    service_type: str = typer.Option(
+        None,
+        "--service-type", "-s",
+        help="Filter by service type (vm, database, etc.)"
+    ),
     enabled_only: bool = typer.Option(
         False,
         "--enabled-only",
@@ -34,12 +39,17 @@ def list_rules(
 
     Example:
         dfo rules list
-        dfo rules list --layer 1
-        dfo rules list --enabled-only
+        dfo rules list --service-type vm
+        dfo rules list --layer 1 --enabled-only
+        dfo rules list --service-type database
     """
     try:
         engine = get_rule_engine()
         rules = engine.get_all_rules()
+
+        # Filter by service type if specified
+        if service_type:
+            rules = [r for r in rules if r.service_type == service_type]
 
         # Filter by layer if specified
         if layer is not None:
@@ -53,8 +63,9 @@ def list_rules(
             console.print("[yellow]No rules found matching your criteria.[/yellow]")
             return
 
-        # Create table
+        # Create table with service type column
         table = Table(title=f"Optimization Rules ({len(rules)} total)", show_header=True)
+        table.add_column("Service", style="blue", width=10)
         table.add_column("Layer", style="cyan", width=6)
         table.add_column("Type", style="bold")
         table.add_column("Metric", style="dim")
@@ -67,6 +78,7 @@ def list_rules(
             status_style = "green" if rule.enabled else "dim"
 
             table.add_row(
+                rule.service_type,
                 f"L{rule.layer}",
                 rule.type,
                 rule.metric[:40] + "..." if len(rule.metric) > 40 else rule.metric,
@@ -79,8 +91,12 @@ def list_rules(
         console.print(table)
         console.print()
 
-        # Show summary
+        # Show summary by service type
+        from collections import Counter
+        service_counts = Counter(r.service_type for r in rules)
         enabled_count = sum(1 for r in rules if r.enabled)
+
+        console.print(f"[dim]Service types: {', '.join(f'{k}({v})' for k, v in service_counts.items())}[/dim]")
         console.print(f"[dim]Enabled: {enabled_count} | Disabled: {len(rules) - enabled_count}[/dim]\n")
 
     except Exception as e:
@@ -123,6 +139,7 @@ def show_rule(
         details = []
 
         # Basic info
+        details.append(f"[bold blue]Service Type:[/bold blue] {rule.service_type}")
         details.append(f"[bold cyan]Layer:[/bold cyan] {rule.layer} - {rule.sub_layer}")
         details.append(f"[bold cyan]Type:[/bold cyan] {rule.type}")
         details.append(f"[bold cyan]Metric:[/bold cyan] {rule.metric}")
@@ -233,6 +250,69 @@ def show_layers():
     console.print(f"  Layer 2: {layer_counts[2]} rules")
     console.print(f"  Layer 3: {layer_counts[3]} rules")
     console.print(f"  [dim]Total: {len(all_rules)} rules[/dim]\n")
+
+
+@app.command("services")
+def list_services():
+    """List all available service types.
+
+    Shows service types found in the rules file along with
+    rule counts and enabled status.
+
+    Example:
+        dfo rules services
+    """
+    try:
+        engine = get_rule_engine()
+        all_rules = engine.get_all_rules()
+
+        # Group rules by service type
+        from collections import defaultdict
+        service_map = defaultdict(list)
+        for rule in all_rules:
+            service_map[rule.service_type].append(rule)
+
+        if not service_map:
+            console.print("[yellow]No service types found.[/yellow]")
+            return
+
+        # Create table
+        table = Table(title="Available Service Types", show_header=True)
+        table.add_column("Service Type", style="bold blue")
+        table.add_column("Total Rules", style="cyan", justify="right")
+        table.add_column("Enabled", style="green", justify="right")
+        table.add_column("Disabled", style="dim", justify="right")
+        table.add_column("Status", style="magenta")
+
+        for service_type in sorted(service_map.keys()):
+            rules = service_map[service_type]
+            enabled = sum(1 for r in rules if r.enabled)
+            disabled = len(rules) - enabled
+
+            # Determine overall status
+            if enabled > 0:
+                status = "✓ Active"
+                status_style = "green"
+            else:
+                status = "✗ Inactive"
+                status_style = "dim"
+
+            table.add_row(
+                service_type,
+                str(len(rules)),
+                str(enabled),
+                str(disabled),
+                f"[{status_style}]{status}[/{status_style}]"
+            )
+
+        console.print()
+        console.print(table)
+        console.print()
+        console.print(f"[dim]Total service types: {len(service_map)}[/dim]\n")
+
+    except Exception as e:
+        console.print(f"[red]Error:[/red] {e}")
+        raise typer.Exit(1)
 
 
 @app.command("mvp")

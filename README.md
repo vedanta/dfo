@@ -61,7 +61,7 @@ cp .env.example .env
 ./dfo db init
 ```
 
-> **Note:** If you're updating from a previous version with schema changes, run `./dfo db refresh --yes` instead. See [MIGRATIONS.md](MIGRATIONS.md) for details.
+> **Note:** If you're updating from a previous version with schema changes, run `./dfo db refresh --yes` instead. See [MIGRATIONS.md](docs/MIGRATIONS.md) for details.
 
 ### 4. Test your Azure connection
 
@@ -128,11 +128,12 @@ The `dfo` wrapper script allows you to run commands from the root directory:
 ## Documentation
 
 - **[USER_GUIDE.md](USER_GUIDE.md)** - Complete user guide with workflow, examples, and troubleshooting
-- **[MIGRATIONS.md](MIGRATIONS.md)** - Database schema changes and upgrade instructions
 - **[CLAUDE.md](CLAUDE.md)** - Architecture and development guidelines for Claude Code
-- **[CODE_STYLE.md](CODE_STYLE.md)** - Code standards and conventions
-- **[MVP.md](MVP.md)** - Milestone breakdown and implementation plan
-- **[ARCHITECTURE.md](ARCHITECTURE.md)** - System architecture and design patterns
+- **[docs/MIGRATIONS.md](docs/MIGRATIONS.md)** - Database schema changes and upgrade instructions
+- **[docs/CODE_STYLE.md](docs/CODE_STYLE.md)** - Code standards and conventions
+- **[docs/MVP.md](docs/MVP.md)** - Milestone breakdown and implementation plan
+- **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** - System architecture and design patterns
+- **[docs/ROADMAP.md](docs/ROADMAP.md)** - Project roadmap and future plans
 
 ## Example Workflow (Once Complete)
 
@@ -183,10 +184,18 @@ dfo/
 │       ├── discovery/  # VM discovery orchestration ✓ M3
 │       ├── rules/      # Optimization rules engine ✓ M3
 │       └── tests/      # Test suite (119 tests passing) ✓
+├── docs/               # Documentation
+│   ├── MIGRATIONS.md   # Database schema changes
+│   ├── CODE_STYLE.md   # Code standards and conventions
+│   ├── MVP.md          # Milestone breakdown
+│   ├── ARCHITECTURE.md # System architecture
+│   └── ROADMAP.md      # Project roadmap
+├── README.md           # This file (project overview)
+├── USER_GUIDE.md       # Complete user guide
+├── CLAUDE.md           # Development guide for Claude Code
 ├── environment.yml     # Conda environment
 ├── .env                # Environment configuration (create from .env.example)
-├── dfo.duckdb         # DuckDB database (created on init)
-└── USER_GUIDE.md      # Complete user documentation
+└── dfo.duckdb         # DuckDB database (created on init)
 ```
 
 ## Development
@@ -203,7 +212,7 @@ PYTHONPATH=src pytest --cov=dfo src/dfo/tests/
 ```
 
 ### Code Quality
-- Follows CODE_STYLE.md conventions
+- Follows [docs/CODE_STYLE.md](docs/CODE_STYLE.md) conventions
 - Type hints on all functions
 - Import order: stdlib → third-party → internal
 - Max 250 lines per file, 40 lines per function
