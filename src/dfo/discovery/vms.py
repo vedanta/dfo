@@ -89,6 +89,8 @@ def discover_vms(
                 location=vm_data["location"],
                 size=vm_data["size"],
                 power_state=vm_data["power_state"],
+                os_type=vm_data.get("os_type"),
+                priority=vm_data.get("priority") or "Regular",
                 tags=vm_data["tags"],
                 cpu_timeseries=cpu_metrics,
                 discovered_at=datetime.utcnow()
@@ -110,6 +112,8 @@ def discover_vms(
                 location=vm_data["location"],
                 size=vm_data["size"],
                 power_state=vm_data["power_state"],
+                os_type=vm_data.get("os_type"),
+                priority=vm_data.get("priority") or "Regular",
                 tags=vm_data["tags"],
                 cpu_timeseries=[],  # Empty metrics
                 discovered_at=datetime.utcnow()

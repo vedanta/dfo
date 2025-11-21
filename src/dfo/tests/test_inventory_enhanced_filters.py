@@ -12,22 +12,22 @@ def test_filter_by_tag_key_value(test_db):
     db.execute_query("""
         INSERT INTO vm_inventory (
             vm_id, subscription_id, name, resource_group, location, size,
-            power_state, tags, cpu_timeseries, discovered_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            power_state, os_type, priority, tags, cpu_timeseries, discovered_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         "vm1_id", "sub1", "vm1", "rg1", "eastus", "Standard_B1s",
-        "running", '{"env": "production", "owner": "team-a"}', "[]",
+        "running", "Linux", "Regular", '{"env": "production", "owner": "team-a"}', "[]",
         datetime.now(timezone.utc)
     ))
 
     db.execute_query("""
         INSERT INTO vm_inventory (
             vm_id, subscription_id, name, resource_group, location, size,
-            power_state, tags, cpu_timeseries, discovered_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            power_state, os_type, priority, tags, cpu_timeseries, discovered_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         "vm2_id", "sub2", "vm2", "rg2", "westus", "Standard_D2s_v3",
-        "stopped", '{"env": "development", "owner": "team-b"}', "[]",
+        "stopped", "Windows", "Regular", '{"env": "development", "owner": "team-b"}', "[]",
         datetime.now(timezone.utc)
     ))
 
@@ -50,22 +50,22 @@ def test_filter_by_tag_key_exists(test_db):
     db.execute_query("""
         INSERT INTO vm_inventory (
             vm_id, subscription_id, name, resource_group, location, size,
-            power_state, tags, cpu_timeseries, discovered_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            power_state, os_type, priority, tags, cpu_timeseries, discovered_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         "vm1_id", "sub1", "vm1", "rg1", "eastus", "Standard_B1s",
-        "running", '{"env": "production", "cost-center": "eng"}', "[]",
+        "running", "Linux", "Regular", '{"env": "production", "cost-center": "eng"}', "[]",
         datetime.now(timezone.utc)
     ))
 
     db.execute_query("""
         INSERT INTO vm_inventory (
             vm_id, subscription_id, name, resource_group, location, size,
-            power_state, tags, cpu_timeseries, discovered_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            power_state, os_type, priority, tags, cpu_timeseries, discovered_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         "vm2_id", "sub2", "vm2", "rg2", "westus", "Standard_D2s_v3",
-        "stopped", '{"env": "development"}', "[]",
+        "stopped", "Windows", "Regular", '{"env": "development"}', "[]",
         datetime.now(timezone.utc)
     ))
 
@@ -86,22 +86,22 @@ def test_filter_by_tag_without_equals(test_db):
     db.execute_query("""
         INSERT INTO vm_inventory (
             vm_id, subscription_id, name, resource_group, location, size,
-            power_state, tags, cpu_timeseries, discovered_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            power_state, os_type, priority, tags, cpu_timeseries, discovered_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         "vm1_id", "sub1", "vm1", "rg1", "eastus", "Standard_B1s",
-        "running", '{"owner": "team-a"}', "[]",
+        "running", "Linux", "Regular", '{"owner": "team-a"}', "[]",
         datetime.now(timezone.utc)
     ))
 
     db.execute_query("""
         INSERT INTO vm_inventory (
             vm_id, subscription_id, name, resource_group, location, size,
-            power_state, tags, cpu_timeseries, discovered_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            power_state, os_type, priority, tags, cpu_timeseries, discovered_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         "vm2_id", "sub2", "vm2", "rg2", "westus", "Standard_D2s_v3",
-        "stopped", '{"env": "dev"}', "[]",
+        "stopped", "Windows", "Regular", '{"env": "dev"}', "[]",
         datetime.now(timezone.utc)
     ))
 
@@ -120,11 +120,11 @@ def test_filter_by_discovered_after(test_db):
     db.execute_query("""
         INSERT INTO vm_inventory (
             vm_id, subscription_id, name, resource_group, location, size,
-            power_state, tags, cpu_timeseries, discovered_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            power_state, os_type, priority, tags, cpu_timeseries, discovered_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         "vm1_id", "sub1", "vm1", "rg1", "eastus", "Standard_B1s",
-        "running", "{}", "[]", yesterday
+        "running", "Linux", "Regular", "{}", "[]", yesterday
     ))
 
     # VM discovered today
@@ -132,11 +132,11 @@ def test_filter_by_discovered_after(test_db):
     db.execute_query("""
         INSERT INTO vm_inventory (
             vm_id, subscription_id, name, resource_group, location, size,
-            power_state, tags, cpu_timeseries, discovered_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            power_state, os_type, priority, tags, cpu_timeseries, discovered_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         "vm2_id", "sub2", "vm2", "rg2", "westus", "Standard_D2s_v3",
-        "stopped", "{}", "[]", today
+        "stopped", "Windows", "Regular", "{}", "[]", today
     ))
 
     # Filter: discovered after yesterday (should get vm2)
@@ -155,11 +155,11 @@ def test_filter_by_discovered_before(test_db):
     db.execute_query("""
         INSERT INTO vm_inventory (
             vm_id, subscription_id, name, resource_group, location, size,
-            power_state, tags, cpu_timeseries, discovered_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            power_state, os_type, priority, tags, cpu_timeseries, discovered_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         "vm1_id", "sub1", "vm1", "rg1", "eastus", "Standard_B1s",
-        "running", "{}", "[]", three_days_ago
+        "running", "Linux", "Regular", "{}", "[]", three_days_ago
     ))
 
     # VM discovered today
@@ -167,11 +167,11 @@ def test_filter_by_discovered_before(test_db):
     db.execute_query("""
         INSERT INTO vm_inventory (
             vm_id, subscription_id, name, resource_group, location, size,
-            power_state, tags, cpu_timeseries, discovered_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            power_state, os_type, priority, tags, cpu_timeseries, discovered_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         "vm2_id", "sub2", "vm2", "rg2", "westus", "Standard_D2s_v3",
-        "stopped", "{}", "[]", today
+        "stopped", "Windows", "Regular", "{}", "[]", today
     ))
 
     # Filter: discovered before 2 days ago (should get vm1)
@@ -191,11 +191,11 @@ def test_filter_by_date_range(test_db):
     db.execute_query("""
         INSERT INTO vm_inventory (
             vm_id, subscription_id, name, resource_group, location, size,
-            power_state, tags, cpu_timeseries, discovered_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            power_state, os_type, priority, tags, cpu_timeseries, discovered_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         "vm1_id", "sub1", "vm1", "rg1", "eastus", "Standard_B1s",
-        "running", "{}", "[]", five_days_ago
+        "running", "Linux", "Regular", "{}", "[]", five_days_ago
     ))
 
     # VM discovered 3 days ago
@@ -203,11 +203,11 @@ def test_filter_by_date_range(test_db):
     db.execute_query("""
         INSERT INTO vm_inventory (
             vm_id, subscription_id, name, resource_group, location, size,
-            power_state, tags, cpu_timeseries, discovered_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            power_state, os_type, priority, tags, cpu_timeseries, discovered_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         "vm2_id", "sub2", "vm2", "rg2", "westus", "Standard_D2s_v3",
-        "stopped", "{}", "[]", three_days_ago
+        "stopped", "Windows", "Regular", "{}", "[]", three_days_ago
     ))
 
     # VM discovered today
@@ -215,11 +215,11 @@ def test_filter_by_date_range(test_db):
     db.execute_query("""
         INSERT INTO vm_inventory (
             vm_id, subscription_id, name, resource_group, location, size,
-            power_state, tags, cpu_timeseries, discovered_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            power_state, os_type, priority, tags, cpu_timeseries, discovered_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         "vm3_id", "sub3", "vm3", "rg3", "centralus", "Standard_B2s",
-        "running", "{}", "[]", today
+        "running", "Linux", "Regular", "{}", "[]", today
     ))
 
     # Filter: discovered between 4 days ago and 2 days ago (should get vm2)
@@ -241,33 +241,33 @@ def test_filter_combined_tag_and_location(test_db):
     db.execute_query("""
         INSERT INTO vm_inventory (
             vm_id, subscription_id, name, resource_group, location, size,
-            power_state, tags, cpu_timeseries, discovered_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            power_state, os_type, priority, tags, cpu_timeseries, discovered_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         "vm1_id", "sub1", "vm1", "rg1", "eastus", "Standard_B1s",
-        "running", '{"env": "production"}', "[]",
+        "running", "Linux", "Regular", '{"env": "production"}', "[]",
         datetime.now(timezone.utc)
     ))
 
     db.execute_query("""
         INSERT INTO vm_inventory (
             vm_id, subscription_id, name, resource_group, location, size,
-            power_state, tags, cpu_timeseries, discovered_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            power_state, os_type, priority, tags, cpu_timeseries, discovered_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         "vm2_id", "sub2", "vm2", "rg2", "westus", "Standard_D2s_v3",
-        "stopped", '{"env": "production"}', "[]",
+        "stopped", "Windows", "Regular", '{"env": "production"}', "[]",
         datetime.now(timezone.utc)
     ))
 
     db.execute_query("""
         INSERT INTO vm_inventory (
             vm_id, subscription_id, name, resource_group, location, size,
-            power_state, tags, cpu_timeseries, discovered_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            power_state, os_type, priority, tags, cpu_timeseries, discovered_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         "vm3_id", "sub3", "vm3", "rg3", "eastus", "Standard_B2s",
-        "running", '{"env": "development"}', "[]",
+        "running", "Linux", "Regular", '{"env": "development"}', "[]",
         datetime.now(timezone.utc)
     ))
 
@@ -284,11 +284,11 @@ def test_filter_no_matching_tags(test_db):
     db.execute_query("""
         INSERT INTO vm_inventory (
             vm_id, subscription_id, name, resource_group, location, size,
-            power_state, tags, cpu_timeseries, discovered_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            power_state, os_type, priority, tags, cpu_timeseries, discovered_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         "vm1_id", "sub1", "vm1", "rg1", "eastus", "Standard_B1s",
-        "running", '{"env": "production"}', "[]",
+        "running", "Linux", "Regular", '{"env": "production"}', "[]",
         datetime.now(timezone.utc)
     ))
 
@@ -309,11 +309,11 @@ def test_filter_vms_without_tags(test_db):
     db.execute_query("""
         INSERT INTO vm_inventory (
             vm_id, subscription_id, name, resource_group, location, size,
-            power_state, tags, cpu_timeseries, discovered_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            power_state, os_type, priority, tags, cpu_timeseries, discovered_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         "vm1_id", "sub1", "vm1", "rg1", "eastus", "Standard_B1s",
-        "running", '{"env": "production"}', "[]",
+        "running", "Linux", "Regular", '{"env": "production"}', "[]",
         datetime.now(timezone.utc)
     ))
 
@@ -321,11 +321,11 @@ def test_filter_vms_without_tags(test_db):
     db.execute_query("""
         INSERT INTO vm_inventory (
             vm_id, subscription_id, name, resource_group, location, size,
-            power_state, tags, cpu_timeseries, discovered_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            power_state, os_type, priority, tags, cpu_timeseries, discovered_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         "vm2_id", "sub2", "vm2", "rg2", "westus", "Standard_D2s_v3",
-        "stopped", '{}', "[]",
+        "stopped", "Windows", "Regular", '{}', "[]",
         datetime.now(timezone.utc)
     ))
 
@@ -343,11 +343,11 @@ def test_filter_combined_all_filters(test_db):
     db.execute_query("""
         INSERT INTO vm_inventory (
             vm_id, subscription_id, name, resource_group, location, size,
-            power_state, tags, cpu_timeseries, discovered_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            power_state, os_type, priority, tags, cpu_timeseries, discovered_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         "vm1_id", "sub1", "vm1", "prod-rg", "eastus", "Standard_B1s",
-        "running", '{"env": "production", "owner": "team-a"}', "[]",
+        "running", "Linux", "Regular", '{"env": "production", "owner": "team-a"}', "[]",
         yesterday
     ))
 
@@ -355,11 +355,11 @@ def test_filter_combined_all_filters(test_db):
     db.execute_query("""
         INSERT INTO vm_inventory (
             vm_id, subscription_id, name, resource_group, location, size,
-            power_state, tags, cpu_timeseries, discovered_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            power_state, os_type, priority, tags, cpu_timeseries, discovered_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         "vm2_id", "sub2", "vm2", "prod-rg", "eastus", "Standard_B1s",
-        "running", '{"env": "production", "owner": "team-b"}', "[]",
+        "running", "Linux", "Regular", '{"env": "production", "owner": "team-b"}', "[]",
         today
     ))
 

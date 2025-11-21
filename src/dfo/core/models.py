@@ -66,6 +66,8 @@ class VMInventory(BaseModel):
     location: str
     size: str
     power_state: str
+    os_type: Optional[str] = None
+    priority: str = "Regular"
     tags: Dict[str, Any] = Field(default_factory=dict)
     cpu_timeseries: List[Dict[str, Any]] = Field(default_factory=list)
     discovered_at: datetime = Field(default_factory=datetime.utcnow)
@@ -85,6 +87,8 @@ class VMInventory(BaseModel):
             "location": self.location,
             "size": self.size,
             "power_state": self.power_state,
+            "os_type": self.os_type,
+            "priority": self.priority,
             "tags": json.dumps(self.tags),
             "cpu_timeseries": json.dumps(self.cpu_timeseries),
             "discovered_at": self.discovered_at

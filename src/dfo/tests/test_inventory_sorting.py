@@ -14,11 +14,11 @@ def test_sort_by_name_ascending(test_db):
         db.execute_query("""
             INSERT INTO vm_inventory (
                 vm_id, subscription_id, name, resource_group, location, size,
-                power_state, tags, cpu_timeseries, discovered_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                power_state, os_type, priority, tags, cpu_timeseries, discovered_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             f"{name}_id", "sub1", name, "rg1", "eastus", "Standard_B1s",
-            "running", "{}", "[]", datetime.now(timezone.utc)
+            "running", "Linux", "Regular", "{}", "[]", datetime.now(timezone.utc)
         ))
 
     # Sort by name ascending (default)
@@ -37,11 +37,11 @@ def test_sort_by_name_descending(test_db):
         db.execute_query("""
             INSERT INTO vm_inventory (
                 vm_id, subscription_id, name, resource_group, location, size,
-                power_state, tags, cpu_timeseries, discovered_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                power_state, os_type, priority, tags, cpu_timeseries, discovered_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             f"{name}_id", "sub1", name, "rg1", "eastus", "Standard_B1s",
-            "running", "{}", "[]", datetime.now(timezone.utc)
+            "running", "Linux", "Regular", "{}", "[]", datetime.now(timezone.utc)
         ))
 
     # Sort by name descending
@@ -61,11 +61,11 @@ def test_sort_by_location(test_db):
         db.execute_query("""
             INSERT INTO vm_inventory (
                 vm_id, subscription_id, name, resource_group, location, size,
-                power_state, tags, cpu_timeseries, discovered_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                power_state, os_type, priority, tags, cpu_timeseries, discovered_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             f"vm{i}_id", "sub1", f"vm{i}", "rg1", location, "Standard_B1s",
-            "running", "{}", "[]", datetime.now(timezone.utc)
+            "running", "Linux", "Regular", "{}", "[]", datetime.now(timezone.utc)
         ))
 
     # Sort by location
@@ -85,11 +85,11 @@ def test_sort_by_power_state(test_db):
         db.execute_query("""
             INSERT INTO vm_inventory (
                 vm_id, subscription_id, name, resource_group, location, size,
-                power_state, tags, cpu_timeseries, discovered_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                power_state, os_type, priority, tags, cpu_timeseries, discovered_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             f"{name}_id", "sub1", name, "rg1", "eastus", "Standard_B1s",
-            power_state, "{}", "[]", datetime.now(timezone.utc)
+            power_state, "Linux", "Regular", "{}", "[]", datetime.now(timezone.utc)
         ))
 
     # Sort by power_state
@@ -109,11 +109,11 @@ def test_sort_by_size(test_db):
         db.execute_query("""
             INSERT INTO vm_inventory (
                 vm_id, subscription_id, name, resource_group, location, size,
-                power_state, tags, cpu_timeseries, discovered_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                power_state, os_type, priority, tags, cpu_timeseries, discovered_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             f"{name}_id", "sub1", name, "rg1", "eastus", size,
-            "running", "{}", "[]", datetime.now(timezone.utc)
+            "running", "Linux", "Regular", "{}", "[]", datetime.now(timezone.utc)
         ))
 
     # Sort by size
@@ -138,11 +138,11 @@ def test_sort_by_discovered_at(test_db):
         db.execute_query("""
             INSERT INTO vm_inventory (
                 vm_id, subscription_id, name, resource_group, location, size,
-                power_state, tags, cpu_timeseries, discovered_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                power_state, os_type, priority, tags, cpu_timeseries, discovered_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             f"{name}_id", "sub1", name, "rg1", "eastus", "Standard_B1s",
-            "running", "{}", "[]", discovered_at
+            "running", "Linux", "Regular", "{}", "[]", discovered_at
         ))
 
     # Sort by discovered_at ascending (oldest first)
@@ -169,11 +169,11 @@ def test_sort_by_resource_group(test_db):
         db.execute_query("""
             INSERT INTO vm_inventory (
                 vm_id, subscription_id, name, resource_group, location, size,
-                power_state, tags, cpu_timeseries, discovered_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                power_state, os_type, priority, tags, cpu_timeseries, discovered_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             f"{name}_id", "sub1", name, rg, "eastus", "Standard_B1s",
-            "running", "{}", "[]", datetime.now(timezone.utc)
+            "running", "Linux", "Regular", "{}", "[]", datetime.now(timezone.utc)
         ))
 
     # Sort by resource_group
@@ -198,11 +198,11 @@ def test_sort_with_filters(test_db):
         db.execute_query("""
             INSERT INTO vm_inventory (
                 vm_id, subscription_id, name, resource_group, location, size,
-                power_state, tags, cpu_timeseries, discovered_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                power_state, os_type, priority, tags, cpu_timeseries, discovered_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             f"{name}_id", "sub1", name, rg, location, "Standard_B1s",
-            power_state, "{}", "[]", datetime.now(timezone.utc)
+            power_state, "Linux", "Regular", "{}", "[]", datetime.now(timezone.utc)
         ))
 
     # Filter by resource_group=prod-rg and sort by location
@@ -224,11 +224,11 @@ def test_sort_invalid_field_uses_default(test_db):
         db.execute_query("""
             INSERT INTO vm_inventory (
                 vm_id, subscription_id, name, resource_group, location, size,
-                power_state, tags, cpu_timeseries, discovered_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                power_state, os_type, priority, tags, cpu_timeseries, discovered_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             f"{name}_id", "sub1", name, "rg1", "eastus", "Standard_B1s",
-            "running", "{}", "[]", datetime.now(timezone.utc)
+            "running", "Linux", "Regular", "{}", "[]", datetime.now(timezone.utc)
         ))
 
     # Invalid sort field should fall back to name
@@ -247,11 +247,11 @@ def test_default_sort_is_name_ascending(test_db):
         db.execute_query("""
             INSERT INTO vm_inventory (
                 vm_id, subscription_id, name, resource_group, location, size,
-                power_state, tags, cpu_timeseries, discovered_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                power_state, os_type, priority, tags, cpu_timeseries, discovered_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             f"{name}_id", "sub1", name, "rg1", "eastus", "Standard_B1s",
-            "running", "{}", "[]", datetime.now(timezone.utc)
+            "running", "Linux", "Regular", "{}", "[]", datetime.now(timezone.utc)
         ))
 
     # No sort specified, should default to name ascending

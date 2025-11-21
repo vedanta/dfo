@@ -13,31 +13,31 @@ def test_search_vms_by_name(test_db):
     db.execute_query("""
         INSERT INTO vm_inventory (
             vm_id, subscription_id, name, resource_group, location, size,
-            power_state, tags, cpu_timeseries, discovered_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            power_state, os_type, priority, tags, cpu_timeseries, discovered_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         "vm1_id", "sub1", "prod-web-01", "rg1", "eastus", "Standard_B1s",
-        "running", "{}", "[]", datetime.now(timezone.utc)
+        "running", "Linux", "Regular", "{}", "[]", datetime.now(timezone.utc)
     ))
 
     db.execute_query("""
         INSERT INTO vm_inventory (
             vm_id, subscription_id, name, resource_group, location, size,
-            power_state, tags, cpu_timeseries, discovered_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            power_state, os_type, priority, tags, cpu_timeseries, discovered_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         "vm2_id", "sub2", "prod-api-01", "rg2", "westus", "Standard_D2s_v3",
-        "stopped", "{}", "[]", datetime.now(timezone.utc)
+        "stopped", "Windows", "Regular", "{}", "[]", datetime.now(timezone.utc)
     ))
 
     db.execute_query("""
         INSERT INTO vm_inventory (
             vm_id, subscription_id, name, resource_group, location, size,
-            power_state, tags, cpu_timeseries, discovered_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            power_state, os_type, priority, tags, cpu_timeseries, discovered_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         "vm3_id", "sub3", "dev-web-01", "rg3", "eastus", "Standard_B1s",
-        "running", "{}", "[]", datetime.now(timezone.utc)
+        "running", "Linux", "Regular", "{}", "[]", datetime.now(timezone.utc)
     ))
 
     # Search for "prod"
@@ -53,21 +53,21 @@ def test_search_vms_by_resource_group(test_db):
     db.execute_query("""
         INSERT INTO vm_inventory (
             vm_id, subscription_id, name, resource_group, location, size,
-            power_state, tags, cpu_timeseries, discovered_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            power_state, os_type, priority, tags, cpu_timeseries, discovered_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         "vm1_id", "sub1", "vm1", "production-rg", "eastus", "Standard_B1s",
-        "running", "{}", "[]", datetime.now(timezone.utc)
+        "running", "Linux", "Regular", "{}", "[]", datetime.now(timezone.utc)
     ))
 
     db.execute_query("""
         INSERT INTO vm_inventory (
             vm_id, subscription_id, name, resource_group, location, size,
-            power_state, tags, cpu_timeseries, discovered_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            power_state, os_type, priority, tags, cpu_timeseries, discovered_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         "vm2_id", "sub2", "vm2", "development-rg", "westus", "Standard_D2s_v3",
-        "stopped", "{}", "[]", datetime.now(timezone.utc)
+        "stopped", "Windows", "Regular", "{}", "[]", datetime.now(timezone.utc)
     ))
 
     # Search for "production"
@@ -83,31 +83,31 @@ def test_search_vms_wildcard_pattern(test_db):
     db.execute_query("""
         INSERT INTO vm_inventory (
             vm_id, subscription_id, name, resource_group, location, size,
-            power_state, tags, cpu_timeseries, discovered_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            power_state, os_type, priority, tags, cpu_timeseries, discovered_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         "vm1_id", "sub1", "prod-web-01", "rg1", "eastus", "Standard_B1s",
-        "running", "{}", "[]", datetime.now(timezone.utc)
+        "running", "Linux", "Regular", "{}", "[]", datetime.now(timezone.utc)
     ))
 
     db.execute_query("""
         INSERT INTO vm_inventory (
             vm_id, subscription_id, name, resource_group, location, size,
-            power_state, tags, cpu_timeseries, discovered_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            power_state, os_type, priority, tags, cpu_timeseries, discovered_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         "vm2_id", "sub2", "prod-api-01", "rg2", "westus", "Standard_D2s_v3",
-        "stopped", "{}", "[]", datetime.now(timezone.utc)
+        "stopped", "Windows", "Regular", "{}", "[]", datetime.now(timezone.utc)
     ))
 
     db.execute_query("""
         INSERT INTO vm_inventory (
             vm_id, subscription_id, name, resource_group, location, size,
-            power_state, tags, cpu_timeseries, discovered_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            power_state, os_type, priority, tags, cpu_timeseries, discovered_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         "vm3_id", "sub3", "staging-web-01", "rg3", "eastus", "Standard_B1s",
-        "running", "{}", "[]", datetime.now(timezone.utc)
+        "running", "Linux", "Regular", "{}", "[]", datetime.now(timezone.utc)
     ))
 
     # Search with wildcard: "prod-*"
@@ -123,11 +123,11 @@ def test_search_vms_case_insensitive(test_db):
     db.execute_query("""
         INSERT INTO vm_inventory (
             vm_id, subscription_id, name, resource_group, location, size,
-            power_state, tags, cpu_timeseries, discovered_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            power_state, os_type, priority, tags, cpu_timeseries, discovered_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         "vm1_id", "sub1", "PROD-WEB-01", "rg1", "eastus", "Standard_B1s",
-        "running", "{}", "[]", datetime.now(timezone.utc)
+        "running", "Linux", "Regular", "{}", "[]", datetime.now(timezone.utc)
     ))
 
     # Search with lowercase should match uppercase
@@ -139,11 +139,11 @@ def test_search_vms_case_insensitive(test_db):
     db.execute_query("""
         INSERT INTO vm_inventory (
             vm_id, subscription_id, name, resource_group, location, size,
-            power_state, tags, cpu_timeseries, discovered_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            power_state, os_type, priority, tags, cpu_timeseries, discovered_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         "vm2_id", "sub2", "dev-api-01", "rg2", "westus", "Standard_D2s_v3",
-        "stopped", "{}", "[]", datetime.now(timezone.utc)
+        "stopped", "Windows", "Regular", "{}", "[]", datetime.now(timezone.utc)
     ))
 
     results = search_vms("DEV")
@@ -158,21 +158,21 @@ def test_search_vms_with_filters(test_db):
     db.execute_query("""
         INSERT INTO vm_inventory (
             vm_id, subscription_id, name, resource_group, location, size,
-            power_state, tags, cpu_timeseries, discovered_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            power_state, os_type, priority, tags, cpu_timeseries, discovered_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         "vm1_id", "sub1", "prod-web-01", "rg1", "eastus", "Standard_B1s",
-        "running", "{}", "[]", datetime.now(timezone.utc)
+        "running", "Linux", "Regular", "{}", "[]", datetime.now(timezone.utc)
     ))
 
     db.execute_query("""
         INSERT INTO vm_inventory (
             vm_id, subscription_id, name, resource_group, location, size,
-            power_state, tags, cpu_timeseries, discovered_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            power_state, os_type, priority, tags, cpu_timeseries, discovered_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         "vm2_id", "sub2", "prod-api-01", "rg2", "westus", "Standard_D2s_v3",
-        "stopped", "{}", "[]", datetime.now(timezone.utc)
+        "stopped", "Windows", "Regular", "{}", "[]", datetime.now(timezone.utc)
     ))
 
     # Search with power_state filter
@@ -194,11 +194,11 @@ def test_search_vms_with_limit(test_db):
         db.execute_query("""
             INSERT INTO vm_inventory (
                 vm_id, subscription_id, name, resource_group, location, size,
-                power_state, tags, cpu_timeseries, discovered_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                power_state, os_type, priority, tags, cpu_timeseries, discovered_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             f"vm{i}_id", "sub1", f"prod-vm-{i:02d}", "rg1", "eastus", "Standard_B1s",
-            "running", "{}", "[]", datetime.now(timezone.utc)
+            "running", "Linux", "Regular", "{}", "[]", datetime.now(timezone.utc)
         ))
 
     # Search with limit
@@ -213,11 +213,11 @@ def test_search_vms_no_results(test_db):
     db.execute_query("""
         INSERT INTO vm_inventory (
             vm_id, subscription_id, name, resource_group, location, size,
-            power_state, tags, cpu_timeseries, discovered_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            power_state, os_type, priority, tags, cpu_timeseries, discovered_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         "vm1_id", "sub1", "dev-web-01", "rg1", "eastus", "Standard_B1s",
-        "running", "{}", "[]", datetime.now(timezone.utc)
+        "running", "Linux", "Regular", "{}", "[]", datetime.now(timezone.utc)
     ))
 
     # Search for non-existent pattern
@@ -232,22 +232,22 @@ def test_search_vms_by_tags(test_db):
     db.execute_query("""
         INSERT INTO vm_inventory (
             vm_id, subscription_id, name, resource_group, location, size,
-            power_state, tags, cpu_timeseries, discovered_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            power_state, os_type, priority, tags, cpu_timeseries, discovered_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         "vm1_id", "sub1", "vm1", "rg1", "eastus", "Standard_B1s",
-        "running", '{"env": "production", "owner": "team-a"}', "[]",
+        "running", "Linux", "Regular", '{"env": "production", "owner": "team-a"}', "[]",
         datetime.now(timezone.utc)
     ))
 
     db.execute_query("""
         INSERT INTO vm_inventory (
             vm_id, subscription_id, name, resource_group, location, size,
-            power_state, tags, cpu_timeseries, discovered_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            power_state, os_type, priority, tags, cpu_timeseries, discovered_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         "vm2_id", "sub2", "vm2", "rg2", "westus", "Standard_D2s_v3",
-        "stopped", '{"env": "development"}', "[]",
+        "stopped", "Windows", "Regular", '{"env": "development"}', "[]",
         datetime.now(timezone.utc)
     ))
 

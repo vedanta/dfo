@@ -272,10 +272,10 @@ def _deserialize_vm_records(rows: List[tuple]) -> List[Dict[str, Any]]:
         return []
 
     # Column names from schema: vm_id, subscription_id, name, resource_group,
-    # location, size, power_state, tags, cpu_timeseries, discovered_at
+    # location, size, power_state, os_type, priority, tags, cpu_timeseries, discovered_at
     columns = [
         "vm_id", "subscription_id", "name", "resource_group",
-        "location", "size", "power_state", "tags",
+        "location", "size", "power_state", "os_type", "priority", "tags",
         "cpu_timeseries", "discovered_at"
     ]
 

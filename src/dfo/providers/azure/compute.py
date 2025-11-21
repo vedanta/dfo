@@ -27,6 +27,8 @@ def list_vms(client: ComputeManagementClient) -> List[Dict[str, Any]]:
         - location: Azure region
         - size: VM size (e.g., "Standard_D2s_v3")
         - power_state: Current power state (running/stopped/deallocated/unknown)
+        - os_type: Operating system type (Linux/Windows)
+        - priority: VM priority (Regular/Spot/Low)
         - tags: Resource tags dict
 
     Raises:
@@ -58,6 +60,14 @@ def list_vms(client: ComputeManagementClient) -> List[Dict[str, Any]]:
             # If instance view fails, continue with unknown power state
             power_state = "unknown"
 
+        # Extract OS type from storage profile
+        os_type = None
+        if vm.storage_profile and vm.storage_profile.os_disk:
+            os_type = vm.storage_profile.os_disk.os_type
+
+        # Extract priority (Regular, Spot, Low)
+        priority = getattr(vm, 'priority', 'Regular')
+
         vms.append({
             "vm_id": vm.id,
             "name": vm.name,
@@ -65,6 +75,8 @@ def list_vms(client: ComputeManagementClient) -> List[Dict[str, Any]]:
             "location": vm.location,
             "size": vm.hardware_profile.vm_size,
             "power_state": power_state,
+            "os_type": os_type,
+            "priority": priority,
             "tags": vm.tags or {}
         })
 

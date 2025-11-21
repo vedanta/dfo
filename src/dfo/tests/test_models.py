@@ -51,6 +51,8 @@ def test_vm_inventory_to_db_record():
         location="eastus",
         size="Standard_D2s_v3",
         power_state="running",
+        os_type="Linux",
+        priority="Regular",
         tags={"env": "dev"},
         cpu_timeseries=[{"timestamp": "2024-01-01T00:00:00Z", "average": 5.0}]
     )
@@ -59,6 +61,8 @@ def test_vm_inventory_to_db_record():
     assert record["vm_id"] == "test-id"
     assert record["subscription_id"] == "test-subscription"
     assert record["name"] == "test-vm"
+    assert record["os_type"] == "Linux"
+    assert record["priority"] == "Regular"
     assert "tags" in record
     assert "cpu_timeseries" in record
     # JSON strings for DuckDB
@@ -155,6 +159,8 @@ def test_vm_inventory_default_discovered_at():
         power_state="running"
     )
     assert isinstance(inventory.discovered_at, datetime)
+    assert inventory.priority == "Regular"  # Default value
+    assert inventory.os_type is None  # Optional field
 
 
 def test_vm_analysis_default_analyzed_at():

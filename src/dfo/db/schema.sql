@@ -8,6 +8,8 @@ CREATE TABLE IF NOT EXISTS vm_inventory (
     location TEXT,
     size TEXT,
     power_state TEXT,
+    os_type TEXT,
+    priority TEXT,
     tags JSON,
     cpu_timeseries JSON,
     discovered_at TIMESTAMP
