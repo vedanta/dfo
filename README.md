@@ -116,13 +116,22 @@ The `dfo` wrapper script allows you to run commands from the root directory:
 ./dfo azure discover vms --no-refresh  # Append to existing data
 ./dfo azure discover vms --subscription SUB_ID  # Custom subscription
 
-# Browse discovered inventory (✓ Available now - M3)
+# Browse discovered inventory (✓ Available now - M3 + Phase 2)
 ./dfo azure list vms             # List all discovered VMs
 ./dfo azure list vms --resource-group production-rg  # Filter by resource group
 ./dfo azure list vms --power-state running  # Filter by power state
 ./dfo azure list vms --location eastus --limit 10  # Combined filters
+./dfo azure list vms --tag env=production  # Filter by tag
+./dfo azure list vms --tag-key cost-center  # Filter by tag key exists
+./dfo azure list vms --discovered-after 2025-01-15  # Filter by date
+./dfo azure list vms --sort location --order desc  # Sort results
+./dfo azure list vms --format json --output inventory.json  # Export to JSON
+./dfo azure list vms --format csv --output inventory.csv  # Export to CSV
 ./dfo azure show vm my-vm        # Show detailed VM information
 ./dfo azure show vm my-vm --metrics  # Include detailed metrics
+./dfo azure show vm my-vm --format json  # Export VM details as JSON
+./dfo azure search vms "prod*"   # Search VMs by pattern
+./dfo azure search vms "web" --power-state running  # Search with filters
 
 # View and manage optimization rules (✓ Available now - M3)
 ./dfo rules list                 # List all rules
@@ -300,7 +309,16 @@ See [USER_GUIDE.md - FAQ](USER_GUIDE.md#faq) for more questions.
 
 ## Changelog
 
-### v0.0.3 (Current - Milestone 3 Complete)
+### v0.0.4 (Current - Inventory Browse Phase 2 Complete)
+- ✅ **Output Formats**: JSON and CSV export with `--format` and `--output` flags
+- ✅ **Search Command**: `azure search vms` with wildcard pattern support
+- ✅ **Enhanced Filtering**: Tag filtering (`--tag`, `--tag-key`) and date filtering (`--discovered-after`, `--discovered-before`)
+- ✅ **Sorting**: Sort by any field (`--sort`) with ascending/descending order (`--order`)
+- ✅ **Formatters Module**: Reusable JSON/CSV formatters for all commands
+- ✅ **Comprehensive Testing**: 174 tests passing (+37 new tests)
+- ✅ **Documentation**: Updated README, USER_GUIDE, and test guides
+
+### v0.0.3 (Milestone 3 Complete)
 - ✅ VM discovery layer with rules-driven metric collection
 - ✅ Azure Compute provider implementation (list_vms)
 - ✅ Azure Monitor provider implementation (get_cpu_metrics)
@@ -309,7 +327,8 @@ See [USER_GUIDE.md - FAQ](USER_GUIDE.md#faq) for more questions.
 - ✅ Multi-service optimization rules engine (VMs, databases, storage, networking, AKS)
 - ✅ Rules management CLI: list, show, enable, disable, services, layers, mvp
 - ✅ Service type filtering (--service-type flag, DFO_SERVICE_TYPES env var)
-- ✅ 119 tests passing, 97% coverage
+- ✅ Inventory browse commands: list and show with filters
+- ✅ 137 tests passing, 97% coverage
 - ✅ Production-ready VM discovery with read-only access
 
 ### v0.0.2 (Milestone 2 Complete)
