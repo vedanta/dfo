@@ -205,6 +205,303 @@ def discover(
         raise typer.Exit(1)
 
 
+@app.command(name="list")
+def list_resources(
+    resource: str = typer.Argument(
+        ...,
+        help="Resource type to list (e.g., 'vms')"
+    ),
+    resource_group: str = typer.Option(
+        None,
+        "--resource-group", "-g",
+        help="Filter by resource group"
+    ),
+    location: str = typer.Option(
+        None,
+        "--location", "-l",
+        help="Filter by location"
+    ),
+    power_state: str = typer.Option(
+        None,
+        "--power-state", "-p",
+        help="Filter by power state (running, stopped, deallocated)"
+    ),
+    size: str = typer.Option(
+        None,
+        "--size", "-s",
+        help="Filter by VM size"
+    ),
+    limit: int = typer.Option(
+        None,
+        "--limit",
+        help="Limit number of results"
+    )
+):
+    """List discovered resources from local database.
+
+    Displays resources that have been discovered and stored in the
+    local database via the discover command.
+
+    Supported resource types:
+    - vms: Virtual machines
+
+    Example:
+        dfo azure list vms
+        dfo azure list vms --resource-group production-rg
+        dfo azure list vms --power-state running
+        dfo azure list vms --location eastus
+    """
+    if resource != "vms":
+        console.print(f"[red]Error:[/red] Unsupported resource type: {resource}")
+        console.print("Supported types: vms")
+        raise typer.Exit(1)
+
+    try:
+        from rich.table import Table
+        from rich.panel import Panel
+        from dfo.inventory.queries import (
+            get_vms_filtered,
+            get_vm_count_by_power_state,
+            get_vm_count_by_location
+        )
+
+        # Query VMs with filters
+        vms = get_vms_filtered(
+            resource_group=resource_group,
+            location=location,
+            power_state=power_state,
+            size=size,
+            limit=limit
+        )
+
+        if not vms:
+            console.print("\n[yellow]No VMs found in inventory.[/yellow]")
+            console.print("[dim]Run './dfo azure discover vms' to discover VMs from Azure.[/dim]\n")
+            return
+
+        # Create table
+        table = Table(
+            title=f"VM Inventory ({len(vms)} VMs)",
+            show_header=True,
+            header_style="bold cyan"
+        )
+
+        table.add_column("Name", style="bold", width=25)
+        table.add_column("Resource Group", style="dim", width=20)
+        table.add_column("Location", style="blue", width=12)
+        table.add_column("Size", style="yellow", width=15)
+        table.add_column("Power State", style="magenta", width=12)
+        table.add_column("Metrics", style="green", justify="center", width=8)
+
+        for vm in vms:
+            # Determine power state color
+            power_state_display = vm["power_state"]
+            if vm["power_state"] == "running":
+                power_state_display = f"[green]{vm['power_state']}[/green]"
+            elif vm["power_state"] == "stopped":
+                power_state_display = f"[yellow]{vm['power_state']}[/yellow]"
+            elif vm["power_state"] == "deallocated":
+                power_state_display = f"[dim]{vm['power_state']}[/dim]"
+
+            # Check if metrics exist
+            has_metrics = len(vm.get("cpu_timeseries", [])) > 0
+            metrics_icon = "✓" if has_metrics else "✗"
+            metrics_display = f"[green]{metrics_icon}[/green]" if has_metrics else f"[dim]{metrics_icon}[/dim]"
+
+            table.add_row(
+                vm["name"],
+                vm["resource_group"],
+                vm["location"],
+                vm["size"],
+                power_state_display,
+                metrics_display
+            )
+
+        console.print()
+        console.print(table)
+        console.print()
+
+        # Show summary statistics
+        power_counts = get_vm_count_by_power_state()
+        location_counts = get_vm_count_by_location()
+
+        summary_lines = []
+        summary_lines.append("[bold]Power State Distribution:[/bold]")
+        for state, count in power_counts.items():
+            summary_lines.append(f"  {state}: {count}")
+
+        summary_lines.append("")
+        summary_lines.append("[bold]Location Distribution:[/bold]")
+        for loc, count in location_counts.items():
+            summary_lines.append(f"  {loc}: {count}")
+
+        summary_lines.append("")
+        vms_with_metrics = sum(1 for vm in vms if vm.get("cpu_timeseries"))
+        summary_lines.append(f"[dim]VMs with metrics: {vms_with_metrics}/{len(vms)}[/dim]")
+
+        console.print("\n".join(summary_lines))
+        console.print()
+
+    except Exception as e:
+        console.print(f"[red]Error:[/red] {e}")
+        import os
+        if os.getenv("DFO_DEBUG"):
+            import traceback
+            traceback.print_exc()
+        raise typer.Exit(1)
+
+
+@app.command(name="show")
+def show_resource(
+    resource: str = typer.Argument(
+        ...,
+        help="Resource type (e.g., 'vm')"
+    ),
+    name: str = typer.Argument(
+        ...,
+        help="Resource name"
+    ),
+    metrics: bool = typer.Option(
+        False,
+        "--metrics",
+        help="Show detailed metrics information"
+    )
+):
+    """Show detailed information about a specific resource.
+
+    Displays complete details for a resource from the local database,
+    including metadata, tags, and metrics.
+
+    Supported resource types:
+    - vm: Virtual machine
+
+    Example:
+        dfo azure show vm prod-web-01
+        dfo azure show vm prod-web-01 --metrics
+    """
+    if resource != "vm":
+        console.print(f"[red]Error:[/red] Unsupported resource type: {resource}")
+        console.print("Supported types: vm")
+        raise typer.Exit(1)
+
+    try:
+        from rich.table import Table
+        from rich.panel import Panel
+        from rich.syntax import Syntax
+        from dfo.inventory.queries import get_vm_by_name
+        import json
+
+        # Get VM
+        vm = get_vm_by_name(name)
+
+        if not vm:
+            console.print(f"\n[red]Error:[/red] VM '{name}' not found in inventory")
+            console.print("[dim]Run './dfo azure list vms' to see available VMs[/dim]\n")
+            raise typer.Exit(1)
+
+        # Build detail view
+        details = []
+
+        # Basic info
+        details.append(f"[bold cyan]Basic Information[/bold cyan]")
+        details.append(f"  VM ID: [dim]{vm['vm_id']}[/dim]")
+        details.append(f"  Name: [bold]{vm['name']}[/bold]")
+        details.append(f"  Resource Group: {vm['resource_group']}")
+        details.append(f"  Location: {vm['location']}")
+        details.append(f"  Size: [yellow]{vm['size']}[/yellow]")
+
+        # Power state with color
+        power_state = vm['power_state']
+        if power_state == "running":
+            power_display = f"[green]●[/green] {power_state}"
+        elif power_state == "stopped":
+            power_display = f"[yellow]●[/yellow] {power_state}"
+        elif power_state == "deallocated":
+            power_display = f"[dim]●[/dim] {power_state}"
+        else:
+            power_display = power_state
+
+        details.append(f"  Power State: {power_display}")
+        details.append("")
+
+        # Tags
+        if vm.get("tags"):
+            details.append("[bold cyan]Tags[/bold cyan]")
+            for key, value in vm["tags"].items():
+                details.append(f"  {key}: {value}")
+            details.append("")
+
+        # Metrics summary
+        cpu_data = vm.get("cpu_timeseries", [])
+        if cpu_data:
+            details.append("[bold cyan]CPU Metrics[/bold cyan]")
+            details.append(f"  Data Points: {len(cpu_data)}")
+
+            # Calculate summary statistics
+            if cpu_data:
+                averages = [point["average"] for point in cpu_data if "average" in point]
+                if averages:
+                    avg_cpu = sum(averages) / len(averages)
+                    min_cpu = min(averages)
+                    max_cpu = max(averages)
+
+                    details.append(f"  Average CPU: [yellow]{avg_cpu:.2f}%[/yellow]")
+                    details.append(f"  Min CPU: {min_cpu:.2f}%")
+                    details.append(f"  Max CPU: {max_cpu:.2f}%")
+
+            # Time range
+            if len(cpu_data) > 0:
+                first_point = cpu_data[0].get("timestamp", "")
+                last_point = cpu_data[-1].get("timestamp", "")
+                if first_point and last_point:
+                    details.append(f"  Period: {first_point} to {last_point}")
+            details.append("")
+        else:
+            details.append("[bold cyan]CPU Metrics[/bold cyan]")
+            details.append("  [dim]No metrics collected[/dim]")
+            details.append("")
+
+        # Discovery info
+        details.append("[bold cyan]Discovery[/bold cyan]")
+        details.append(f"  Discovered At: {vm['discovered_at']}")
+        details.append(f"  Subscription ID: [dim]{vm['subscription_id']}[/dim]")
+
+        # Display in panel
+        console.print()
+        console.print(Panel(
+            "\n".join(details),
+            title=f"[bold]{vm['name']}[/bold]",
+            border_style="cyan",
+            padding=(1, 2)
+        ))
+
+        # Show detailed metrics if requested
+        if metrics and cpu_data:
+            # Build metrics display
+            metrics_text = f"[bold]CPU Timeseries Data ({len(cpu_data)} points)[/bold]\n\n"
+            metrics_text += json.dumps(cpu_data[:10], indent=2)
+
+            if len(cpu_data) > 10:
+                metrics_text += f"\n\n[dim]... and {len(cpu_data) - 10} more data points[/dim]"
+
+            console.print()
+            console.print(Panel(
+                metrics_text,
+                title="Detailed Metrics",
+                border_style="yellow"
+            ))
+
+        console.print()
+
+    except Exception as e:
+        console.print(f"[red]Error:[/red] {e}")
+        import os
+        if os.getenv("DFO_DEBUG"):
+            import traceback
+            traceback.print_exc()
+        raise typer.Exit(1)
+
+
 @app.command()
 def analyze(
     analysis_type: str = typer.Argument(

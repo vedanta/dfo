@@ -156,6 +156,24 @@ class DuckDBManager:
         result = self.execute_query(query, params)
         return result.fetchall()
 
+    def query(
+        self,
+        query: str,
+        params: Optional[List[Any]] = None
+    ) -> List[tuple]:
+        """Execute query and return results (alias for fetch_all with list params).
+
+        Args:
+            query: SQL query string.
+            params: Optional query parameters as list.
+
+        Returns:
+            List of result tuples.
+        """
+        if params:
+            return self.fetch_all(query, tuple(params))
+        return self.fetch_all(query)
+
     def fetch_df(self, query: str, params: Optional[tuple] = None):
         """Execute query and return as pandas DataFrame.
 

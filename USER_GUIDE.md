@@ -182,7 +182,44 @@ Scan your Azure subscription for VMs and collect CPU metrics:
 ./dfo db info
 ```
 
-### 2.5. View Rules ✓ Available Now (Milestone 3)
+### 2.5. Browse Discovered Inventory ✓ Available Now (Milestone 3)
+
+View VMs that have been discovered and stored in your local database:
+
+```bash
+# List all discovered VMs
+./dfo azure list vms
+
+# Filter by resource group
+./dfo azure list vms --resource-group production-rg
+
+# Filter by location
+./dfo azure list vms --location eastus
+
+# Filter by power state
+./dfo azure list vms --power-state running
+
+# Combined filters
+./dfo azure list vms --resource-group prod-rg --power-state running
+
+# Limit results
+./dfo azure list vms --limit 10
+
+# Show detailed VM information
+./dfo azure show vm my-vm-name
+
+# Show VM with detailed metrics
+./dfo azure show vm my-vm-name --metrics
+```
+
+**What it shows:**
+- VM name, resource group, location, size, power state
+- Whether CPU metrics were collected (✓/✗)
+- Power state distribution
+- Location distribution
+- Summary statistics
+
+### 2.6. View Rules ✓ Available Now (Milestone 3)
 
 View and manage optimization rules:
 
@@ -381,6 +418,128 @@ Discover Azure resources and store in database.
 - `<resource>` - Resource type to discover (currently only `vms`)
 
 **Time:** ~2-5 minutes for 100 VMs
+
+---
+
+#### `dfo azure list <resource>` ✓ Available Now (Milestone 3)
+List discovered resources from local database.
+
+```bash
+./dfo azure list vms [OPTIONS]
+```
+
+**Options:**
+- `--resource-group/-g <name>` - Filter by resource group
+- `--location/-l <location>` - Filter by location
+- `--power-state/-p <state>` - Filter by power state (running, stopped, deallocated)
+- `--size/-s <size>` - Filter by VM size
+- `--limit <n>` - Limit number of results
+
+**What it does:**
+- Queries the local vm_inventory database table
+- Displays VMs in a rich formatted table
+- Shows summary statistics by power state and location
+- Indicates which VMs have metrics collected
+
+**Examples:**
+```bash
+# List all VMs
+./dfo azure list vms
+
+# List only running VMs
+./dfo azure list vms --power-state running
+
+# List VMs in specific resource group
+./dfo azure list vms --resource-group production-rg
+
+# List VMs in eastus location, limit to 20
+./dfo azure list vms --location eastus --limit 20
+
+# Combine filters
+./dfo azure list vms --resource-group prod-rg --power-state running
+```
+
+**Example output:**
+```
+                VM Inventory (10 VMs)
+┏━━━━━━━━━━┳━━━━━━━━━━━━━━┳━━━━━━━━┳━━━━━━━━━┳━━━━━━━━┳━━━━━┓
+┃ Name     ┃ Resource Grp ┃ Locatn ┃ Size    ┃ Power  ┃ Met ┃
+┡━━━━━━━━━━╇━━━━━━━━━━━━━━╇━━━━━━━━╇━━━━━━━━━╇━━━━━━━━╇━━━━━┩
+│ vm1      │ prod-rg      │ eastus │ B1s     │ running│  ✓  │
+│ vm2      │ test-rg      │ westus │ B2s     │ stopped│  ✓  │
+└──────────┴──────────────┴────────┴─────────┴────────┴─────┘
+
+Power State Distribution:
+  running: 8
+  stopped: 2
+
+Location Distribution:
+  eastus: 7
+  westus: 3
+
+VMs with metrics: 10/10
+```
+
+**Time:** < 1 second
+
+---
+
+#### `dfo azure show <resource> <name>` ✓ Available Now (Milestone 3)
+Show detailed information about a specific resource.
+
+```bash
+./dfo azure show vm <vm-name> [OPTIONS]
+```
+
+**Options:**
+- `--metrics` - Show detailed CPU timeseries data
+
+**What it does:**
+- Retrieves complete VM details from vm_inventory
+- Displays metadata, tags, and CPU metrics summary
+- Optionally shows detailed timeseries data
+
+**Examples:**
+```bash
+# Show VM details
+./dfo azure show vm prod-web-01
+
+# Show VM with detailed metrics
+./dfo azure show vm prod-web-01 --metrics
+```
+
+**Example output:**
+```
+╭────────────────── prod-web-01 ──────────────────╮
+│                                                 │
+│  Basic Information                              │
+│    VM ID: /subscriptions/.../prod-web-01        │
+│    Name: prod-web-01                            │
+│    Resource Group: production-rg                │
+│    Location: eastus                             │
+│    Size: Standard_B2s                           │
+│    Power State: ● running                       │
+│                                                 │
+│  Tags                                           │
+│    env: production                              │
+│    team: platform                               │
+│    cost-center: engineering                     │
+│                                                 │
+│  CPU Metrics                                    │
+│    Data Points: 336                             │
+│    Average CPU: 12.45%                          │
+│    Min CPU: 2.10%                               │
+│    Max CPU: 45.80%                              │
+│    Period: 2025-01-07 to 2025-01-21             │
+│                                                 │
+│  Discovery                                      │
+│    Discovered At: 2025-01-21 10:30:15           │
+│    Subscription ID: abc-123-def                 │
+│                                                 │
+╰─────────────────────────────────────────────────╯
+```
+
+**Time:** < 1 second
 
 ---
 
@@ -743,6 +902,39 @@ Understand and customize optimization rules:
 
 # Or disable multiple rules via .env
 echo 'DFO_DISABLE_RULES=Spot Instance Recommendation,Reserved Instance Analysis' >> .env
+```
+
+### Use Case 6: Browse and Audit Inventory ✓ Available Now
+
+Explore discovered VMs with filtering and detailed views:
+
+```bash
+# Discover VMs from Azure
+./dfo azure discover vms
+
+# List all discovered VMs
+./dfo azure list vms
+
+# Find all running VMs
+./dfo azure list vms --power-state running
+
+# Check VMs in specific resource group
+./dfo azure list vms --resource-group production-rg
+
+# Find large VMs
+./dfo azure list vms --size Standard_D4s_v3
+
+# Show details for specific VM
+./dfo azure show vm prod-web-01
+
+# Show VM with full metrics data
+./dfo azure show vm prod-web-01 --metrics
+
+# Audit VMs by location
+./dfo azure list vms --location eastus
+
+# List first 10 VMs only
+./dfo azure list vms --limit 10
 ```
 
 ---
