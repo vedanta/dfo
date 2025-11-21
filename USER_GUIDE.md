@@ -777,9 +777,9 @@ Use with caution in production. Test thoroughly in dev/test environments first.
 ### Documentation
 - **User Guide**: This file
 - **Developer Guide**: `CLAUDE.md`
-- **Architecture**: `ARCHITECTURE.md`
-- **Code Style**: `CODE_STYLE.md`
-- **Milestones**: `MVP.md`
+- **Architecture**: `docs/ARCHITECTURE.md`
+- **Code Style**: `docs/CODE_STYLE.md`
+- **Milestones**: `docs/MVP.md`
 
 ### Support
 - Report issues: Create an issue in the repository

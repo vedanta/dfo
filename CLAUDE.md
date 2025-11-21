@@ -218,7 +218,7 @@ The project follows a phased roadmap:
 
 ### Current Status: Phase 1 (MVP)
 
-Phase 1 is broken into 7 incremental milestones (see MVP.md for full details):
+Phase 1 is broken into 7 incremental milestones (see docs/MVP.md for full details):
 
 1. **Foundation & Infrastructure** - Config, DuckDB, models, CLI skeleton
 2. **Authentication & Azure Provider** - Azure auth, client factory
@@ -232,7 +232,7 @@ Each milestone has clear deliverables, testing requirements, and exit criteria.
 
 ## Code Style & Standards
 
-**All code MUST follow the standards defined in CODE_STYLE.md.**
+**All code MUST follow the standards defined in docs/CODE_STYLE.md.**
 
 ### Key Principles
 - **Explicit > Implicit**: No hidden magic or side effects
@@ -280,7 +280,7 @@ from dfo.db.duck import get_db
 | `db` | Read/write DuckDB only | No cloud logic, no analysis |
 | `cli/cmd` | Orchestrate commands | No business logic |
 
-See CODE_STYLE.md for complete specifications.
+See docs/CODE_STYLE.md for complete specifications.
 
 ## Important Notes
 
