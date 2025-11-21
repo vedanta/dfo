@@ -116,6 +116,14 @@ The `dfo` wrapper script allows you to run commands from the root directory:
 ./dfo azure discover vms --no-refresh  # Append to existing data
 ./dfo azure discover vms --subscription SUB_ID  # Custom subscription
 
+# Browse discovered inventory (✓ Available now - M3)
+./dfo azure list vms             # List all discovered VMs
+./dfo azure list vms --resource-group production-rg  # Filter by resource group
+./dfo azure list vms --power-state running  # Filter by power state
+./dfo azure list vms --location eastus --limit 10  # Combined filters
+./dfo azure show vm my-vm        # Show detailed VM information
+./dfo azure show vm my-vm --metrics  # Include detailed metrics
+
 # View and manage optimization rules (✓ Available now - M3)
 ./dfo rules list                 # List all rules
 ./dfo rules list --service-type vm  # Filter by service type
