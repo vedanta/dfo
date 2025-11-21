@@ -39,6 +39,7 @@ class Settings(BaseSettings):
     dfo_idle_days: int = 14
     dfo_dry_run_default: bool = True
     dfo_disable_rules: str = ""  # Comma-separated list of rule types to disable
+    dfo_service_types: str = ""  # Comma-separated list of service types to enable (empty = all)
 
     # DuckDB Configuration (DFO_ prefix)
     dfo_duckdb_file: str = "./dfo.duckdb"

@@ -211,6 +211,7 @@ def test_rules_enable_command(setup_env, tmp_path, monkeypatch):
     rules_data = {
         "optimizations": [
             {
+                "service_type": "vm",
                 "layer": 1,
                 "sub_layer": "Test",
                 "type": "Test Rule",
@@ -265,6 +266,7 @@ def test_rules_disable_command(setup_env, tmp_path, monkeypatch):
     rules_data = {
         "optimizations": [
             {
+                "service_type": "vm",
                 "layer": 1,
                 "sub_layer": "Test",
                 "type": "Test Rule",

@@ -25,8 +25,19 @@ class ThresholdOperator(str, Enum):
     GREATER_EQUAL = ">="
 
 
+class ServiceType(str, Enum):
+    """Supported service types for optimization rules."""
+    VM = "vm"
+    DATABASE = "database"
+    STORAGE = "storage"
+    NETWORKING = "networking"
+    APP_SERVICE = "app-service"
+    AKS = "aks"
+
+
 class OptimizationRule(BaseModel):
     """Single optimization rule with structured thresholds."""
+    service_type: str  # Service type: vm, database, storage, networking, etc.
     layer: int
     sub_layer: str
     type: str
@@ -128,7 +139,7 @@ class OptimizationRule(BaseModel):
 class RuleEngine:
     """Load and manage optimization rules."""
 
-    def __init__(self, rules_file: str = "vm_rules.json"):
+    def __init__(self, rules_file: str = "optimization_rules.json"):
         """Initialize rule engine.
 
         Args:
@@ -152,9 +163,14 @@ class RuleEngine:
         """Apply user configuration overrides to rules.
 
         Allows users to customize rule thresholds/periods via .env file.
-        Also applies DFO_DISABLE_RULES to disable specific rules.
+        Also applies DFO_SERVICE_TYPES and DFO_DISABLE_RULES to filter rules.
         """
         settings = get_settings()
+
+        # Parse enabled service types list (empty = all enabled)
+        enabled_service_types = []
+        if settings.dfo_service_types:
+            enabled_service_types = [s.strip() for s in settings.dfo_service_types.split(",") if s.strip()]
 
         # Parse disabled rules list
         disabled_rules = []
@@ -163,7 +179,11 @@ class RuleEngine:
 
         # Map config to specific rules
         for rule in self._rules:
-            # Apply disable overrides first
+            # Apply service type filter (if specified)
+            if enabled_service_types and rule.service_type not in enabled_service_types:
+                rule.enabled = False
+
+            # Apply disable overrides
             if rule.type in disabled_rules:
                 rule.enabled = False
 
@@ -198,6 +218,34 @@ class RuleEngine:
             List of rules for that layer.
         """
         return [r for r in self._rules if r.layer == layer and r.enabled]
+
+    def get_rules_by_service_type(self, service_type: str) -> List[OptimizationRule]:
+        """Get all rules for a specific service type.
+
+        Args:
+            service_type: Service type to filter by (vm, database, etc.)
+
+        Returns:
+            List of rules matching the service type.
+        """
+        return [r for r in self._rules if r.service_type == service_type]
+
+    def get_service_types(self) -> List[str]:
+        """Get all unique service types from loaded rules.
+
+        Returns:
+            Sorted list of unique service types.
+        """
+        return sorted(set(r.service_type for r in self._rules))
+
+    def get_enabled_service_types(self) -> List[str]:
+        """Get service types that have at least one enabled rule.
+
+        Returns:
+            Sorted list of service types with enabled rules.
+        """
+        enabled_rules = [r for r in self._rules if r.enabled]
+        return sorted(set(r.service_type for r in enabled_rules))
 
     def get_rule_by_type(self, rule_type: str) -> Optional[OptimizationRule]:
         """Get a specific rule by type.
@@ -281,6 +329,7 @@ class RuleEngine:
         rules_data = []
         for rule in self._rules:
             rule_dict = {
+                "service_type": rule.service_type,
                 "layer": rule.layer,
                 "sub_layer": rule.sub_layer,
                 "type": rule.type,

@@ -10,6 +10,66 @@ Since we're using DuckDB for local storage in the MVP phase, migrations are hand
 
 ## Migration History
 
+### Migration 003 - Add service_type to optimization rules (2025-01-20)
+
+**Commit:** (pending)
+
+**Change:**
+Added `service_type` field to optimization rules to support multiple Azure service types (vm, database, storage, networking, etc.). File renamed from `vm_rules.json` to `optimization_rules.json`.
+
+**Configuration Change:**
+```json
+// Before (vm_rules.json)
+{
+  "optimizations": [
+    {
+      "layer": 1,
+      "type": "Idle VM Detection",
+      ...
+    }
+  ]
+}
+
+// After (optimization_rules.json)
+{
+  "optimizations": [
+    {
+      "service_type": "vm",  // NEW
+      "layer": 1,
+      "type": "Idle VM Detection",
+      ...
+    }
+  ]
+}
+```
+
+**Migration Required:** No (backward compatible for users)
+
+**Breaking Change:** No - existing configurations continue to work
+
+**Impact:**
+- All existing 29 rules now have `service_type: "vm"`
+- Rules file renamed to `optimization_rules.json` (loaded automatically)
+- No action required for users - existing .env configs continue to work
+
+**New Features:**
+```bash
+# Filter rules by service type
+./dfo rules list --service-type vm
+
+# View all service types
+./dfo rules services
+
+# Enable specific service types via .env
+DFO_SERVICE_TYPES="vm,database"
+```
+
+**For Developers:**
+- Update custom scripts reading vm_rules.json to use optimization_rules.json
+- Include `service_type` field when creating new rules
+
+---
+
 ### Migration 002 - Add subscription_id to vm_inventory (2025-01-20)
 
 **Commit:** `33717f1`
