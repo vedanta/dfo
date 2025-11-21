@@ -3,9 +3,131 @@
 # Third-party
 import typer
 from rich.console import Console
+from rich.columns import Columns
 
 app = typer.Typer(help="Azure cloud provider commands")
 console = Console()
+
+
+def _show_discovery_visual_summary():
+    """Show visual summary of discovered VMs using visualization module."""
+    from rich.table import Table
+    from dfo.inventory.queries import (
+        get_all_vms,
+        get_vm_count_by_power_state,
+        get_vm_count_by_location
+    )
+    from dfo.common.visualizations import (
+        horizontal_bar_chart,
+        metric_panel,
+        sparkline,
+        color_indicator
+    )
+
+    console.print("\n[bold cyan]═══ Discovery Visualization ═══[/bold cyan]\n")
+
+    vms = get_all_vms()
+
+    if not vms:
+        console.print("[yellow]No VMs in inventory.[/yellow]\n")
+        return
+
+    # Summary metrics
+    total_vms = len(vms)
+    vms_with_metrics = sum(1 for vm in vms if vm.get("cpu_timeseries"))
+    coverage_pct = (vms_with_metrics / total_vms * 100) if total_vms > 0 else 0
+
+    metrics = [
+        metric_panel(
+            "Total VMs",
+            total_vms,
+            color="cyan"
+        ),
+        metric_panel(
+            "VMs with Metrics",
+            vms_with_metrics,
+            subtitle=f"{coverage_pct:.0f}% coverage",
+            color="green" if coverage_pct > 80 else "yellow"
+        )
+    ]
+    console.print(Columns(metrics, equal=True, expand=True))
+    console.print()
+
+    # Distribution by power state
+    power_state_counts = get_vm_count_by_power_state()
+    if power_state_counts:
+        chart = horizontal_bar_chart(
+            power_state_counts,
+            "VMs by Power State",
+            color="cyan"
+        )
+        console.print(chart)
+
+    # Distribution by location
+    location_counts = get_vm_count_by_location()
+    if location_counts:
+        chart = horizontal_bar_chart(
+            location_counts,
+            "VMs by Location",
+            color="green"
+        )
+        console.print(chart)
+
+    # Show idle VM preview (top 10 lowest CPU)
+    vms_with_metrics_list = [vm for vm in vms if vm.get("cpu_timeseries")]
+    if vms_with_metrics_list:
+        console.print("[bold]Idle VM Preview (Lowest CPU Usage)[/bold]")
+
+        # Calculate average CPU for each VM
+        def get_avg_cpu(vm):
+            cpu_data = vm.get("cpu_timeseries", [])
+            if not cpu_data:
+                return 0
+            cpu_values = [m.get("average", 0) for m in cpu_data]
+            return sum(cpu_values) / len(cpu_values) if cpu_values else 0
+
+        # Sort by average CPU and take top 10
+        sorted_vms = sorted(vms_with_metrics_list, key=get_avg_cpu)[:10]
+
+        table = Table(show_header=True)
+        table.add_column("VM Name", style="cyan", width=25)
+        table.add_column("Location", width=12)
+        table.add_column("Power State", width=12)
+        table.add_column("CPU Trend", width=18)
+        table.add_column("Avg CPU", width=10, justify="right")
+        table.add_column("Status", width=10)
+
+        for vm in sorted_vms:
+            cpu_data = vm.get("cpu_timeseries", [])
+            cpu_values = [m.get("average", 0) for m in cpu_data]
+            avg_cpu = sum(cpu_values) / len(cpu_values) if cpu_values else 0
+
+            # Create sparkline
+            spark = sparkline(cpu_values) if cpu_values else ""
+
+            # Color indicator
+            status = color_indicator(
+                avg_cpu,
+                {"low": 5.0, "medium": 15.0, "high": 50.0}
+            )
+
+            table.add_row(
+                vm["name"],
+                vm["location"],
+                vm["power_state"],
+                spark,
+                f"{avg_cpu:.1f}%",
+                status
+            )
+
+        console.print(table)
+        console.print()
+
+    # Next steps
+    console.print("[dim]💡 Tip: Use these commands to explore your inventory:[/dim]")
+    console.print("[dim]   • ./dfo azure list vms[/dim]")
+    console.print("[dim]   • ./dfo azure show vm <name>[/dim]")
+    console.print("[dim]   • PYTHONPATH=src python examples/visualize_my_vms.py[/dim]\n")
 
 
 @app.command()
@@ -23,6 +145,11 @@ def discover(
         None,
         "--subscription",
         help="Azure subscription ID (uses config default if not specified)"
+    ),
+    visual: bool = typer.Option(
+        False,
+        "--visual",
+        help="Show visual summary after discovery"
     )
 ):
     """Discover Azure resources and store in database.
@@ -35,6 +162,7 @@ def discover(
 
     Example:
         dfo azure discover vms
+        dfo azure discover vms --visual
         dfo azure discover vms --no-refresh
         dfo azure discover vms --subscription abc-123
     """
@@ -101,6 +229,10 @@ def discover(
             border_style="green"
         ))
         console.print("\n[green]✓[/green] VM inventory updated in database\n")
+
+        # Show visual summary if requested
+        if visual:
+            _show_discovery_visual_summary()
 
     except ClientAuthenticationError as e:
         console.print(f"\n[red]✗ Discovery failed:[/red] Authentication error\n")
