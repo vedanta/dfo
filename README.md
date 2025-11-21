@@ -114,6 +114,7 @@ The `dfo` wrapper script allows you to run commands from the root directory:
 
 # Discover VMs with metrics (✓ Available now - M3)
 ./dfo azure discover vms         # Discover VMs with CPU metrics
+./dfo azure discover vms --visual  # Show visual summary after discovery
 ./dfo azure discover vms --no-refresh  # Append to existing data
 ./dfo azure discover vms --subscription SUB_ID  # Custom subscription
 
