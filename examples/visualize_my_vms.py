@@ -130,12 +130,21 @@ def show_vms_with_cpu_trends():
     table.add_column("Status", width=12)
 
     # Sort by average CPU (lowest first to highlight idle VMs)
-    for vm in sorted(vms_with_metrics, key=lambda x: sum(m["value"] for m in x["cpu_timeseries"]) / len(x["cpu_timeseries"]) if x["cpu_timeseries"] else 0)[:20]:
+    def get_avg_cpu(vm):
+        cpu_data = vm.get("cpu_timeseries", [])
+        if not cpu_data:
+            return 0
+        # Use "average" field from Azure Monitor metrics
+        cpu_values = [m.get("average", 0) for m in cpu_data]
+        return sum(cpu_values) / len(cpu_values) if cpu_values else 0
+
+    for vm in sorted(vms_with_metrics, key=get_avg_cpu)[:20]:
         cpu_data = vm.get("cpu_timeseries", [])
 
         if cpu_data:
-            cpu_values = [m["value"] for m in cpu_data]
-            avg_cpu = sum(cpu_values) / len(cpu_values)
+            # Use "average" field from Azure Monitor metrics
+            cpu_values = [m.get("average", 0) for m in cpu_data]
+            avg_cpu = sum(cpu_values) / len(cpu_values) if cpu_values else 0
 
             # Create sparkline
             spark = sparkline(cpu_values)
@@ -181,7 +190,7 @@ def show_cpu_detail(vm_name: str):
 
     # Extract timestamps and values
     timestamps = [m["timestamp"][:10] for m in cpu_data]  # Just the date part
-    values = [m["value"] for m in cpu_data]
+    values = [m.get("average", 0) for m in cpu_data]  # Use "average" from Azure Monitor
 
     # Create time series chart
     chart = time_series_chart(
