@@ -30,7 +30,9 @@ dfo is a command-line tool that discovers Azure VMs, analyzes their CPU usage, i
 - ✓ Azure authentication (DefaultAzureCredential + service principal)
 - ✓ Azure SDK client management (Compute & Monitor)
 - ✓ VM discovery with CPU metrics collection (rules-driven)
-- ✓ CLI commands: `./dfo azure test-auth`, `./dfo azure discover vms`
+- ✓ Multi-service optimization rules engine (VMs, databases, storage, networking, AKS)
+- ✓ Rules management commands with service type filtering
+- ✓ CLI commands: `./dfo azure test-auth`, `./dfo azure discover vms`, `./dfo rules list`
 
 ## Quick Start
 
@@ -113,6 +115,15 @@ The `dfo` wrapper script allows you to run commands from the root directory:
 ./dfo azure discover vms         # Discover VMs with CPU metrics
 ./dfo azure discover vms --no-refresh  # Append to existing data
 ./dfo azure discover vms --subscription SUB_ID  # Custom subscription
+
+# View and manage optimization rules (✓ Available now - M3)
+./dfo rules list                 # List all rules
+./dfo rules list --service-type vm  # Filter by service type
+./dfo rules show "Idle VM Detection"  # Show rule details
+./dfo rules services             # List available service types
+./dfo rules layers               # Show layer descriptions
+./dfo rules enable "Rule Name"   # Enable a rule
+./dfo rules disable "Rule Name"  # Disable a rule
 
 # Coming soon in Milestones 4-6:
 ./dfo azure analyze idle-vms     # Analyze for idle VMs
@@ -264,7 +275,7 @@ A: **Reader** role for discovery/analysis (read-only). **Contributor** role for 
 A: All data is stored locally in `dfo.duckdb`. No cloud storage or external services required.
 
 **Q: Is dfo production-ready?**
-A: Milestones 1-3 are complete and tested (95 tests, 97% coverage). VM discovery is production-ready with read-only access. Milestones 4-6 are in development.
+A: Milestones 1-3 are complete and tested (119 tests, 97% coverage). VM discovery and rules management are production-ready with read-only access. Milestones 4-6 are in development.
 
 See [USER_GUIDE.md - FAQ](USER_GUIDE.md#faq) for more questions.
 
@@ -287,7 +298,10 @@ See [USER_GUIDE.md - FAQ](USER_GUIDE.md#faq) for more questions.
 - ✅ Azure Monitor provider implementation (get_cpu_metrics)
 - ✅ Discovery orchestration with error handling
 - ✅ CLI discover command with Rich progress indicators
-- ✅ 95 tests passing, 97% coverage
+- ✅ Multi-service optimization rules engine (VMs, databases, storage, networking, AKS)
+- ✅ Rules management CLI: list, show, enable, disable, services, layers, mvp
+- ✅ Service type filtering (--service-type flag, DFO_SERVICE_TYPES env var)
+- ✅ 119 tests passing, 97% coverage
 - ✅ Production-ready VM discovery with read-only access
 
 ### v0.0.2 (Milestone 2 Complete)

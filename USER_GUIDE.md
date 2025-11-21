@@ -95,6 +95,15 @@ DFO_IDLE_CPU_THRESHOLD=5.0        # CPU % below which a VM is considered idle
 DFO_IDLE_DAYS=14                  # Days of idle CPU to flag a VM
 DFO_DRY_RUN_DEFAULT=true          # Safety: dry-run enabled by default
 
+# Service Type Filtering (optional)
+# Comma-separated list of service types to enable (empty = all enabled)
+# Available: vm, database, storage, networking, app-service, aks
+# DFO_SERVICE_TYPES=vm,database
+
+# Rule Management (optional)
+# Comma-separated list of rules to disable
+# DFO_DISABLE_RULES=Right-Sizing (CPU),Family Optimization
+
 # Database Configuration (optional)
 DFO_DUCKDB_FILE=./dfo.duckdb      # Where to store local data
 
@@ -155,7 +164,7 @@ To see unmasked values:
 ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
 ```
 
-### 2. Discover (Coming in Milestone 3)
+### 2. Discover ✓ Available Now (Milestone 3)
 
 Scan your Azure subscription for VMs and collect CPU metrics:
 
@@ -172,6 +181,36 @@ Scan your Azure subscription for VMs and collect CPU metrics:
 ```bash
 ./dfo db info
 ```
+
+### 2.5. View Rules ✓ Available Now (Milestone 3)
+
+View and manage optimization rules:
+
+```bash
+# List all rules
+./dfo rules list
+
+# Filter by service type
+./dfo rules list --service-type vm
+
+# Show only enabled rules
+./dfo rules list --enabled-only
+
+# Show rule details
+./dfo rules show "Idle VM Detection"
+
+# List available service types
+./dfo rules services
+
+# Show layer descriptions
+./dfo rules layers
+```
+
+**What it shows:**
+- All configured optimization rules
+- Service type, layer, metric, threshold, period
+- Current enabled/disabled status
+- Configuration source (rules file or .env override)
 
 ### 3. Analyze (Coming in Milestone 4)
 
@@ -325,7 +364,7 @@ Test Azure authentication and SDK client creation.
 
 ---
 
-#### `dfo azure discover <resource>` ⏳ Coming in Milestone 3
+#### `dfo azure discover <resource>` ✓ Available Now (Milestone 3)
 Discover Azure resources and store in database.
 
 ```bash
@@ -431,6 +470,176 @@ Execute remediation actions on Azure resources.
 
 ---
 
+### Rules Commands (`dfo rules`) ✓ Available Now (Milestone 3)
+
+#### `dfo rules list`
+List all optimization rules with optional filtering.
+
+```bash
+./dfo rules list                        # List all rules
+./dfo rules list --service-type vm      # Filter by service type
+./dfo rules list --layer 1              # Filter by layer
+./dfo rules list --enabled-only         # Show only enabled rules
+./dfo rules list --service-type database --enabled-only  # Combined filters
+```
+
+**Options:**
+- `--service-type/-s <type>` - Filter by service type (vm, database, storage, networking, app-service, aks)
+- `--layer/-l <number>` - Filter by layer (1, 2, or 3)
+- `--enabled-only` - Show only enabled rules
+
+**Output:**
+- Service type
+- Layer number
+- Rule type/name
+- Metric being measured
+- Threshold value
+- Period (time window)
+- Enabled/disabled status
+
+---
+
+#### `dfo rules show`
+Show detailed information about a specific rule.
+
+```bash
+./dfo rules show "Idle VM Detection"
+./dfo rules show "Right-Sizing (CPU)"
+```
+
+**What it shows:**
+- Service type
+- Layer and sub-layer
+- Metric and threshold configuration
+- Period configuration
+- Configuration source (rules file or .env override)
+- Provider-specific metric mappings (Azure, AWS, GCP)
+- Enabled/disabled status
+- Usage tips for configurable rules
+
+**Example output:**
+```
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ Idle VM Detection                         ┃
+┠───────────────────────────────────────────┨
+┃ Service Type: vm                          ┃
+┃ Layer: 1 - Self-Contained VM              ┃
+┃ Metric: CPU/RAM <5%                       ┃
+┃                                           ┃
+┃ Threshold Configuration:                  ┃
+┃   Raw: <5%                                ┃
+┃   Operator: <                             ┃
+┃   Value: 5.0 percent                      ┃
+┃   Source: .env override                   ┃
+┃                                           ┃
+┃ Period Configuration:                     ┃
+┃   Raw: 7d                                 ┃
+┃   Days: 14                                ┃
+┃   Source: .env override (DFO_IDLE_DAYS=14)┃
+┃                                           ┃
+┃ Provider Mappings:                        ┃
+┃   AZURE: CPU% + RAM% time series          ┃
+┃   AWS: CPUUtilization + mem_used_percent  ┃
+┃   GCP: low CPU+RAM                        ┃
+┃                                           ┃
+┃ Status: ✓ Enabled                         ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+
+💡 Tip: Override values in .env file:
+   DFO_IDLE_CPU_THRESHOLD=10.0  # Change threshold
+   DFO_IDLE_DAYS=30             # Change lookback period
+```
+
+---
+
+#### `dfo rules services`
+List all available service types with statistics.
+
+```bash
+./dfo rules services
+```
+
+**What it shows:**
+- Service type name
+- Total rules for that service
+- Enabled/disabled counts
+- Active/inactive status
+
+**Example output:**
+```
+Available Service Types
+┏━━━━━━━━━━━━━┳━━━━━━━━━━━━┳━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━┓
+┃ Service Type┃ Total Rules┃ Enabled ┃ Disabled ┃ Status   ┃
+┡━━━━━━━━━━━━━╇━━━━━━━━━━━━╇━━━━━━━━━╇━━━━━━━━━━╇━━━━━━━━━━┩
+│ vm          │ 29         │ 3       │ 26       │ ✓ Active │
+└─────────────┴────────────┴─────────┴──────────┴──────────┘
+```
+
+---
+
+#### `dfo rules layers`
+Show optimization layer descriptions and statistics.
+
+```bash
+./dfo rules layers
+```
+
+**What it shows:**
+- Description of each layer (1, 2, 3)
+- Rule count per layer
+- Total rules across all layers
+
+---
+
+#### `dfo rules mvp`
+Show rules included in the MVP scope.
+
+```bash
+./dfo rules mvp
+```
+
+**What it shows:**
+- MVP (Phase 1) implemented rules
+- Phase 2 planned rules
+- Current MVP rule details
+
+---
+
+#### `dfo rules enable`
+Enable a specific rule.
+
+```bash
+./dfo rules enable "Idle VM Detection"
+./dfo rules enable "Right-Sizing (CPU)"
+```
+
+**What it does:**
+- Updates the rule's enabled status in optimization_rules.json
+- Makes the rule active for future operations
+
+**Note:** Changes persist across sessions until disabled or overridden by `DFO_DISABLE_RULES`.
+
+---
+
+#### `dfo rules disable`
+Disable a specific rule.
+
+```bash
+./dfo rules disable "Idle VM Detection"
+./dfo rules disable "Right-Sizing (CPU)"
+```
+
+**What it does:**
+- Updates the rule's enabled status in optimization_rules.json
+- Makes the rule inactive for future operations
+
+**Alternative:** Use environment variable for temporary disable:
+```bash
+DFO_DISABLE_RULES="Idle VM Detection,Right-Sizing (CPU)"
+```
+
+---
+
 ## Typical Use Cases
 
 ### Use Case 1: Monthly Cost Review
@@ -507,6 +716,33 @@ DATE=$(date +%Y-%m)
 
 # Upload to S3/Azure Blob/etc for dashboard
 # aws s3 cp cost-report-$DATE.json s3://finops-reports/
+```
+
+### Use Case 5: Review and Configure Rules ✓ Available Now
+
+Understand and customize optimization rules:
+
+```bash
+# List all available service types
+./dfo rules services
+
+# View all VM rules
+./dfo rules list --service-type vm
+
+# Check details of specific rule
+./dfo rules show "Idle VM Detection"
+
+# Enable a rule for testing
+./dfo rules enable "Right-Sizing (CPU)"
+
+# View MVP scope
+./dfo rules mvp
+
+# Disable rules not relevant to your environment
+./dfo rules disable "Spot Instance Recommendation"
+
+# Or disable multiple rules via .env
+echo 'DFO_DISABLE_RULES=Spot Instance Recommendation,Reserved Instance Analysis' >> .env
 ```
 
 ---
@@ -682,7 +918,18 @@ DFO_IDLE_CPU_THRESHOLD=3.0  # For stricter detection
 DFO_IDLE_DAYS=7             # For quicker action
 ```
 
-### 7. Tag Your VMs
+### 7. Filter by Service Type
+Enable only specific service types:
+```bash
+# In .env file
+DFO_SERVICE_TYPES=vm,database  # Only VM and database rules
+
+# Or use CLI filtering
+./dfo rules list --service-type vm
+./dfo rules list --service-type database
+```
+
+### 8. Tag Your VMs
 Use Azure tags to:
 - Exclude VMs from analysis (e.g., `dfo:skip=true`)
 - Identify ownership (e.g., `team:platform`)
@@ -724,11 +971,44 @@ Use Azure tags to:
 - **Stop**: VM is stopped but still allocated. You still pay for storage. Quick to restart.
 - **Deallocate**: VM is deallocated, no compute charges. Storage charges remain. Slower to restart.
 
+### Q: How do I enable rules for specific service types only?
+
+**A:** Use the `DFO_SERVICE_TYPES` environment variable:
+```bash
+# In .env file
+DFO_SERVICE_TYPES=vm,database  # Only enable VM and database rules
+```
+
+Or filter at runtime with CLI flags:
+```bash
+./dfo rules list --service-type vm  # View only VM rules
+```
+
+Leave `DFO_SERVICE_TYPES` empty to enable all service types.
+
+### Q: Can I disable specific rules?
+
+**A:** Yes, three ways:
+1. **Permanently via CLI:**
+   ```bash
+   ./dfo rules disable "Rule Name"
+   ```
+
+2. **Temporarily via environment variable:**
+   ```bash
+   DFO_DISABLE_RULES="Rule 1,Rule 2"
+   ```
+
+3. **View current status:**
+   ```bash
+   ./dfo rules show "Rule Name"
+   ```
+
 ### Q: Is dfo production-ready?
 
 **A:** dfo is currently in MVP development:
-- ✅ **Milestones 1-2 Complete**: Configuration, database, authentication
-- ⏳ **Milestones 3-6 In Progress**: Discovery, analysis, reporting, execution
+- ✅ **Milestones 1-3 Complete**: Configuration, database, authentication, VM discovery, rules engine
+- ⏳ **Milestones 4-6 In Progress**: Analysis, reporting, execution
 
 Use with caution in production. Test thoroughly in dev/test environments first.
 
@@ -736,19 +1016,18 @@ Use with caution in production. Test thoroughly in dev/test environments first.
 
 ## Roadmap
 
-### Current Status (Milestones 1-2) ✅
+### Current Status (Milestones 1-3) ✅
 
 - ✅ Configuration management
 - ✅ DuckDB integration
 - ✅ Azure authentication
 - ✅ CLI foundation
 - ✅ Test infrastructure
+- ✅ VM discovery and metric collection
+- ✅ Multi-service rules engine (VMs, databases, storage, networking, AKS)
+- ✅ Rules management commands
 
 ### Coming Soon
-
-**Milestone 3 (Week 2):** Discovery Layer
-- VM discovery and metric collection
-- Store in local database
 
 **Milestone 4 (Week 3):** Analysis Layer
 - Idle VM detection
@@ -802,7 +1081,17 @@ We welcome contributions! See `CONTRIBUTING.md` for guidelines.
 
 ## Changelog
 
-### v0.0.2 (Current)
+### v0.0.3 (Current - Milestone 3 Complete)
+- ✅ VM discovery layer with rules-driven metric collection
+- ✅ Azure Compute and Monitor provider implementation
+- ✅ Discovery orchestration with error handling
+- ✅ Multi-service optimization rules engine
+- ✅ Rules management CLI: list, show, enable, disable, services, layers, mvp
+- ✅ Service type filtering (--service-type, DFO_SERVICE_TYPES)
+- ✅ Rule enable/disable via CLI and environment variables
+- ✅ 119 tests passing, 97% coverage
+
+### v0.0.2 (Milestone 2 Complete)
 - ✅ Milestone 1: Foundation & Infrastructure
 - ✅ Milestone 2: Authentication & Azure Provider
 - Added `azure test-auth` command
