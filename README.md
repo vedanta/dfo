@@ -32,6 +32,7 @@ dfo is a command-line tool that discovers Azure VMs, analyzes their CPU usage, i
 - ✓ VM discovery with CPU metrics collection (rules-driven)
 - ✓ Multi-service optimization rules engine (VMs, databases, storage, networking, AKS)
 - ✓ Rules management commands with service type filtering
+- ✓ Common visualization module (sparklines, charts, dashboards)
 - ✓ CLI commands: `./dfo azure test-auth`, `./dfo azure discover vms`, `./dfo rules list`
 
 ## Quick Start
@@ -157,6 +158,7 @@ The `dfo` wrapper script allows you to run commands from the root directory:
 
 - **[USER_GUIDE.md](USER_GUIDE.md)** - Complete user guide with workflow, examples, and troubleshooting
 - **[CLAUDE.md](CLAUDE.md)** - Architecture and development guidelines for Claude Code
+- **[docs/VISUALIZATIONS.md](docs/VISUALIZATIONS.md)** - Visualization module API reference and usage guide
 - **[docs/MIGRATIONS.md](docs/MIGRATIONS.md)** - Database schema changes and upgrade instructions
 - **[docs/CODE_STYLE.md](docs/CODE_STYLE.md)** - Code standards and conventions
 - **[docs/MVP.md](docs/MVP.md)** - Milestone breakdown and implementation plan
@@ -309,7 +311,17 @@ See [USER_GUIDE.md - FAQ](USER_GUIDE.md#faq) for more questions.
 
 ## Changelog
 
-### v0.0.4 (Current - Inventory Browse Phase 2 Complete)
+### v0.0.5 (Current - Visualization Module)
+- ✅ **Common Visualization Module**: Reusable terminal visualization library
+- ✅ **Micro-visualizations**: Sparklines, progress bars, color indicators
+- ✅ **Chart Visualizations**: Horizontal bar charts, time-series charts, histograms
+- ✅ **Composite Visualizations**: Metric panels with trends
+- ✅ **Comprehensive Testing**: 50 tests passing for visualization module
+- ✅ **Documentation**: Complete API reference and usage guide
+- ✅ **Demo Script**: Interactive examples in `examples/visualization_demo.py`
+- ✅ **Ready for M4**: Visualization infrastructure for Analysis Layer
+
+### v0.0.4 (Inventory Browse Phase 2 Complete)
 - ✅ **Output Formats**: JSON and CSV export with `--format` and `--output` flags
 - ✅ **Search Command**: `azure search vms` with wildcard pattern support
 - ✅ **Enhanced Filtering**: Tag filtering (`--tag`, `--tag-key`) and date filtering (`--discovered-after`, `--discovered-before`)
