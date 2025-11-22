@@ -4,7 +4,7 @@ from unittest.mock import Mock, patch, ANY
 from datetime import datetime
 
 # Internal
-from dfo.discovery.vms import discover_vms
+from dfo.discover.vms import discover_vms
 from dfo.core.models import VMInventory
 from dfo.core.config import reset_settings
 from dfo.rules import reset_rule_engine

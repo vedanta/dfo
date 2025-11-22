@@ -21,6 +21,8 @@ def init():
     - vm_inventory: Stores discovered VM metadata and metrics
     - vm_idle_analysis: Stores analysis results for idle VMs
     - vm_actions: Logs all executed actions
+    - vm_pricing_cache: Caches Azure VM pricing data
+    - vm_equivalence: Maps legacy VM SKUs to modern equivalents
 
     This command will fail if tables already exist.
     Use 'dfo db refresh' to recreate existing tables.
@@ -41,7 +43,7 @@ def init():
         console.print(f"[green]✓[/green] Database initialized at {db.db_path}")
         console.print(
             "[green]✓[/green] Created tables: "
-            "vm_inventory, vm_idle_analysis, vm_actions"
+            "vm_inventory, vm_idle_analysis, vm_actions, vm_pricing_cache, vm_equivalence"
         )
 
     except typer.Exit:
@@ -123,7 +125,15 @@ def info():
         table.add_column("Table", style="cyan", no_wrap=True)
         table.add_column("Record Count", style="green", justify="right")
 
-        tables = ["vm_inventory", "vm_idle_analysis", "vm_actions"]
+        # Get all tables from database
+        all_tables = db.query("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
+        if not all_tables:
+            # Fallback to known tables if query fails (DuckDB uses different catalog)
+            all_tables = db.query("SHOW TABLES")
+            tables = [row[0] for row in all_tables] if all_tables else []
+        else:
+            tables = [row[0] for row in all_tables]
+
         total_records = 0
 
         for table_name in tables:
