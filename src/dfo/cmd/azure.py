@@ -176,7 +176,7 @@ def discover(
         from rich.table import Table
         from rich.panel import Panel
         from azure.core.exceptions import HttpResponseError, ClientAuthenticationError
-        from dfo.discovery.vms import discover_vms
+        from dfo.discover.vms import discover_vms
         from dfo.rules import get_rule_engine
 
         # Show rule context
@@ -1002,6 +1002,163 @@ def search_resources(
         raise typer.Exit(1)
 
 
+def _export_idle_vms(export_format: str, export_file: str, full: bool, console):
+    """Export idle VM analysis results to CSV or JSON.
+
+    Args:
+        export_format: Export format ('csv' or 'json')
+        export_file: Output file path (None for stdout)
+        full: Include all VM details (True) or just analysis results (False)
+        console: Rich console for output
+    """
+    import csv
+    import json
+    from pathlib import Path
+    from dfo.analyze.idle_vms import get_idle_vms
+    from dfo.db.duck import get_db
+
+    # Validate format
+    if export_format not in ["csv", "json"]:
+        console.print(f"[red]Error:[/red] Unsupported export format: {export_format}")
+        console.print("Supported formats: csv, json")
+        raise typer.Exit(1)
+
+    # Get idle VMs data
+    idle_vms = get_idle_vms()
+
+    if not idle_vms:
+        console.print("[yellow]No idle VMs to export[/yellow]")
+        return
+
+    # Get additional VM details if full export requested
+    if full:
+        db = get_db()
+        # Enrich with additional VM metadata
+        for vm in idle_vms:
+            vm_details = db.query(
+                """
+                SELECT tags, cpu_timeseries, discovered_at, os_type, priority
+                FROM vm_inventory
+                WHERE vm_id = ?
+                """,
+                (vm["vm_id"],)
+            )
+            if vm_details:
+                vm["tags"] = vm_details[0][0]
+                vm["cpu_timeseries"] = vm_details[0][1]
+                vm["discovered_at"] = str(vm_details[0][2])
+                vm["os_type"] = vm_details[0][3]
+                vm["priority"] = vm_details[0][4]
+
+    # Export based on format
+    if export_format == "csv":
+        _export_to_csv(idle_vms, export_file, full, console)
+    elif export_format == "json":
+        _export_to_json(idle_vms, export_file, full, console)
+
+
+def _export_to_csv(data: list, output_file: str, full: bool, console):
+    """Export data to CSV format.
+
+    Args:
+        data: List of idle VM dictionaries
+        output_file: Output file path (None for stdout)
+        full: Include all fields (True) or basic fields only (False)
+        console: Rich console for output
+    """
+    import csv
+    import sys
+    from io import StringIO
+
+    if not data:
+        return
+
+    # Define field order for CSV
+    if full:
+        fieldnames = [
+            "vm_id", "name", "resource_group", "location", "size",
+            "power_state", "os_type", "priority", "cpu_avg",
+            "days_under_threshold", "estimated_monthly_savings",
+            "severity", "recommended_action", "equivalent_sku",
+            "analyzed_at", "tags"
+        ]
+    else:
+        fieldnames = [
+            "name", "resource_group", "location", "size",
+            "cpu_avg", "estimated_monthly_savings", "severity",
+            "recommended_action", "equivalent_sku"
+        ]
+
+    # Filter data to only include specified fields
+    filtered_data = []
+    for row in data:
+        filtered_row = {k: v for k, v in row.items() if k in fieldnames}
+        # Convert None to empty string for CSV
+        filtered_row = {k: (v if v is not None else "") for k, v in filtered_row.items()}
+        # Convert dict/list fields to JSON strings for CSV
+        if full and "tags" in filtered_row and isinstance(filtered_row["tags"], (dict, list)):
+            import json
+            filtered_row["tags"] = json.dumps(filtered_row["tags"])
+        filtered_data.append(filtered_row)
+
+    # Write to file or stdout
+    if output_file:
+        with open(output_file, 'w', newline='') as f:
+            writer = csv.DictWriter(f, fieldnames=fieldnames)
+            writer.writeheader()
+            writer.writerows(filtered_data)
+        console.print(f"[green]✓[/green] Exported {len(filtered_data)} VMs to {output_file} (CSV)")
+    else:
+        # Output to stdout
+        output = StringIO()
+        writer = csv.DictWriter(output, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(filtered_data)
+        console.print("\n" + output.getvalue())
+
+
+def _export_to_json(data: list, output_file: str, full: bool, console):
+    """Export data to JSON format.
+
+    Args:
+        data: List of idle VM dictionaries
+        output_file: Output file path (None for stdout)
+        full: Include all fields (True) or basic fields only (False)
+        console: Rich console for output
+    """
+    import json
+
+    if not data:
+        return
+
+    # Define fields to include
+    if full:
+        # Include all fields
+        export_data = data
+    else:
+        # Include only basic analysis fields
+        basic_fields = [
+            "name", "resource_group", "location", "size",
+            "cpu_avg", "estimated_monthly_savings", "severity",
+            "recommended_action", "equivalent_sku"
+        ]
+        export_data = [
+            {k: v for k, v in row.items() if k in basic_fields}
+            for row in data
+        ]
+
+    # Convert to JSON
+    json_output = json.dumps(export_data, indent=2, default=str)
+
+    # Write to file or stdout
+    if output_file:
+        with open(output_file, 'w') as f:
+            f.write(json_output)
+        console.print(f"[green]✓[/green] Exported {len(export_data)} VMs to {output_file} (JSON)")
+    else:
+        console.print("\n" + json_output)
+
+
 @app.command()
 def analyze(
     analysis_type: str = typer.Argument(
@@ -1017,6 +1174,21 @@ def analyze(
         None,
         "--min-days",
         help="Minimum days of data required (default: from config)"
+    ),
+    export_format: str = typer.Option(
+        None,
+        "--export-format", "-e",
+        help="Export format: csv, json"
+    ),
+    export_file: str = typer.Option(
+        None,
+        "--export-file", "-o",
+        help="Export output file path"
+    ),
+    full: bool = typer.Option(
+        False,
+        "--full",
+        help="Include all VM details in export (not just analysis results)"
     )
 ):
     """Analyze Azure resources for optimization opportunities.
@@ -1027,10 +1199,17 @@ def analyze(
     Supported analysis types:
     - idle-vms: Detect underutilized virtual machines
 
+    Export Options:
+    - Use --export-format to export results (csv or json)
+    - Use --export-file to specify output file
+    - Use --full to include all VM details in export
+
     Example:
         dfo azure analyze idle-vms
         dfo azure analyze idle-vms --threshold 10.0
         dfo azure analyze idle-vms --min-days 7
+        dfo azure analyze idle-vms --export-format csv --export-file results.csv
+        dfo azure analyze idle-vms --export-format json --export-file results.json --full
     """
     if analysis_type != "idle-vms":
         console.print(f"[red]Error:[/red] Unsupported analysis type: {analysis_type}")
@@ -1042,7 +1221,7 @@ def analyze(
         from rich.table import Table
         from rich.panel import Panel
         from rich.columns import Columns
-        from dfo.analysis.idle_vms import analyze_idle_vms, get_idle_vm_summary, get_idle_vms
+        from dfo.analyze.idle_vms import analyze_idle_vms, get_idle_vm_summary, get_idle_vms
         from dfo.core.config import get_settings
         from dfo.common.visualizations import metric_panel
 
@@ -1187,6 +1366,10 @@ def analyze(
 
             console.print(idle_table)
             console.print()
+
+        # Export results if requested
+        if export_format:
+            _export_idle_vms(export_format, export_file, full, console)
 
         # Next steps
         console.print("[dim]💡 Next steps:[/dim]")

@@ -73,14 +73,28 @@ class DuckDBManager:
             )
 
         if drop_existing:
-            tables = ["vm_actions", "vm_idle_analysis", "vm_inventory"]
+            tables = [
+                "vm_actions",
+                "vm_idle_analysis",
+                "vm_inventory",
+                "vm_pricing_cache",
+                "vm_equivalence"
+            ]
             for table in tables:
                 self._connection.execute(f"DROP TABLE IF EXISTS {table}")
             self._connection.commit()
 
+        # Create tables from schema
         schema_sql = schema_path.read_text()
         self._connection.execute(schema_sql)
         self._connection.commit()
+
+        # Load initial data for vm_equivalence table
+        init_data_path = Path(__file__).parent / "init_data.sql"
+        if init_data_path.exists():
+            init_data_sql = init_data_path.read_text()
+            self._connection.execute(init_data_sql)
+            self._connection.commit()
 
     def get_connection(self) -> duckdb.DuckDBPyConnection:
         """Get the database connection.
