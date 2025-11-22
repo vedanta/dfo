@@ -17,6 +17,7 @@ import requests
 # Internal
 from dfo.core.config import get_settings
 from dfo.db.duck import DuckDBManager
+from dfo.analyze.compute_mapper import resolve_equivalent_sku
 
 logger = logging.getLogger(__name__)
 
@@ -50,15 +51,13 @@ def fetch_vm_price(
     base_url = settings.dfo_azure_pricing_api_url
 
     # Build OData filter for Azure Retail Prices API
-    # Note: Product names include OS type (e.g., "Virtual Machines Dv3 Series Windows")
-    os_filter = f"and (productName contains '{os_type}')"
-
+    # Note: We don't filter by OS type in the query because 'contains' operator
+    # causes 400 errors. Instead, we filter results after fetching.
     filter_query = (
         f"serviceName eq 'Virtual Machines' "
         f"and armRegionName eq '{region}' "
         f"and armSkuName eq '{vm_size}' "
-        f"and priceType eq 'Consumption' "
-        f"{os_filter}"
+        f"and priceType eq 'Consumption'"
     )
 
     params = {
@@ -92,8 +91,23 @@ def fetch_vm_price(
             logger.warning(f"No pricing data found for {vm_size} in {region} ({os_type})")
             return None
 
-        # Return the first matching price (should only be one)
-        first_item = all_items[0]
+        # Filter by OS type in product name
+        # Product names include OS type (e.g., "Virtual Machines Dv3 Series Windows")
+        os_matched_items = [
+            item for item in all_items
+            if os_type.lower() in item.get("productName", "").lower()
+        ]
+
+        # If no OS-specific match, use first item (often Linux or base price)
+        if not os_matched_items:
+            logger.debug(
+                f"No {os_type}-specific pricing found for {vm_size}, "
+                f"using first available price"
+            )
+            os_matched_items = all_items
+
+        # Return the first matching price
+        first_item = os_matched_items[0]
         hourly_price = first_item.get("retailPrice")
         currency = first_item.get("currencyCode", "USD")
 
@@ -119,6 +133,106 @@ def fetch_vm_price(
         return None
 
 
+def get_vm_monthly_cost_with_metadata(
+    vm_size: str,
+    region: str,
+    os_type: str = "Linux",
+    use_cache: bool = True
+) -> dict:
+    """Get estimated monthly cost with SKU equivalence metadata.
+
+    Args:
+        vm_size: VM size/SKU (e.g., "Standard_B1s")
+        region: Azure region (e.g., "eastus")
+        os_type: Operating system ("Linux" or "Windows")
+        use_cache: Check cache first (default: True)
+
+    Returns:
+        Dict with:
+            - monthly_cost: float (estimated monthly cost in USD)
+            - equivalent_sku: str or None (if legacy SKU was resolved)
+            - hourly_price: float (hourly rate used)
+
+    Example:
+        >>> result = get_vm_monthly_cost_with_metadata("Standard_B1s", "eastus")
+        >>> result
+        {
+            "monthly_cost": 6.07,
+            "equivalent_sku": "Standard_B2ls_v2",
+            "hourly_price": 0.00832
+        }
+    """
+    settings = get_settings()
+
+    # Normalize os_type
+    os_type = os_type or "Linux"
+    if os_type not in ["Linux", "Windows"]:
+        logger.warning(f"Unknown os_type '{os_type}', defaulting to Linux")
+        os_type = "Linux"
+
+    hourly_price = None
+    equivalent_sku = None
+
+    # Step 0: Check if this SKU has a known equivalent (even if cached)
+    # This ensures we always track equivalence for legacy SKUs
+    equivalent_sku = resolve_equivalent_sku(vm_size)
+    if equivalent_sku:
+        logger.debug(f"Legacy SKU detected: {vm_size} → {equivalent_sku}")
+
+    # Step 1: Check cache if enabled
+    if use_cache:
+        hourly_price = _get_cached_price(vm_size, region, os_type)
+        if hourly_price is not None:
+            logger.debug(f"Cache hit for {vm_size} in {region} ({os_type})")
+
+    # Step 2: Fetch from API if not in cache
+    if hourly_price is None:
+        hourly_price = fetch_vm_price(vm_size, region, os_type)
+
+        # Step 3: If not found, try equivalent SKU (for legacy VMs)
+        if hourly_price is None and equivalent_sku:
+            logger.info(
+                f"SKU {vm_size} not found in pricing API, "
+                f"trying equivalent: {equivalent_sku}"
+            )
+            hourly_price = fetch_vm_price(equivalent_sku, region, os_type)
+
+            if hourly_price is not None:
+                logger.info(
+                    f"Using equivalent SKU pricing: {vm_size} → {equivalent_sku}"
+                )
+
+        # Step 4: Cache the result (using original SKU as key)
+        if hourly_price is not None:
+            _cache_price(vm_size, region, os_type, hourly_price)
+
+    # Step 5: Calculate monthly cost
+    if hourly_price is None:
+        logger.warning(
+            f"Could not determine pricing for {vm_size} in {region} ({os_type}), "
+            f"returning 0.0"
+        )
+        return {
+            "monthly_cost": 0.0,
+            "equivalent_sku": equivalent_sku,
+            "hourly_price": 0.0
+        }
+
+    # Monthly cost: hourly_rate * 730 hours/month (standard calculation)
+    monthly_cost = hourly_price * 730
+
+    logger.debug(
+        f"Monthly cost for {vm_size} in {region} ({os_type}): ${monthly_cost:.2f}"
+        + (f" (using equivalent: {equivalent_sku})" if equivalent_sku else "")
+    )
+
+    return {
+        "monthly_cost": monthly_cost,
+        "equivalent_sku": equivalent_sku,
+        "hourly_price": hourly_price
+    }
+
+
 def get_vm_monthly_cost(
     vm_size: str,
     region: str,
@@ -137,52 +251,13 @@ def get_vm_monthly_cost(
         Estimated monthly cost in USD (hourly_rate * 730 hours)
         Returns 0.0 if pricing not found (with warning log)
 
-    Process:
-        1. Check pricing cache in DuckDB (if use_cache=True)
-        2. If not cached or expired, fetch from Azure API
-        3. Cache the result with TTL
-        4. Calculate monthly cost (hourly * 730)
+    Note:
+        This function wraps get_vm_monthly_cost_with_metadata() for backwards
+        compatibility. Use get_vm_monthly_cost_with_metadata() if you need
+        to know whether an equivalent SKU was used.
     """
-    settings = get_settings()
-
-    # Normalize os_type
-    os_type = os_type or "Linux"
-    if os_type not in ["Linux", "Windows"]:
-        logger.warning(f"Unknown os_type '{os_type}', defaulting to Linux")
-        os_type = "Linux"
-
-    hourly_price = None
-
-    # Step 1: Check cache if enabled
-    if use_cache:
-        hourly_price = _get_cached_price(vm_size, region, os_type)
-        if hourly_price is not None:
-            logger.debug(f"Cache hit for {vm_size} in {region} ({os_type})")
-
-    # Step 2: Fetch from API if not in cache
-    if hourly_price is None:
-        hourly_price = fetch_vm_price(vm_size, region, os_type)
-
-        # Step 3: Cache the result
-        if hourly_price is not None:
-            _cache_price(vm_size, region, os_type, hourly_price)
-
-    # Step 4: Calculate monthly cost
-    if hourly_price is None:
-        logger.warning(
-            f"Could not determine pricing for {vm_size} in {region} ({os_type}), "
-            f"returning 0.0"
-        )
-        return 0.0
-
-    # Monthly cost: hourly_rate * 730 hours/month (standard calculation)
-    monthly_cost = hourly_price * 730
-
-    logger.debug(
-        f"Monthly cost for {vm_size} in {region} ({os_type}): ${monthly_cost:.2f}"
-    )
-
-    return monthly_cost
+    result = get_vm_monthly_cost_with_metadata(vm_size, region, os_type, use_cache)
+    return result["monthly_cost"]
 
 
 def _get_cached_price(

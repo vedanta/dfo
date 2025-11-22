@@ -22,6 +22,7 @@ CREATE TABLE IF NOT EXISTS vm_idle_analysis (
     estimated_monthly_savings DOUBLE,
     severity TEXT,
     recommended_action TEXT,
+    equivalent_sku TEXT,
     analyzed_at TIMESTAMP
 );
 
@@ -42,4 +43,15 @@ CREATE TABLE IF NOT EXISTS vm_pricing_cache (
     currency TEXT,
     fetched_at TIMESTAMP,
     PRIMARY KEY (vm_size, region, os_type)
+);
+
+CREATE TABLE IF NOT EXISTS vm_equivalence (
+    legacy_sku TEXT PRIMARY KEY,
+    modern_sku TEXT NOT NULL,
+    vcpu_legacy INTEGER,
+    vcpu_modern INTEGER,
+    memory_gb_legacy DOUBLE,
+    memory_gb_modern DOUBLE,
+    series_family TEXT,
+    notes TEXT
 );

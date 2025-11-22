@@ -5,7 +5,7 @@ import pytest
 import json
 
 # Internal
-from dfo.analysis.idle_vms import (
+from dfo.analyze.idle_vms import (
     analyze_idle_vms,
     _analyze_vm_cpu,
     _determine_action,
