@@ -41,11 +41,19 @@ class OptimizationRule(BaseModel):
     layer: int
     sub_layer: str
     type: str
+    key: Optional[str] = None  # CLI command key (e.g., "idle-vms")
+    category: Optional[str] = None  # Grouping category (e.g., "compute")
+    description: Optional[str] = None  # Human-readable description
+    module: Optional[str] = None  # Python module name in analyze/ directory
     metric: str
     threshold: str  # Raw threshold string (e.g., "<20%", ">0")
     period: str     # Time period (e.g., "14d", "7d", "na")
     unit: str
     providers: Dict[str, str]
+
+    # New fields for rules-driven CLI
+    actions: Optional[List[str]] = None  # Available actions (e.g., ["stop", "deallocate"])
+    export_formats: Optional[List[str]] = None  # Supported export formats (e.g., ["csv", "json"])
 
     # Parsed threshold components (computed at runtime)
     threshold_operator: Optional[ThresholdOperator] = None
@@ -290,6 +298,64 @@ class RuleEngine:
         ]
         return [r for r in self._rules if r.type in mvp_types and r.enabled]
 
+    def get_rule_by_key(self, key: str) -> Optional[OptimizationRule]:
+        """Get a specific rule by its CLI key.
+
+        Args:
+            key: CLI key (e.g., "idle-vms", "rightsize-cpu").
+
+        Returns:
+            Rule if found, None otherwise.
+        """
+        for rule in self._rules:
+            if rule.key == key:
+                return rule
+        return None
+
+    def get_available_analyses(self, provider: Optional[str] = None) -> List[Dict[str, Any]]:
+        """Get all available analysis modules with metadata.
+
+        Args:
+            provider: Optional provider filter (e.g., "azure").
+
+        Returns:
+            List of dicts with key, type, description, module, enabled, category.
+        """
+        analyses = []
+        for rule in self._rules:
+            # Skip rules without a key (not yet CLI-enabled)
+            if not rule.key:
+                continue
+
+            # Filter by provider if specified
+            if provider and provider not in rule.providers:
+                continue
+
+            analyses.append({
+                "key": rule.key,
+                "type": rule.type,
+                "description": rule.description or rule.type,
+                "module": rule.module,
+                "enabled": rule.enabled,
+                "category": rule.category or "general",
+                "actions": rule.actions or [],
+                "export_formats": rule.export_formats or []
+            })
+
+        return analyses
+
+    def get_categories(self) -> List[str]:
+        """Get all unique categories from rules.
+
+        Returns:
+            Sorted list of unique categories (excluding None).
+        """
+        categories = set()
+        for rule in self._rules:
+            if rule.category:
+                categories.add(rule.category)
+        return sorted(categories)
+
     def enable_rule(self, rule_type: str) -> bool:
         """Enable a specific rule by type.
 
@@ -333,13 +399,36 @@ class RuleEngine:
                 "layer": rule.layer,
                 "sub_layer": rule.sub_layer,
                 "type": rule.type,
+            }
+
+            # Add optional new fields if present
+            if rule.key:
+                rule_dict["key"] = rule.key
+            if rule.category:
+                rule_dict["category"] = rule.category
+            if rule.description:
+                rule_dict["description"] = rule.description
+            if rule.module:
+                rule_dict["module"] = rule.module
+
+            # Add core fields
+            rule_dict.update({
                 "metric": rule.metric,
                 "threshold": rule.threshold,
                 "period": rule.period,
                 "unit": rule.unit,
                 "enabled": rule.enabled,
-                "providers": rule.providers
-            }
+            })
+
+            # Add actions and export_formats if present
+            if rule.actions:
+                rule_dict["actions"] = rule.actions
+            if rule.export_formats:
+                rule_dict["export_formats"] = rule.export_formats
+
+            # Add providers last
+            rule_dict["providers"] = rule.providers
+
             rules_data.append(rule_dict)
 
         output = {"optimizations": rules_data}
