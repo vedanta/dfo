@@ -26,10 +26,20 @@ def list_rules(
         "--service-type", "-s",
         help="Filter by service type (vm, database, etc.)"
     ),
+    category: str = typer.Option(
+        None,
+        "--category", "-c",
+        help="Filter by category (compute, storage, etc.)"
+    ),
     enabled_only: bool = typer.Option(
         False,
         "--enabled-only",
         help="Show only enabled rules"
+    ),
+    with_keys_only: bool = typer.Option(
+        False,
+        "--with-keys-only",
+        help="Show only rules with CLI keys defined"
     )
 ):
     """List all optimization rules.
@@ -41,7 +51,8 @@ def list_rules(
         dfo rules list
         dfo rules list --service-type vm
         dfo rules list --layer 1 --enabled-only
-        dfo rules list --service-type database
+        dfo rules list --category compute
+        dfo rules list --with-keys-only
     """
     try:
         engine = get_rule_engine()
@@ -51,6 +62,10 @@ def list_rules(
         if service_type:
             rules = [r for r in rules if r.service_type == service_type]
 
+        # Filter by category if specified
+        if category:
+            rules = [r for r in rules if r.category == category]
+
         # Filter by layer if specified
         if layer is not None:
             rules = [r for r in rules if r.layer == layer]
@@ -59,29 +74,35 @@ def list_rules(
         if enabled_only:
             rules = [r for r in rules if r.enabled]
 
+        # Filter by rules with keys only
+        if with_keys_only:
+            rules = [r for r in rules if r.key is not None]
+
         if not rules:
             console.print("[yellow]No rules found matching your criteria.[/yellow]")
             return
 
-        # Create table with service type column
+        # Create table with key column
         table = Table(title=f"Optimization Rules ({len(rules)} total)", show_header=True)
-        table.add_column("Service", style="blue", width=10)
-        table.add_column("Layer", style="cyan", width=6)
-        table.add_column("Type", style="bold")
-        table.add_column("Metric", style="dim")
-        table.add_column("Threshold", style="yellow")
-        table.add_column("Period", style="green")
-        table.add_column("Status", style="magenta")
+        table.add_column("Key", style="cyan", width=14)
+        table.add_column("Service", style="blue", width=8)
+        table.add_column("Category", style="green", width=10)
+        table.add_column("Layer", style="magenta", width=5)
+        table.add_column("Type", style="bold", width=25)
+        table.add_column("Threshold", style="yellow", width=9)
+        table.add_column("Period", style="dim", width=7)
+        table.add_column("Status", style="magenta", width=9)
 
         for rule in rules:
             status = "✓ Enabled" if rule.enabled else "✗ Disabled"
             status_style = "green" if rule.enabled else "dim"
 
             table.add_row(
+                rule.key if rule.key else "[dim]-[/dim]",
                 rule.service_type,
+                rule.category if rule.category else "[dim]-[/dim]",
                 f"L{rule.layer}",
-                rule.type,
-                rule.metric[:40] + "..." if len(rule.metric) > 40 else rule.metric,
+                rule.type[:23] + "..." if len(rule.type) > 23 else rule.type,
                 rule.threshold,
                 rule.period,
                 f"[{status_style}]{status}[/{status_style}]"
@@ -106,9 +127,14 @@ def list_rules(
 
 @app.command("show")
 def show_rule(
-    rule_type: str = typer.Argument(
+    identifier: str = typer.Argument(
         ...,
-        help="Rule type to display (e.g., 'Idle VM Detection')"
+        help="Rule key or type to display (e.g., 'idle-vms' or 'Idle VM Detection')"
+    ),
+    by_key: bool = typer.Option(
+        False,
+        "--by-key", "-k",
+        help="Treat identifier as a key rather than rule type"
     )
 ):
     """Show detailed information about a specific rule.
@@ -118,31 +144,71 @@ def show_rule(
     - Overrides from .env configuration
     - Effective values that will be used
     - Provider-specific metric mappings
+    - CLI integration details (key, module, actions, export formats)
+
+    You can look up rules by key (e.g., 'idle-vms') or by full type name.
+    If identifier looks like a key (lowercase with dashes), key lookup is tried first.
 
     Example:
+        dfo rules show idle-vms
         dfo rules show "Idle VM Detection"
-        dfo rules show "Right-Sizing (CPU)"
+        dfo rules show rightsize-cpu --by-key
     """
     try:
         engine = get_rule_engine()
         settings = get_settings()
 
-        # Try to find the rule
-        rule = engine.get_rule_by_type(rule_type)
+        # Try to find the rule - smart lookup
+        rule = None
+
+        # If it looks like a key (lowercase, contains dashes, no spaces), try key first
+        if "-" in identifier and " " not in identifier and identifier.islower():
+            rule = engine.get_rule_by_key(identifier)
+            if not rule and not by_key:
+                # Fall back to type lookup
+                rule = engine.get_rule_by_type(identifier)
+        elif by_key:
+            # Explicitly requested key lookup
+            rule = engine.get_rule_by_key(identifier)
+        else:
+            # Try type lookup first, then key as fallback
+            rule = engine.get_rule_by_type(identifier)
+            if not rule:
+                rule = engine.get_rule_by_key(identifier)
 
         if not rule:
-            console.print(f"[red]Error:[/red] Rule type '{rule_type}' not found")
+            console.print(f"[red]Error:[/red] Rule '{identifier}' not found")
             console.print("\n[dim]Use 'dfo rules list' to see available rules[/dim]")
+            console.print("[dim]Use 'dfo rules keys' to see all CLI keys[/dim]")
             raise typer.Exit(1)
 
         # Build detailed view
         details = []
 
         # Basic info
-        details.append(f"[bold blue]Service Type:[/bold blue] {rule.service_type}")
-        details.append(f"[bold cyan]Layer:[/bold cyan] {rule.layer} - {rule.sub_layer}")
         details.append(f"[bold cyan]Type:[/bold cyan] {rule.type}")
+        details.append(f"[bold blue]Service Type:[/bold blue] {rule.service_type}")
+        details.append(f"[bold blue]Layer:[/bold blue] {rule.layer} - {rule.sub_layer}")
+
+        # CLI integration details (new fields)
+        if rule.key:
+            details.append(f"[bold green]CLI Key:[/bold green] {rule.key}")
+        if rule.category:
+            details.append(f"[bold green]Category:[/bold green] {rule.category}")
+        if rule.description:
+            details.append(f"[bold green]Description:[/bold green] {rule.description}")
+        if rule.module:
+            details.append(f"[bold green]Module:[/bold green] dfo.analysis.{rule.module}")
+
+        details.append("")
         details.append(f"[bold cyan]Metric:[/bold cyan] {rule.metric}")
+
+        # Actions and export formats
+        if rule.actions:
+            details.append(f"[bold yellow]Available Actions:[/bold yellow] {', '.join(rule.actions)}")
+        if rule.export_formats:
+            details.append(f"[bold yellow]Export Formats:[/bold yellow] {', '.join(rule.export_formats)}")
+
         details.append("")
 
         # Threshold configuration
@@ -315,6 +381,115 @@ def list_services():
         raise typer.Exit(1)
 
 
+@app.command("keys")
+def list_keys():
+    """List all CLI keys for available analyses.
+
+    Shows rules that have CLI keys defined, making them available
+    via 'dfo azure analyze <key>' commands.
+
+    Example:
+        dfo rules keys
+    """
+    try:
+        engine = get_rule_engine()
+        analyses = engine.get_available_analyses(provider="azure")
+
+        if not analyses:
+            console.print("[yellow]No CLI keys defined yet.[/yellow]")
+            console.print("[dim]Add 'key' field to rules in optimization_rules.json[/dim]\n")
+            return
+
+        # Create table
+        table = Table(title="Available CLI Keys", show_header=True)
+        table.add_column("Key", style="bold cyan", width=18)
+        table.add_column("Category", style="blue", width=12)
+        table.add_column("Description", width=50)
+        table.add_column("Module", style="green", width=18)
+        table.add_column("Status", style="magenta", width=10)
+
+        for analysis in analyses:
+            status = "✓ Enabled" if analysis["enabled"] else "✗ Disabled"
+            status_style = "green" if analysis["enabled"] else "dim"
+
+            table.add_row(
+                analysis["key"],
+                analysis["category"],
+                analysis["description"][:48] + "..." if len(analysis["description"]) > 48 else analysis["description"],
+                analysis["module"],
+                f"[{status_style}]{status}[/{status_style}]"
+            )
+
+        console.print()
+        console.print(table)
+        console.print()
+
+        # Show usage tip
+        console.print("[dim]💡 Usage: dfo azure analyze <key>[/dim]")
+        console.print("[dim]   Example: dfo azure analyze idle-vms[/dim]\n")
+
+    except Exception as e:
+        console.print(f"[red]Error:[/red] {e}")
+        raise typer.Exit(1)
+
+
+@app.command("categories")
+def list_categories():
+    """List all rule categories.
+
+    Shows all unique categories from rules with their counts.
+    Categories group related optimizations together.
+
+    Example:
+        dfo rules categories
+    """
+    try:
+        engine = get_rule_engine()
+        categories = engine.get_categories()
+
+        if not categories:
+            console.print("[yellow]No categories defined yet.[/yellow]")
+            console.print("[dim]Add 'category' field to rules in optimization_rules.json[/dim]\n")
+            return
+
+        # Group rules by category
+        from collections import defaultdict
+        category_map = defaultdict(list)
+        all_rules = engine.get_all_rules()
+
+        for rule in all_rules:
+            if rule.category:
+                category_map[rule.category].append(rule)
+
+        # Create table
+        table = Table(title="Rule Categories", show_header=True)
+        table.add_column("Category", style="bold blue", width=15)
+        table.add_column("Total Rules", style="cyan", justify="right", width=12)
+        table.add_column("Enabled", style="green", justify="right", width=10)
+        table.add_column("With Keys", style="magenta", justify="right", width=12)
+
+        for category in sorted(categories):
+            rules = category_map[category]
+            enabled = sum(1 for r in rules if r.enabled)
+            with_keys = sum(1 for r in rules if r.key is not None)
+
+            table.add_row(
+                category,
+                str(len(rules)),
+                str(enabled),
+                str(with_keys)
+            )
+
+        console.print()
+        console.print(table)
+        console.print()
+        console.print(f"[dim]Total categories: {len(categories)}[/dim]\n")
+
+    except Exception as e:
+        console.print(f"[red]Error:[/red] {e}")
+        raise typer.Exit(1)
+
+
 @app.command("mvp")
 def show_mvp():
     """Show rules included in the MVP.
@@ -363,43 +538,64 @@ def show_mvp():
 
 @app.command("enable")
 def enable_rule(
-    rule_type: str = typer.Argument(
+    identifier: str = typer.Argument(
         ...,
-        help="Rule type to enable (e.g., 'Idle VM Detection')"
+        help="Rule key or type to enable (e.g., 'idle-vms' or 'Idle VM Detection')"
+    ),
+    by_key: bool = typer.Option(
+        False,
+        "--by-key", "-k",
+        help="Treat identifier as a key rather than rule type"
     )
 ):
     """Enable a specific rule.
 
-    Updates the rule's enabled status in vm_rules.json.
+    Updates the rule's enabled status in optimization_rules.json.
     The rule will be active for all future operations.
 
+    You can enable rules by key (e.g., 'idle-vms') or by full type name.
+
     Example:
+        dfo rules enable idle-vms
         dfo rules enable "Idle VM Detection"
-        dfo rules enable "Right-Sizing (CPU)"
+        dfo rules enable rightsize-cpu --by-key
     """
     try:
         from dfo.rules import reset_rule_engine
 
         engine = get_rule_engine()
 
-        # Check if rule exists
-        rule = engine.get_rule_by_type(rule_type)
+        # Smart lookup - same logic as show command
+        rule = None
+        if "-" in identifier and " " not in identifier and identifier.islower():
+            rule = engine.get_rule_by_key(identifier)
+            if not rule and not by_key:
+                rule = engine.get_rule_by_type(identifier)
+        elif by_key:
+            rule = engine.get_rule_by_key(identifier)
+        else:
+            rule = engine.get_rule_by_type(identifier)
+            if not rule:
+                rule = engine.get_rule_by_key(identifier)
+
         if not rule:
-            console.print(f"[red]Error:[/red] Rule type '{rule_type}' not found")
+            console.print(f"[red]Error:[/red] Rule '{identifier}' not found")
             console.print("\n[dim]Use 'dfo rules list' to see available rules[/dim]")
             raise typer.Exit(1)
 
         # Check if already enabled
         if rule.enabled:
-            console.print(f"[yellow]Rule '{rule_type}' is already enabled[/yellow]")
+            console.print(f"[yellow]Rule '{rule.type}' is already enabled[/yellow]")
             return
 
         # Enable and save
-        engine.enable_rule(rule_type)
+        engine.enable_rule(rule.type)
         engine.save_rules()
 
-        console.print(f"[green]✓[/green] Enabled rule: [bold]{rule_type}[/bold]")
-        console.print(f"[dim]Updated vm_rules.json[/dim]\n")
+        console.print(f"[green]✓[/green] Enabled rule: [bold]{rule.type}[/bold]")
+        if rule.key:
+            console.print(f"[dim]CLI key: {rule.key}[/dim]")
+        console.print(f"[dim]Updated optimization_rules.json[/dim]\n")
 
         # Reset singleton so next command loads fresh data
         reset_rule_engine()
@@ -411,46 +607,67 @@ def enable_rule(
 
 @app.command("disable")
 def disable_rule(
-    rule_type: str = typer.Argument(
+    identifier: str = typer.Argument(
         ...,
-        help="Rule type to disable (e.g., 'Idle VM Detection')"
+        help="Rule key or type to disable (e.g., 'idle-vms' or 'Idle VM Detection')"
+    ),
+    by_key: bool = typer.Option(
+        False,
+        "--by-key", "-k",
+        help="Treat identifier as a key rather than rule type"
     )
 ):
     """Disable a specific rule.
 
-    Updates the rule's enabled status in vm_rules.json.
+    Updates the rule's enabled status in optimization_rules.json.
     The rule will not be active for future operations.
+
+    You can disable rules by key (e.g., 'idle-vms') or by full type name.
 
     Note: You can also disable rules via .env file:
       DFO_DISABLE_RULES="Rule 1,Rule 2"
 
     Example:
+        dfo rules disable idle-vms
         dfo rules disable "Idle VM Detection"
-        dfo rules disable "Right-Sizing (CPU)"
+        dfo rules disable rightsize-cpu --by-key
     """
     try:
         from dfo.rules import reset_rule_engine
 
         engine = get_rule_engine()
 
-        # Check if rule exists
-        rule = engine.get_rule_by_type(rule_type)
+        # Smart lookup - same logic as show command
+        rule = None
+        if "-" in identifier and " " not in identifier and identifier.islower():
+            rule = engine.get_rule_by_key(identifier)
+            if not rule and not by_key:
+                rule = engine.get_rule_by_type(identifier)
+        elif by_key:
+            rule = engine.get_rule_by_key(identifier)
+        else:
+            rule = engine.get_rule_by_type(identifier)
+            if not rule:
+                rule = engine.get_rule_by_key(identifier)
+
         if not rule:
-            console.print(f"[red]Error:[/red] Rule type '{rule_type}' not found")
+            console.print(f"[red]Error:[/red] Rule '{identifier}' not found")
             console.print("\n[dim]Use 'dfo rules list' to see available rules[/dim]")
             raise typer.Exit(1)
 
         # Check if already disabled
         if not rule.enabled:
-            console.print(f"[yellow]Rule '{rule_type}' is already disabled[/yellow]")
+            console.print(f"[yellow]Rule '{rule.type}' is already disabled[/yellow]")
             return
 
         # Disable and save
-        engine.disable_rule(rule_type)
+        engine.disable_rule(rule.type)
         engine.save_rules()
 
-        console.print(f"[green]✓[/green] Disabled rule: [bold]{rule_type}[/bold]")
-        console.print(f"[dim]Updated vm_rules.json[/dim]\n")
+        console.print(f"[green]✓[/green] Disabled rule: [bold]{rule.type}[/bold]")
+        if rule.key:
+            console.print(f"[dim]CLI key: {rule.key}[/dim]")
+        console.print(f"[dim]Updated optimization_rules.json[/dim]\n")
 
         # Reset singleton so next command loads fresh data
         reset_rule_engine()

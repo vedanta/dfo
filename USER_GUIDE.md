@@ -1,145 +1,155 @@
 # dfo User Guide
 
-**DevFinOps (dfo)** - Azure cloud cost optimization made simple.
+**DevFinOps (dfo)** - Your Azure cloud cost optimization companion.
+
+## Table of Contents
+
+- [What is dfo?](#what-is-dfo)
+- [Getting Started](#getting-started)
+- [Core Workflows](#core-workflows)
+- [Command Reference](#command-reference)
+- [Rules-Driven CLI](#rules-driven-cli)
+- [Export and Reporting](#export-and-reporting)
+- [Advanced Usage](#advanced-usage)
+- [Troubleshooting](#troubleshooting)
+- [FAQ](#faq)
+
+---
 
 ## What is dfo?
 
-dfo is a command-line tool that helps you identify and reduce Azure cloud costs by finding underutilized virtual machines (VMs). It analyzes your Azure resources, identifies idle or underutilized VMs, and helps you take action to reduce costs.
+dfo is a command-line tool that helps you identify and reduce Azure cloud costs by finding underutilized virtual machines (VMs). It uses a sophisticated rules-driven architecture to analyze your Azure resources, identify idle or underutilized VMs, and help you take action to reduce costs.
 
-### What can dfo do?
+### Key Features
 
-- 🔍 **Discover** Azure VMs across your subscription
-- 📊 **Analyze** CPU usage to identify idle resources
-- 💰 **Estimate** potential monthly savings
-- 📋 **Report** findings in console or JSON format
-- ⚡ **Execute** cost-saving actions (stop/deallocate VMs)
-- 🔒 **Safe by default** with dry-run mode and confirmations
+- 🔍 **Discover** - Find all Azure VMs across your subscription with 14 days of CPU metrics
+- 📊 **Analyze** - Identify idle or underutilized VMs using configurable rules
+- 💰 **Calculate** - Accurate cost estimates using Azure VM SKU equivalence mapping
+- 📋 **Export** - Generate CSV or JSON reports for management
+- 🎯 **Rules-Driven** - Extensible architecture where adding new analyses requires zero CLI code changes
+- 🔒 **Safe by Default** - Dry-run mode, confirmation prompts, and full audit logging
+
+### What Makes dfo Different?
+
+1. **Rules-Driven CLI**: The `optimization_rules.json` file is the single source of truth. Adding a new analysis type requires creating a Python module and adding a JSON entry—no CLI code changes needed.
+
+2. **SKU Equivalence**: Accurate pricing for legacy Azure VMs through intelligent SKU mapping (e.g., Standard_B1s → Standard_B2ls_v2).
+
+3. **Local-First**: All data stored in a local DuckDB database. No cloud storage or external dependencies.
+
+4. **Production-Ready**: Tested, documented, and designed for real-world use.
 
 ---
 
-## Quick Start
+## Getting Started
 
 ### Prerequisites
 
-- Azure subscription with VMs
-- Azure service principal credentials (see [Setup Azure Credentials](#setup-azure-credentials))
-- Python 3.10+ and conda installed
+- **Azure Subscription**: With VMs you want to analyze
+- **Azure Credentials**: Service principal with Reader role (see [Azure Setup](#azure-setup))
+- **Python 3.10+**: With conda installed
+- **Operating System**: macOS, Linux, or Windows with WSL
 
 ### Installation
 
-1. Clone the repository:
+#### 1. Clone the Repository
+
 ```bash
-cd /path/to/dfo
+git clone https://github.com/your-org/dfo.git
+cd dfo
 ```
 
-2. Create and activate the conda environment:
+#### 2. Create Conda Environment
+
 ```bash
+# Create the environment from environment.yml
 conda env create -f environment.yml
+
+# Activate the environment
 conda activate dfo
 ```
 
-3. Configure your Azure credentials (see [Configuration](#configuration))
+#### 3. Configure Azure Credentials
 
-4. Initialize the database:
 ```bash
-./dfo db init
-```
-
-5. Test your Azure connection:
-```bash
-./dfo azure test-auth
-```
-
-You're ready to start optimizing! 🎉
-
----
-
-## Configuration
-
-### Setup Azure Credentials
-
-dfo needs credentials to access your Azure subscription. You have two options:
-
-#### Option 1: Service Principal (Recommended)
-
-1. Create a service principal in Azure:
-```bash
-az ad sp create-for-rbac --name "dfo-service-principal" \
-  --role Reader \
-  --scopes /subscriptions/YOUR_SUBSCRIPTION_ID
-```
-
-2. Copy the output values to your `.env` file
-
-#### Option 2: Azure CLI (For Testing)
-
-Simply run `az login` and dfo will use your Azure CLI credentials.
-
-### Environment File Setup
-
-1. Copy the example file:
-```bash
+# Copy the example environment file
 cp .env.example .env
+
+# Edit .env with your Azure credentials
+nano .env  # or use your preferred editor
 ```
 
-2. Edit `.env` with your Azure credentials:
+Required environment variables:
+
 ```bash
 # Azure Authentication
-AZURE_TENANT_ID=your-tenant-id
-AZURE_CLIENT_ID=your-client-id
-AZURE_CLIENT_SECRET=your-client-secret
-AZURE_SUBSCRIPTION_ID=your-subscription-id
+AZURE_TENANT_ID=your-tenant-id-here
+AZURE_CLIENT_ID=your-client-id-here
+AZURE_CLIENT_SECRET=your-client-secret-here
+AZURE_SUBSCRIPTION_ID=your-subscription-id-here
 
-# Analysis Configuration (optional - these are defaults)
-DFO_IDLE_CPU_THRESHOLD=5.0        # CPU % below which a VM is considered idle
-DFO_IDLE_DAYS=14                  # Days of idle CPU to flag a VM
-DFO_DRY_RUN_DEFAULT=true          # Safety: dry-run enabled by default
-
-# Service Type Filtering (optional)
-# Comma-separated list of service types to enable (empty = all enabled)
-# Available: vm, database, storage, networking, app-service, aks
-# DFO_SERVICE_TYPES=vm,database
-
-# Rule Management (optional)
-# Comma-separated list of rules to disable
-# DFO_DISABLE_RULES=Right-Sizing (CPU),Family Optimization
-
-# Database Configuration (optional)
-DFO_DUCKDB_FILE=./dfo.duckdb      # Where to store local data
-
-# Logging Configuration (optional)
-DFO_LOG_LEVEL=INFO                # DEBUG, INFO, WARNING, ERROR
+# Analysis Configuration (optional)
+DFO_IDLE_CPU_THRESHOLD=5.0    # CPU % below which VM is idle
+DFO_IDLE_DAYS=14              # Days of idle CPU to flag VM
+DFO_DUCKDB_FILE=dfo.duckdb    # Database file path
 ```
 
-### Verify Configuration
+<details>
+<summary><b>Need help getting Azure credentials? Click here →</b></summary>
 
-Check that your configuration is loaded correctly:
+### Azure Setup
+
+#### Option 1: Create Service Principal (Recommended)
+
 ```bash
-./dfo config
+# Login to Azure CLI
+az login
+
+# Create service principal with Reader role
+az ad sp create-for-rbac \
+  --name "dfo-service-principal" \
+  --role Reader \
+  --scopes /subscriptions/YOUR_SUBSCRIPTION_ID
+
+# Output will contain:
+# - appId (use as AZURE_CLIENT_ID)
+# - password (use as AZURE_CLIENT_SECRET)
+# - tenant (use as AZURE_TENANT_ID)
 ```
 
-This shows all settings (with secrets masked for security).
+#### Option 2: Use Azure CLI (For Testing)
 
-To see unmasked values:
+Simply run `az login` and dfo will use your Azure CLI credentials automatically.
+
+#### Required Permissions
+
+- **Reader**: For discovery and analysis (read-only)
+- **Contributor**: For execution actions (start/stop VMs) - *Coming in Milestone 6*
+
+</details>
+
+#### 4. Initialize Database
+
 ```bash
-./dfo config --show-secrets
-```
-
----
-
-## Basic Workflow
-
-### 1. Setup (One-time)
-
-```bash
-# Initialize the database
+# Initialize the DuckDB database
 ./dfo db init
+```
 
-# Test Azure authentication
+This creates `dfo.duckdb` with 5 tables:
+- `vm_inventory` - Discovered VMs and metrics
+- `vm_idle_analysis` - Analysis results
+- `vm_pricing_cache` - Cached Azure pricing
+- `vm_equivalence` - Legacy-to-modern SKU mappings (29 entries)
+- `vm_actions` - Execution audit log
+
+#### 5. Test Azure Connection
+
+```bash
 ./dfo azure test-auth
 ```
 
 **Expected output:**
+
 ```
 1/4 Loading configuration...
 ✓ Subscription: your-subscription-id
@@ -155,166 +165,117 @@ To see unmasked values:
 
 ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
 ┃ Success                             ┃
-┠─────────────────────────────────────┨
 ┃ Authentication test passed!         ┃
-┃                                     ┃
-┃ All Azure clients initialized       ┃
-┃ successfully. You are ready to      ┃
-┃ proceed with VM discovery.          ┃
 ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
 ```
 
-### 2. Discover ✓ Available Now (Milestone 3)
+You're ready! 🎉
 
-Scan your Azure subscription for VMs and collect CPU metrics:
+---
 
-```bash
-./dfo azure discover vms
-```
+## Core Workflows
 
-**What happens:**
-- Lists all VMs in your subscription
-- Collects 14 days of CPU metrics for each VM
-- Stores data in local DuckDB database
+### Workflow 1: Your First Cost Analysis
 
-**Check what was discovered:**
-```bash
-./dfo db info
-```
-
-### 2.5. Browse Discovered Inventory ✓ Available Now (Milestone 3)
-
-View VMs that have been discovered and stored in your local database:
+**Goal**: Discover VMs and identify idle resources
 
 ```bash
-# List all discovered VMs
+# Step 1: Discover VMs
+./dfo azure discover
+
+# Step 2: View discovered VMs
 ./dfo azure list vms
 
-# Filter by resource group
-./dfo azure list vms --resource-group production-rg
+# Step 3: See what analyses are available
+./dfo azure analyze --list
 
-# Filter by location
-./dfo azure list vms --location eastus
-
-# Filter by power state
-./dfo azure list vms --power-state running
-
-# Combined filters
-./dfo azure list vms --resource-group prod-rg --power-state running
-
-# Limit results
-./dfo azure list vms --limit 10
-
-# Show detailed VM information
-./dfo azure show vm my-vm-name
-
-# Show VM with detailed metrics
-./dfo azure show vm my-vm-name --metrics
-```
-
-**What it shows:**
-- VM name, resource group, location, size, power state
-- Whether CPU metrics were collected (✓/✗)
-- Power state distribution
-- Location distribution
-- Summary statistics
-
-### 2.6. View Rules ✓ Available Now (Milestone 3)
-
-View and manage optimization rules:
-
-```bash
-# List all rules
-./dfo rules list
-
-# Filter by service type
-./dfo rules list --service-type vm
-
-# Show only enabled rules
-./dfo rules list --enabled-only
-
-# Show rule details
-./dfo rules show "Idle VM Detection"
-
-# List available service types
-./dfo rules services
-
-# Show layer descriptions
-./dfo rules layers
-```
-
-**What it shows:**
-- All configured optimization rules
-- Service type, layer, metric, threshold, period
-- Current enabled/disabled status
-- Configuration source (rules file or .env override)
-
-### 3. Analyze (Coming in Milestone 4)
-
-Analyze VMs to identify idle resources:
-
-```bash
+# Step 4: Run idle VM analysis
 ./dfo azure analyze idle-vms
+
+# Step 5: Export results to CSV
+./dfo azure analyze idle-vms --export-format csv --export-file idle_vms.csv
 ```
 
-**What happens:**
-- Calculates average CPU usage over the collection period
-- Identifies VMs with CPU < 5% for 14+ days
-- Estimates monthly savings for each idle VM
-- Assigns severity levels (critical/high/medium/low)
-- Stores analysis results in database
+**What to expect:**
+- Step 1 discovers VMs and fetches 14 days of CPU metrics (~1-2 min)
+- Step 4 identifies VMs with avg CPU <5% for ≥14 days
+- Shows total potential savings per month
+- Breaks down by severity (Critical, High, Medium, Low)
 
-### 4. Report (Coming in Milestone 5)
+### Workflow 2: Monthly Cost Review
 
-View cost optimization opportunities:
+**Goal**: Generate a management report
 
 ```bash
-# Console report (Rich formatted table)
-./dfo azure report idle-vms
+# 1. Fresh discovery
+./dfo azure discover
+
+# 2. Analyze with default thresholds
+./dfo azure analyze idle-vms
+
+# 3. Export full details to CSV for management
+./dfo azure analyze idle-vms \
+  --export-format csv \
+  --export-file monthly-review-jan-2025.csv \
+  --full
+
+# 4. View rule details to understand the analysis
+./dfo rules show idle-vms
 ```
 
-**Example output:**
-```
-                    Idle VM Analysis Results
-┏━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━┳━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━┓
-┃ VM Name      ┃ Resource Group ┃ CPU % ┃ Idle Days┃ Savings  ┃ Severity ┃
-┡━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━╇━━━━━━━╇━━━━━━━━━━╇━━━━━━━━━━╇━━━━━━━━━━┩
-│ prod-web-01  │ production-rg  │ 1.2%  │ 14       │ $856/mo  │ CRITICAL │
-│ dev-test-vm  │ development-rg │ 3.5%  │ 21       │ $124/mo  │ HIGH     │
-│ backup-srv   │ backup-rg      │ 4.8%  │ 14       │ $65/mo   │ MEDIUM   │
-└──────────────┴────────────────┴───────┴──────────┴──────────┴──────────┘
+**Full export includes:**
+- VM ID, name, resource group, location, size
+- Power state, OS type, priority
+- CPU average, days under threshold
+- Estimated monthly savings
+- Severity, recommended action
+- Equivalent SKU (for legacy VMs)
+- Analysis timestamp
+- Tags
 
-Total Potential Savings: $1,045/month
-```
+### Workflow 3: Custom Threshold Analysis
 
-**Export to JSON:**
+**Goal**: Find VMs with different idle criteria
+
 ```bash
-./dfo azure report idle-vms --format json --output results.json
+# Discover VMs
+./dfo azure discover
+
+# Stricter criteria: 10% CPU, 30 days
+./dfo azure analyze idle-vms --threshold 10.0 --min-days 30
+
+# More lenient: 15% CPU, 7 days
+./dfo azure analyze idle-vms --threshold 15.0 --min-days 7
+
+# Export each analysis separately
+./dfo azure analyze idle-vms --threshold 10.0 --min-days 30 \
+  --export-format json --export-file strict-analysis.json --full
 ```
 
-### 5. Execute (Coming in Milestone 6)
+### Workflow 4: Exploring the Rules System
 
-Take action to reduce costs:
+**Goal**: Understand available analyses and how to manage them
 
 ```bash
-# Dry-run (see what would happen - NO changes made)
-./dfo azure execute stop-idle-vms
+# List all CLI-enabled analyses
+./dfo rules keys
 
-# Actually stop VMs (requires confirmation)
-./dfo azure execute stop-idle-vms --no-dry-run
+# See all categories
+./dfo rules categories
 
-# Auto-confirm for automation/CI-CD
-./dfo azure execute stop-idle-vms --no-dry-run --yes
+# Show detailed info about a specific rule
+./dfo rules show idle-vms
 
-# Only act on critical and high severity VMs
-./dfo azure execute stop-idle-vms --no-dry-run --min-severity high
+# List all rules with keys
+./dfo rules list --with-keys-only
+
+# Filter by category
+./dfo rules list --category compute
+
+# Enable/disable a rule
+./dfo rules disable shutdown-vms
+./dfo rules enable shutdown-vms
 ```
-
-**Safety features:**
-- ✓ Dry-run enabled by default
-- ✓ Requires confirmation prompt
-- ✓ All actions logged to database
-- ✓ Severity filtering to control scope
 
 ---
 
@@ -322,976 +283,522 @@ Take action to reduce costs:
 
 ### Top-Level Commands
 
-#### `dfo version`
-Display version information.
-
 ```bash
-./dfo version
+./dfo version        # Show version
+./dfo config         # Show configuration (secrets masked)
+./dfo config --show-secrets  # Show config with secrets
+./dfo --help         # Show help
 ```
 
-#### `dfo config`
-Display current configuration.
+### Database Commands
 
 ```bash
-./dfo config              # Masked secrets
-./dfo config --show-secrets  # Show actual values
+./dfo db init        # Initialize database
+./dfo db refresh     # Drop and recreate tables
+./dfo db refresh --yes  # Skip confirmation
+./dfo db info        # Show table counts
+```
+
+### Azure Commands
+
+#### Discovery
+
+```bash
+./dfo azure discover  # Discover VMs with metrics
+./dfo azure discover --show-summary  # Show visual summary
+./dfo azure discover --no-refresh    # Append (don't drop existing data)
+```
+
+#### Browse Inventory
+
+```bash
+./dfo azure list vms                    # List all VMs
+./dfo azure list vms --power-state running  # Filter by state
+./dfo azure list vms --location eastus      # Filter by location
+./dfo azure list vms --tag env=prod        # Filter by tag
+./dfo azure list vms --format json --output vms.json  # Export
+
+./dfo azure show vm my-vm-name          # Show VM details
+./dfo azure show vm my-vm-name --metrics  # Include CPU metrics
+
+./dfo azure search vms "web*"           # Search by pattern
+```
+
+#### Analysis
+
+```bash
+./dfo azure analyze --list              # List available analyses
+./dfo azure analyze idle-vms            # Run idle VM analysis
+./dfo azure analyze idle-vms --threshold 10.0  # Custom threshold
+./dfo azure analyze idle-vms --min-days 7      # Custom period
+
+# Export options
+./dfo azure analyze idle-vms --export-format csv        # Basic CSV
+./dfo azure analyze idle-vms --export-format json       # Basic JSON
+./dfo azure analyze idle-vms --export-format csv --full # Full CSV
+./dfo azure analyze idle-vms --export-format csv \
+  --export-file results.csv --full  # Full CSV to file
+```
+
+### Rules Commands
+
+```bash
+./dfo rules list                 # List all rules
+./dfo rules list --with-keys-only  # CLI-enabled rules only
+./dfo rules list --category compute  # Filter by category
+./dfo rules list --service-type vm   # Filter by service
+./dfo rules list --layer 1           # Filter by layer
+./dfo rules list --enabled-only      # Only enabled rules
+
+./dfo rules keys                 # List all CLI keys
+./dfo rules categories           # List categories
+./dfo rules layers               # Show layer descriptions
+./dfo rules services             # List service types
+
+./dfo rules show idle-vms        # Show rule by key
+./dfo rules show "Idle VM Detection"  # Show rule by type
+
+./dfo rules enable idle-vms      # Enable by key
+./dfo rules disable shutdown-vms # Disable by key
+./dfo rules enable "Right-Sizing (CPU)"  # Enable by type
 ```
 
 ---
 
-### Database Commands (`dfo db`)
+## Rules-Driven CLI
 
-#### `dfo db init`
-Initialize the database schema. Creates a new DuckDB file with required tables.
+### How It Works
 
-```bash
-./dfo db init
+dfo uses a **rules-driven architecture** where the CLI is automatically generated from `optimization_rules.json`. This makes the system extremely extensible.
+
+#### The Rules File
+
+Every analysis type corresponds to a rule in `src/dfo/rules/optimization_rules.json`:
+
+```json
+{
+  "service_type": "vm",
+  "layer": 1,
+  "sub_layer": "Self-Contained VM",
+  "type": "Idle VM Detection",
+  "key": "idle-vms",
+  "category": "compute",
+  "description": "Detect underutilized VMs based on CPU and RAM metrics",
+  "module": "idle_vms",
+  "metric": "CPU/RAM <5%",
+  "threshold": "<5%",
+  "period": "7d",
+  "unit": "percent",
+  "enabled": true,
+  "actions": ["stop", "deallocate", "delete"],
+  "export_formats": ["csv", "json"],
+  "providers": {
+    "azure": "CPU% + RAM% time series"
+  }
+}
 ```
 
-**When to use:** First time setup, or after deleting the database file.
+#### Key Fields
 
-**Tables created:**
-- `vm_inventory` - Discovered VMs and metrics
-- `vm_idle_analysis` - Analysis results
-- `vm_actions` - Executed actions log
+| Field | Purpose | Example |
+|-------|---------|---------|
+| `key` | CLI command identifier | `"idle-vms"` |
+| `category` | Grouping category | `"compute"` |
+| `description` | Human-readable description | `"Detect underutilized VMs..."` |
+| `module` | Python module in `analyze/` | `"idle_vms"` |
+| `actions` | Available actions | `["stop", "deallocate"]` |
+| `export_formats` | Supported formats | `["csv", "json"]` |
 
-#### `dfo db info`
-Show database statistics.
+#### Dynamic CLI Routing
 
-```bash
-./dfo db info
-```
+When you run `./dfo azure analyze idle-vms`:
 
-**Output:** Table names, record counts, database size.
+1. CLI looks up rule with `key="idle-vms"`
+2. Checks if rule is enabled
+3. Dynamically imports `dfo.analysis.{module}`
+4. Calls the analysis function
+5. Displays results
 
-#### `dfo db refresh`
-Drop and recreate all tables (⚠️ deletes all data).
+**No CLI code changes needed!** Just add a rule and a Python module.
 
-```bash
-./dfo db refresh         # Requires confirmation
-./dfo db refresh --yes   # Skip confirmation
-```
+### Adding a New Analysis
 
-**When to use:**
-- Reset database to clean state
-- Apply schema changes during development
-- Clear all data before fresh discovery
+To add a new analysis type (e.g., "memory-intensive"):
+
+1. **Create analysis module**: `src/dfo/analyze/memory_intensive.py`
+2. **Add rule to JSON**: Set `key="memory-intensive"`, `module="memory_intensive"`
+3. **Done!** Run `./dfo azure analyze memory-intensive`
+
+See [docs/rules_driven_cli.md](docs/rules_driven_cli.md) for complete details.
 
 ---
 
-### Azure Commands (`dfo azure`)
+## Export and Reporting
 
-#### `dfo azure test-auth` ✓ Available Now
-Test Azure authentication and SDK client creation.
+### Export Formats
 
-```bash
-./dfo azure test-auth
-```
+dfo supports two export formats:
 
-**What it does:**
-1. Loads configuration from .env
-2. Authenticates to Azure
-3. Creates Compute and Monitor clients
-4. Reports success or failure
-
-**When to use:**
-- Verify Azure credentials are correct
-- Troubleshoot authentication issues
-- Validate setup after configuration changes
-
----
-
-#### `dfo azure discover <resource>` ✓ Available Now (Milestone 3)
-Discover Azure resources and store in database.
+#### CSV Export
 
 ```bash
-./dfo azure discover vms
+# Basic CSV (9 fields)
+./dfo azure analyze idle-vms --export-format csv
+
+# Full CSV (16 fields)
+./dfo azure analyze idle-vms --export-format csv --full
+
+# Export to file
+./dfo azure analyze idle-vms --export-format csv --export-file report.csv --full
 ```
 
-**What it does:**
-- Lists all VMs in your subscription
-- Retrieves VM metadata (name, size, location, tags)
-- Collects 14 days of CPU metrics
-- Stores everything in `vm_inventory` table
+**Basic CSV Fields:**
+- name, resource_group, location, size
+- cpu_avg, estimated_monthly_savings
+- severity, recommended_action, equivalent_sku
 
-**Options:**
-- `<resource>` - Resource type to discover (currently only `vms`)
+**Full CSV Fields (adds):**
+- vm_id, power_state, os_type, priority
+- days_under_threshold, analyzed_at, tags
 
-**Time:** ~2-5 minutes for 100 VMs
-
----
-
-#### `dfo azure list <resource>` ✓ Available Now (Milestone 3)
-List discovered resources from local database.
+#### JSON Export
 
 ```bash
-./dfo azure list vms [OPTIONS]
+# Basic JSON
+./dfo azure analyze idle-vms --export-format json
+
+# Full JSON with all metadata
+./dfo azure analyze idle-vms --export-format json --full
+
+# Export to file
+./dfo azure analyze idle-vms --export-format json --export-file report.json
 ```
 
-**Options:**
-- `--resource-group/-g <name>` - Filter by resource group
-- `--location/-l <location>` - Filter by location
-- `--power-state/-p <state>` - Filter by power state (running, stopped, deallocated)
-- `--size/-s <size>` - Filter by VM size
-- `--limit <n>` - Limit number of results
-
-**What it does:**
-- Queries the local vm_inventory database table
-- Displays VMs in a rich formatted table
-- Shows summary statistics by power state and location
-- Indicates which VMs have metrics collected
-
-**Examples:**
-```bash
-# List all VMs
-./dfo azure list vms
-
-# List only running VMs
-./dfo azure list vms --power-state running
-
-# List VMs in specific resource group
-./dfo azure list vms --resource-group production-rg
-
-# List VMs in eastus location, limit to 20
-./dfo azure list vms --location eastus --limit 20
-
-# Combine filters
-./dfo azure list vms --resource-group prod-rg --power-state running
-```
-
-**Example output:**
-```
-                VM Inventory (10 VMs)
-┏━━━━━━━━━━┳━━━━━━━━━━━━━━┳━━━━━━━━┳━━━━━━━━━┳━━━━━━━━┳━━━━━┓
-┃ Name     ┃ Resource Grp ┃ Locatn ┃ Size    ┃ Power  ┃ Met ┃
-┡━━━━━━━━━━╇━━━━━━━━━━━━━━╇━━━━━━━━╇━━━━━━━━━╇━━━━━━━━╇━━━━━┩
-│ vm1      │ prod-rg      │ eastus │ B1s     │ running│  ✓  │
-│ vm2      │ test-rg      │ westus │ B2s     │ stopped│  ✓  │
-└──────────┴──────────────┴────────┴─────────┴────────┴─────┘
-
-Power State Distribution:
-  running: 8
-  stopped: 2
-
-Location Distribution:
-  eastus: 7
-  westus: 3
-
-VMs with metrics: 10/10
-```
-
-**Time:** < 1 second
-
----
-
-#### `dfo azure show <resource> <name>` ✓ Available Now (Milestone 3)
-Show detailed information about a specific resource.
+### Export to Stdout vs File
 
 ```bash
-./dfo azure show vm <vm-name> [OPTIONS]
+# To stdout (pipe to other tools)
+./dfo azure analyze idle-vms --export-format csv | grep "Critical"
+
+# To file
+./dfo azure analyze idle-vms --export-format csv --export-file results.csv
 ```
 
-**Options:**
-- `--metrics` - Show detailed CPU timeseries data
-
-**What it does:**
-- Retrieves complete VM details from vm_inventory
-- Displays metadata, tags, and CPU metrics summary
-- Optionally shows detailed timeseries data
-
-**Examples:**
-```bash
-# Show VM details
-./dfo azure show vm prod-web-01
-
-# Show VM with detailed metrics
-./dfo azure show vm prod-web-01 --metrics
-```
-
-**Example output:**
-```
-╭────────────────── prod-web-01 ──────────────────╮
-│                                                 │
-│  Basic Information                              │
-│    VM ID: /subscriptions/.../prod-web-01        │
-│    Name: prod-web-01                            │
-│    Resource Group: production-rg                │
-│    Location: eastus                             │
-│    Size: Standard_B2s                           │
-│    Power State: ● running                       │
-│                                                 │
-│  Tags                                           │
-│    env: production                              │
-│    team: platform                               │
-│    cost-center: engineering                     │
-│                                                 │
-│  CPU Metrics                                    │
-│    Data Points: 336                             │
-│    Average CPU: 12.45%                          │
-│    Min CPU: 2.10%                               │
-│    Max CPU: 45.80%                              │
-│    Period: 2025-01-07 to 2025-01-21             │
-│                                                 │
-│  Discovery                                      │
-│    Discovered At: 2025-01-21 10:30:15           │
-│    Subscription ID: abc-123-def                 │
-│                                                 │
-╰─────────────────────────────────────────────────╯
-```
-
-**Time:** < 1 second
-
----
-
-#### `dfo azure analyze <analysis-type>` ⏳ Coming in Milestone 4
-Analyze resources for optimization opportunities.
-
-```bash
-./dfo azure analyze idle-vms
-```
-
-**What it does:**
-- Reads VM data from `vm_inventory`
-- Calculates average CPU usage
-- Identifies VMs below threshold for specified days
-- Estimates monthly cost savings
-- Assigns severity levels
-- Stores results in `vm_idle_analysis` table
-
-**Options:**
-- `<analysis-type>` - Type of analysis (currently only `idle-vms`)
-
-**Time:** < 1 minute for 100 VMs
-
----
-
-#### `dfo azure report <report-type>` ⏳ Coming in Milestone 5
-Generate reports from analysis results.
-
-```bash
-./dfo azure report idle-vms [OPTIONS]
-```
-
-**Options:**
-- `--format <format>` - Output format: `console` (default) or `json`
-- `--output <file>` - Write to file instead of stdout
-
-**Examples:**
-```bash
-# Console report (default)
-./dfo azure report idle-vms
-
-# JSON output to stdout
-./dfo azure report idle-vms --format json
-
-# Save to file
-./dfo azure report idle-vms --format json --output report-$(date +%Y%m%d).json
-```
-
----
-
-#### `dfo azure execute <action>` ⏳ Coming in Milestone 6
-Execute remediation actions on Azure resources.
-
-```bash
-./dfo azure execute stop-idle-vms [OPTIONS]
-```
-
-**Options:**
-- `--dry-run` / `--no-dry-run` - Dry-run mode (default: enabled)
-- `--yes` / `-y` - Skip confirmation prompt
-- `--min-severity <level>` - Minimum severity: `low`, `medium`, `high`, `critical`
-
-**Safety Features:**
-1. **Dry-run by default** - No changes made unless `--no-dry-run`
-2. **Confirmation prompt** - Requires user approval (unless `--yes`)
-3. **Action logging** - All actions logged to `vm_actions` table
-4. **Severity filtering** - Control scope with `--min-severity`
-
-**Examples:**
-```bash
-# See what would happen (dry-run)
-./dfo azure execute stop-idle-vms
-
-# Actually stop VMs (with confirmation)
-./dfo azure execute stop-idle-vms --no-dry-run
-
-# Stop only critical VMs without prompting
-./dfo azure execute stop-idle-vms --no-dry-run --yes --min-severity critical
-
-# Automation-friendly (use in scripts)
-./dfo azure execute stop-idle-vms --no-dry-run --yes --min-severity high
-```
-
-**Actions performed:**
-- `stop` - Stop VM (keeps it allocated, faster restart)
-- `deallocate` - Deallocate VM (releases compute, more savings)
-
----
-
-### Rules Commands (`dfo rules`) ✓ Available Now (Milestone 3)
-
-#### `dfo rules list`
-List all optimization rules with optional filtering.
-
-```bash
-./dfo rules list                        # List all rules
-./dfo rules list --service-type vm      # Filter by service type
-./dfo rules list --layer 1              # Filter by layer
-./dfo rules list --enabled-only         # Show only enabled rules
-./dfo rules list --service-type database --enabled-only  # Combined filters
-```
-
-**Options:**
-- `--service-type/-s <type>` - Filter by service type (vm, database, storage, networking, app-service, aks)
-- `--layer/-l <number>` - Filter by layer (1, 2, or 3)
-- `--enabled-only` - Show only enabled rules
-
-**Output:**
-- Service type
-- Layer number
-- Rule type/name
-- Metric being measured
-- Threshold value
-- Period (time window)
-- Enabled/disabled status
-
----
-
-#### `dfo rules show`
-Show detailed information about a specific rule.
-
-```bash
-./dfo rules show "Idle VM Detection"
-./dfo rules show "Right-Sizing (CPU)"
-```
-
-**What it shows:**
-- Service type
-- Layer and sub-layer
-- Metric and threshold configuration
-- Period configuration
-- Configuration source (rules file or .env override)
-- Provider-specific metric mappings (Azure, AWS, GCP)
-- Enabled/disabled status
-- Usage tips for configurable rules
-
-**Example output:**
-```
-┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
-┃ Idle VM Detection                         ┃
-┠───────────────────────────────────────────┨
-┃ Service Type: vm                          ┃
-┃ Layer: 1 - Self-Contained VM              ┃
-┃ Metric: CPU/RAM <5%                       ┃
-┃                                           ┃
-┃ Threshold Configuration:                  ┃
-┃   Raw: <5%                                ┃
-┃   Operator: <                             ┃
-┃   Value: 5.0 percent                      ┃
-┃   Source: .env override                   ┃
-┃                                           ┃
-┃ Period Configuration:                     ┃
-┃   Raw: 7d                                 ┃
-┃   Days: 14                                ┃
-┃   Source: .env override (DFO_IDLE_DAYS=14)┃
-┃                                           ┃
-┃ Provider Mappings:                        ┃
-┃   AZURE: CPU% + RAM% time series          ┃
-┃   AWS: CPUUtilization + mem_used_percent  ┃
-┃   GCP: low CPU+RAM                        ┃
-┃                                           ┃
-┃ Status: ✓ Enabled                         ┃
-┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
-
-💡 Tip: Override values in .env file:
-   DFO_IDLE_CPU_THRESHOLD=10.0  # Change threshold
-   DFO_IDLE_DAYS=30             # Change lookback period
-```
-
----
-
-#### `dfo rules services`
-List all available service types with statistics.
-
-```bash
-./dfo rules services
-```
-
-**What it shows:**
-- Service type name
-- Total rules for that service
-- Enabled/disabled counts
-- Active/inactive status
-
-**Example output:**
-```
-Available Service Types
-┏━━━━━━━━━━━━━┳━━━━━━━━━━━━┳━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━┓
-┃ Service Type┃ Total Rules┃ Enabled ┃ Disabled ┃ Status   ┃
-┡━━━━━━━━━━━━━╇━━━━━━━━━━━━╇━━━━━━━━━╇━━━━━━━━━━╇━━━━━━━━━━┩
-│ vm          │ 29         │ 3       │ 26       │ ✓ Active │
-└─────────────┴────────────┴─────────┴──────────┴──────────┘
-```
-
----
-
-#### `dfo rules layers`
-Show optimization layer descriptions and statistics.
-
-```bash
-./dfo rules layers
-```
-
-**What it shows:**
-- Description of each layer (1, 2, 3)
-- Rule count per layer
-- Total rules across all layers
-
----
-
-#### `dfo rules mvp`
-Show rules included in the MVP scope.
-
-```bash
-./dfo rules mvp
-```
-
-**What it shows:**
-- MVP (Phase 1) implemented rules
-- Phase 2 planned rules
-- Current MVP rule details
-
----
-
-#### `dfo rules enable`
-Enable a specific rule.
-
-```bash
-./dfo rules enable "Idle VM Detection"
-./dfo rules enable "Right-Sizing (CPU)"
-```
-
-**What it does:**
-- Updates the rule's enabled status in optimization_rules.json
-- Makes the rule active for future operations
-
-**Note:** Changes persist across sessions until disabled or overridden by `DFO_DISABLE_RULES`.
-
----
-
-#### `dfo rules disable`
-Disable a specific rule.
-
-```bash
-./dfo rules disable "Idle VM Detection"
-./dfo rules disable "Right-Sizing (CPU)"
-```
-
-**What it does:**
-- Updates the rule's enabled status in optimization_rules.json
-- Makes the rule inactive for future operations
-
-**Alternative:** Use environment variable for temporary disable:
-```bash
-DFO_DISABLE_RULES="Idle VM Detection,Right-Sizing (CPU)"
-```
-
----
-
-## Typical Use Cases
-
-### Use Case 1: Monthly Cost Review
-
-Run this monthly to identify optimization opportunities:
-
-```bash
-# Discover current state
-./dfo azure discover vms
-
-# Analyze for idle VMs
-./dfo azure analyze idle-vms
-
-# Generate report
-./dfo azure report idle-vms --format json --output monthly-review-$(date +%Y-%m).json
-
-# Review the report and decide on actions
-```
-
-### Use Case 2: Automated Cost Optimization
-
-Set up a weekly cron job to automatically stop idle VMs:
+### Example: Monthly Report Workflow
 
 ```bash
 #!/bin/bash
-# Weekly cost optimization script
-
-cd /path/to/dfo
-source activate dfo
-
-# Discover and analyze
-./dfo azure discover vms
-./dfo azure analyze idle-vms
-
-# Stop critical idle VMs (>$500/month savings)
-./dfo azure execute stop-idle-vms \
-  --no-dry-run \
-  --yes \
-  --min-severity critical
-
-# Generate report
-./dfo azure report idle-vms --format json --output /var/log/dfo/report-$(date +%Y%m%d).json
-```
-
-### Use Case 3: Development Environment Cleanup
-
-Stop all idle dev/test VMs at end of week:
-
-```bash
-# Discover and analyze
-./dfo azure discover vms
-./dfo azure analyze idle-vms
-
-# Review findings
-./dfo azure report idle-vms
-
-# Stop ALL idle VMs (not just critical)
-./dfo azure execute stop-idle-vms --no-dry-run --min-severity low
-```
-
-### Use Case 4: Cost Report for Management
-
-Generate a monthly cost optimization report:
-
-```bash
-#!/bin/bash
-# Monthly cost report for management
+# monthly-cost-review.sh
 
 DATE=$(date +%Y-%m)
 
-./dfo azure discover vms
-./dfo azure analyze idle-vms
-./dfo azure report idle-vms --format json --output cost-report-$DATE.json
+# Discover VMs
+./dfo azure discover
 
-# Upload to S3/Azure Blob/etc for dashboard
-# aws s3 cp cost-report-$DATE.json s3://finops-reports/
-```
+# Generate CSV report
+./dfo azure analyze idle-vms \
+  --export-format csv \
+  --export-file "idle-vms-${DATE}.csv" \
+  --full
 
-### Use Case 5: Review and Configure Rules ✓ Available Now
+# Generate JSON for API consumption
+./dfo azure analyze idle-vms \
+  --export-format json \
+  --export-file "idle-vms-${DATE}.json" \
+  --full
 
-Understand and customize optimization rules:
-
-```bash
-# List all available service types
-./dfo rules services
-
-# View all VM rules
-./dfo rules list --service-type vm
-
-# Check details of specific rule
-./dfo rules show "Idle VM Detection"
-
-# Enable a rule for testing
-./dfo rules enable "Right-Sizing (CPU)"
-
-# View MVP scope
-./dfo rules mvp
-
-# Disable rules not relevant to your environment
-./dfo rules disable "Spot Instance Recommendation"
-
-# Or disable multiple rules via .env
-echo 'DFO_DISABLE_RULES=Spot Instance Recommendation,Reserved Instance Analysis' >> .env
-```
-
-### Use Case 6: Browse and Audit Inventory ✓ Available Now
-
-Explore discovered VMs with filtering and detailed views:
-
-```bash
-# Discover VMs from Azure
-./dfo azure discover vms
-
-# List all discovered VMs
-./dfo azure list vms
-
-# Find all running VMs
-./dfo azure list vms --power-state running
-
-# Check VMs in specific resource group
-./dfo azure list vms --resource-group production-rg
-
-# Find large VMs
-./dfo azure list vms --size Standard_D4s_v3
-
-# Show details for specific VM
-./dfo azure show vm prod-web-01
-
-# Show VM with full metrics data
-./dfo azure show vm prod-web-01 --metrics
-
-# Audit VMs by location
-./dfo azure list vms --location eastus
-
-# List first 10 VMs only
-./dfo azure list vms --limit 10
+echo "Reports generated:"
+echo "- idle-vms-${DATE}.csv"
+echo "- idle-vms-${DATE}.json"
 ```
 
 ---
 
-## Understanding the Results
+## Advanced Usage
 
-### Severity Levels
+### Custom Thresholds via Environment
 
-dfo assigns severity based on estimated monthly savings:
+Instead of using `--threshold` every time, set environment variables:
 
-| Severity | Monthly Savings | Recommended Action |
-|----------|----------------|-------------------|
-| 🔴 **CRITICAL** | > $500 | Immediate review & action |
-| 🟠 **HIGH** | $200 - $500 | Review within 1 week |
-| 🟡 **MEDIUM** | $50 - $200 | Review within 1 month |
-| 🟢 **LOW** | < $50 | Monitor for trends |
-
-### CPU Threshold
-
-By default, VMs with average CPU < 5% for 14 days are flagged as idle.
-
-You can adjust this in `.env`:
 ```bash
-DFO_IDLE_CPU_THRESHOLD=3.0  # More sensitive (more VMs flagged)
-DFO_IDLE_CPU_THRESHOLD=10.0 # Less sensitive (fewer VMs flagged)
-DFO_IDLE_DAYS=7             # Shorter observation period
+# In .env
+DFO_IDLE_CPU_THRESHOLD=10.0
+DFO_IDLE_DAYS=30
 ```
 
-### Cost Savings Calculation
+Then:
 
-Savings are estimated based on:
-- VM size/SKU pricing
-- Region (location)
-- Current power state
-- Assumption: 730 hours/month
+```bash
+./dfo azure analyze idle-vms  # Uses 10% / 30 days
+```
 
-**Note:** Actual savings may vary based on:
-- Reserved instances
-- Spot VMs
-- Azure Hybrid Benefit
-- Enterprise agreements
+### Filtering Discovered VMs
+
+```bash
+# Power state filters
+./dfo azure list vms --power-state running
+./dfo azure list vms --power-state deallocated
+
+# Location filter
+./dfo azure list vms --location eastus
+
+# Resource group filter
+./dfo azure list vms --resource-group production-rg
+
+# Tag filters
+./dfo azure list vms --tag environment=production
+./dfo azure list vms --tag-key cost-center
+
+# Date filters
+./dfo azure list vms --discovered-after 2025-01-15
+
+# Combine filters
+./dfo azure list vms --power-state running --location eastus --tag env=prod
+
+# Sort results
+./dfo azure list vms --sort name --order asc
+./dfo azure list vms --sort location --order desc
+```
+
+### Searching VMs by Pattern
+
+```bash
+# Wildcard search
+./dfo azure search vms "web*"
+./dfo azure search vms "*prod*"
+
+# With filters
+./dfo azure search vms "api" --power-state running
+```
+
+### Understanding SKU Equivalence
+
+dfo includes 29 legacy-to-modern VM SKU mappings. When analyzing idle VMs, if a VM uses a legacy SKU not in the Azure Retail Prices API, dfo automatically:
+
+1. Looks up the modern equivalent (e.g., Standard_B1s → Standard_B2ls_v2)
+2. Fetches pricing for the modern SKU
+3. Uses that price for savings calculations
+4. Shows the equivalent SKU in results
+
+View all mappings:
+
+```bash
+# Via DuckDB
+duckdb dfo.duckdb "SELECT * FROM vm_equivalence ORDER BY legacy_sku"
+
+# Or in Python
+PYTHONPATH=src python -c "
+from dfo.db.duck import get_db
+db = get_db()
+rows = db.query('SELECT * FROM vm_equivalence ORDER BY legacy_sku')
+for row in rows:
+    print(f'{row[0]} → {row[1]}')
+"
+```
+
+See [docs/azure_vm_selection_strategy.md](docs/azure_vm_selection_strategy.md) for complete mapping rules.
+
+### Database Operations
+
+```bash
+# Check database status
+./dfo db info
+
+# Refresh database (drops all data)
+./dfo db refresh --yes
+
+# Query database directly
+duckdb dfo.duckdb "SELECT COUNT(*) FROM vm_inventory"
+duckdb dfo.duckdb "SELECT * FROM vm_idle_analysis"
+```
 
 ---
 
 ## Troubleshooting
 
-### Authentication Errors
+### Common Issues
 
-**Problem:** `Azure authentication failed`
+#### 1. "No VMs with CPU metrics found"
 
-**Solutions:**
-1. Check `.env` file has correct credentials:
-   ```bash
-   ./dfo config --show-secrets
-   ```
+**Cause**: VMs were discovered but no metrics collected, or all VMs are stopped.
 
-2. Verify service principal exists and has permissions:
-   ```bash
-   az ad sp show --id $AZURE_CLIENT_ID
-   ```
-
-3. Test authentication:
-   ```bash
-   ./dfo azure test-auth
-   ```
-
-4. Try Azure CLI authentication:
-   ```bash
-   az login
-   ./dfo azure test-auth
-   ```
-
----
-
-### Database Errors
-
-**Problem:** `Database tables already exist`
-
-**Solution:**
+**Solution**:
 ```bash
-# If you want to keep data, check what's there:
-./dfo db info
+# Check what was discovered
+./dfo azure list vms
 
-# If you want to start fresh:
+# Check power states
+./dfo azure list vms --power-state running
+
+# Re-discover with summary
+./dfo azure discover --show-summary
+```
+
+#### 2. "$0.00 savings for all VMs"
+
+**Cause**: Azure Pricing API didn't return data, or VMs use legacy SKUs without equivalence mapping.
+
+**Solution**:
+```bash
+# Check if pricing cache has data
+duckdb dfo.duckdb "SELECT COUNT(*) FROM vm_pricing_cache"
+
+# Check for unknown SKUs
+duckdb dfo.duckdb "
+  SELECT DISTINCT size
+  FROM vm_inventory
+  WHERE size NOT IN (SELECT modern_sku FROM vm_equivalence)
+"
+
+# Check analysis results for equivalent_sku column
+duckdb dfo.duckdb "SELECT vm_id, equivalent_sku FROM vm_idle_analysis"
+```
+
+#### 3. "Authentication failed"
+
+**Cause**: Invalid Azure credentials or expired service principal.
+
+**Solution**:
+```bash
+# Verify credentials in .env
+./dfo config --show-secrets
+
+# Test authentication
+./dfo azure test-auth
+
+# Try Azure CLI login as fallback
+az login
+./dfo azure test-auth
+```
+
+#### 4. "Table does not exist"
+
+**Cause**: Database schema is outdated or not initialized.
+
+**Solution**:
+```bash
+# Refresh database
 ./dfo db refresh --yes
+
+# Verify tables exist
+./dfo db info
 ```
 
----
+### Debug Mode
 
-**Problem:** `Database file not found`
+Enable detailed logging:
 
-**Solution:**
 ```bash
-./dfo db init
+# In .env
+DFO_LOG_LEVEL=DEBUG
+
+# Then run commands
+./dfo azure discover
 ```
 
----
+### Getting Help
 
-### Permission Errors
-
-**Problem:** `Permission denied` when discovering VMs
-
-**Solution:** Ensure service principal has Reader role:
-```bash
-az role assignment create \
-  --assignee $AZURE_CLIENT_ID \
-  --role Reader \
-  --scope /subscriptions/$AZURE_SUBSCRIPTION_ID
-```
-
----
-
-### No VMs Found
-
-**Problem:** Discovery returns 0 VMs
-
-**Possible causes:**
-1. Wrong subscription ID in `.env`
-2. No VMs in the subscription
-3. Service principal lacks permissions
-
-**Solution:**
-```bash
-# Verify subscription
-az account show
-
-# List VMs manually
-az vm list --output table
-
-# Check service principal permissions
-az role assignment list --assignee $AZURE_CLIENT_ID
-```
-
----
-
-## Best Practices
-
-### 1. Start with Dry-Run
-Always test with dry-run first:
-```bash
-./dfo azure execute stop-idle-vms  # See what would happen
-```
-
-### 2. Use Severity Filtering
-Start with critical VMs only:
-```bash
-./dfo azure execute stop-idle-vms --no-dry-run --min-severity critical
-```
-
-### 3. Regular Cadence
-Run discovery and analysis regularly:
-- **Daily**: For active development environments
-- **Weekly**: For production environments
-- **Monthly**: For cost reporting
-
-### 4. Backup Your Data
-The DuckDB file contains your analysis history:
-```bash
-cp dfo.duckdb backups/dfo-$(date +%Y%m%d).duckdb
-```
-
-### 5. Monitor Action Logs
-Review executed actions:
-```bash
-./dfo db info  # Check vm_actions table
-```
-
-### 6. Adjust Thresholds
-Fine-tune based on your workloads:
-```bash
-# Edit .env
-DFO_IDLE_CPU_THRESHOLD=3.0  # For stricter detection
-DFO_IDLE_DAYS=7             # For quicker action
-```
-
-### 7. Filter by Service Type
-Enable only specific service types:
-```bash
-# In .env file
-DFO_SERVICE_TYPES=vm,database  # Only VM and database rules
-
-# Or use CLI filtering
-./dfo rules list --service-type vm
-./dfo rules list --service-type database
-```
-
-### 8. Tag Your VMs
-Use Azure tags to:
-- Exclude VMs from analysis (e.g., `dfo:skip=true`)
-- Identify ownership (e.g., `team:platform`)
-- Track cost centers (e.g., `cost-center:engineering`)
+1. Check the docs: [docs/](docs/)
+2. Review error messages carefully
+3. Check database with `./dfo db info`
+4. Verify config with `./dfo config`
+5. Open an issue with logs and error output
 
 ---
 
 ## FAQ
 
-### Q: Will dfo make changes to my Azure resources?
+### General
 
-**A:** Only if you explicitly run `execute` commands with `--no-dry-run`. All other commands are read-only. Dry-run is enabled by default for safety.
+**Q: Will dfo make changes to my Azure resources?**
 
-### Q: What permissions does dfo need?
+A: Not yet. Current version (Milestone 4) is read-only. Execution actions (stop/deallocate VMs) are coming in Milestone 6 and will require explicit `--no-dry-run` flag.
 
-**A:**
-- **Reader** role for discovery and analysis (read-only)
-- **Contributor** role for execute actions (start/stop VMs)
+**Q: What permissions does dfo need?**
 
-### Q: Where is my data stored?
+A: **Reader** role for all current features (discovery and analysis). **Contributor** role will be needed for execution actions in Milestone 6.
 
-**A:** All data is stored locally in `dfo.duckdb` (configurable via `DFO_DUCKDB_FILE`). No cloud storage required.
+**Q: Where is my data stored?**
 
-### Q: Can I use dfo with multiple Azure subscriptions?
+A: Locally in `dfo.duckdb`. No cloud storage, no external services. The database file is portable—you can copy it to another machine.
 
-**A:** Currently, dfo works with one subscription at a time (specified in `AZURE_SUBSCRIPTION_ID`). To analyze multiple subscriptions, create separate `.env` files and databases for each.
+**Q: How much does dfo cost to run?**
 
-### Q: How accurate are the cost savings estimates?
+A: Zero. dfo uses Azure's public APIs which are free for read operations. No compute costs, no storage costs.
 
-**A:** Estimates are based on public Azure pricing for standard VMs. Actual savings may vary based on reserved instances, spot VMs, hybrid benefits, and enterprise agreements.
+**Q: Is dfo production-ready?**
 
-### Q: Can dfo automatically restart VMs?
+A: Yes for discovery and analysis (Milestones 1-4). VM discovery, idle VM analysis with accurate pricing, export functionality, and rules management are tested and ready for production use.
 
-**A:** Not currently. dfo focuses on identifying and stopping idle resources. Restarting VMs should be done manually or through your existing automation.
+### Technical
 
-### Q: What happens to stopped VMs?
+**Q: How does SKU equivalence work?**
 
-**A:**
-- **Stop**: VM is stopped but still allocated. You still pay for storage. Quick to restart.
-- **Deallocate**: VM is deallocated, no compute charges. Storage charges remain. Slower to restart.
+A: dfo maintains a mapping table of legacy→modern SKUs. When analyzing a VM with a legacy SKU (e.g., Standard_B1s), dfo looks up the modern equivalent (Standard_B2ls_v2), fetches its pricing, and uses that for calculations. See [docs/sku_equivalence_implementation.md](docs/sku_equivalence_implementation.md).
 
-### Q: How do I enable rules for specific service types only?
+**Q: Can I add my own SKU mappings?**
 
-**A:** Use the `DFO_SERVICE_TYPES` environment variable:
+A: Yes. Edit `src/dfo/db/init_data.sql` and add entries to `vm_equivalence` table, then run `./dfo db refresh --yes`.
+
+**Q: How accurate are the cost savings estimates?**
+
+A: Very accurate. dfo uses Azure's official Retail Prices API and accounts for:
+- Region-specific pricing
+- OS type (Linux vs Windows)
+- Current pricing (not historical)
+- Legacy SKU equivalence
+
+**Q: Can I use dfo with multiple subscriptions?**
+
+A: Not yet. Currently supports one subscription at a time (configured in `.env`). Multi-subscription support is planned for Phase 2.
+
+**Q: How do I add a new analysis type?**
+
+A: See [docs/rules_driven_cli.md](docs/rules_driven_cli.md). In short:
+1. Create Python module in `src/dfo/analyze/`
+2. Add rule entry to `optimization_rules.json`
+3. Done!
+
+### Usage
+
+**Q: How often should I run discovery?**
+
+A: Weekly or monthly. VMs change infrequently, so daily runs aren't necessary. Run before each analysis to ensure fresh data.
+
+**Q: What's the difference between basic and full export?**
+
+A:
+- **Basic** (9 fields): Human-friendly summary for management
+- **Full** (16 fields): Complete data including tags, timestamps, OS type, priority
+
+**Q: Can I export to Excel?**
+
+A: Export to CSV, then open in Excel. CSV files work perfectly in Excel/Google Sheets.
+
+**Q: How do I disable a rule?**
+
+A: `./dfo rules disable <key>` or set `"enabled": false` in `optimization_rules.json`.
+
+**Q: What happens if I run analyze without discovering first?**
+
+A: The analysis will run on existing data in the database. If the database is empty, you'll get "No VMs found". Always discover first.
+
+---
+
+## Next Steps
+
+- **Explore rules**: `./dfo rules list`
+- **Read architecture docs**: [docs/rules_driven_cli.md](docs/rules_driven_cli.md)
+- **Check the roadmap**: [docs/ROADMAP.md](docs/ROADMAP.md)
+- **Review code style**: [docs/CODE_STYLE.md](docs/CODE_STYLE.md)
+- **Join the community**: [GitHub Issues](https://github.com/your-org/dfo/issues)
+
+---
+
+**Ready to optimize your Azure costs? Start with discovery!** 💰☁️
+
 ```bash
-# In .env file
-DFO_SERVICE_TYPES=vm,database  # Only enable VM and database rules
+./dfo azure discover
+./dfo azure analyze idle-vms
+./dfo azure analyze idle-vms --export-format csv --export-file savings-report.csv --full
 ```
-
-Or filter at runtime with CLI flags:
-```bash
-./dfo rules list --service-type vm  # View only VM rules
-```
-
-Leave `DFO_SERVICE_TYPES` empty to enable all service types.
-
-### Q: Can I disable specific rules?
-
-**A:** Yes, three ways:
-1. **Permanently via CLI:**
-   ```bash
-   ./dfo rules disable "Rule Name"
-   ```
-
-2. **Temporarily via environment variable:**
-   ```bash
-   DFO_DISABLE_RULES="Rule 1,Rule 2"
-   ```
-
-3. **View current status:**
-   ```bash
-   ./dfo rules show "Rule Name"
-   ```
-
-### Q: Is dfo production-ready?
-
-**A:** dfo is currently in MVP development:
-- ✅ **Milestones 1-3 Complete**: Configuration, database, authentication, VM discovery, rules engine
-- ⏳ **Milestones 4-6 In Progress**: Analysis, reporting, execution
-
-Use with caution in production. Test thoroughly in dev/test environments first.
-
----
-
-## Roadmap
-
-### Current Status (Milestones 1-3) ✅
-
-- ✅ Configuration management
-- ✅ DuckDB integration
-- ✅ Azure authentication
-- ✅ CLI foundation
-- ✅ Test infrastructure
-- ✅ VM discovery and metric collection
-- ✅ Multi-service rules engine (VMs, databases, storage, networking, AKS)
-- ✅ Rules management commands
-
-### Coming Soon
-
-**Milestone 4 (Week 3):** Analysis Layer
-- Idle VM detection
-- Savings calculation
-
-**Milestone 5 (Week 3-4):** Reporting Layer
-- Console reports with Rich tables
-- JSON export
-
-**Milestone 6 (Week 4):** Execution Layer
-- Stop/deallocate VMs
-- Dry-run mode
-- Action logging
-
-**Phase 2 (Future):**
-- Multi-cloud support (AWS, GCP)
-- Additional resource types (databases, storage)
-- Web dashboard
-- API endpoints
-- LLM-powered recommendations
-
----
-
-## Getting Help
-
-### Documentation
-- **User Guide**: This file
-- **Developer Guide**: `CLAUDE.md`
-- **Architecture**: `docs/ARCHITECTURE.md`
-- **Code Style**: `docs/CODE_STYLE.md`
-- **Milestones**: `docs/MVP.md`
-
-### Support
-- Report issues: Create an issue in the repository
-- Feature requests: Open a discussion
-- Questions: Check the FAQ first
-
----
-
-## Contributing
-
-We welcome contributions! See `CONTRIBUTING.md` for guidelines.
-
----
-
-## License
-
-[Add your license information here]
-
----
-
-## Changelog
-
-### v0.0.3 (Current - Milestone 3 Complete)
-- ✅ VM discovery layer with rules-driven metric collection
-- ✅ Azure Compute and Monitor provider implementation
-- ✅ Discovery orchestration with error handling
-- ✅ Multi-service optimization rules engine
-- ✅ Rules management CLI: list, show, enable, disable, services, layers, mvp
-- ✅ Service type filtering (--service-type, DFO_SERVICE_TYPES)
-- ✅ Rule enable/disable via CLI and environment variables
-- ✅ 119 tests passing, 97% coverage
-
-### v0.0.2 (Milestone 2 Complete)
-- ✅ Milestone 1: Foundation & Infrastructure
-- ✅ Milestone 2: Authentication & Azure Provider
-- Added `azure test-auth` command
-- 75 tests, 97% coverage
-
-### v0.0.1
-- Initial scaffold
-
----
-
-**Happy optimizing! 💰☁️**

@@ -1002,6 +1002,37 @@ def search_resources(
         raise typer.Exit(1)
 
 
+def _show_available_analyses(rule_engine):
+    """Show all available analyses from optimization_rules.json."""
+    from rich.table import Table
+
+    console.print("\n[bold cyan]Available Analyses[/bold cyan]\n")
+
+    analyses = rule_engine.get_available_analyses(provider="azure")
+
+    if not analyses:
+        console.print("[yellow]No analyses available[/yellow]\n")
+        return
+
+    table = Table(show_header=True, header_style="bold cyan")
+    table.add_column("Key", style="cyan", width=18)
+    table.add_column("Category", width=12)
+    table.add_column("Description", width=50)
+    table.add_column("Status", width=10)
+
+    for analysis in analyses:
+        status = "[green]enabled[/green]" if analysis["enabled"] else "[dim]disabled[/dim]"
+        table.add_row(
+            analysis["key"],
+            analysis["category"],
+            analysis["description"],
+            status
+        )
+
+    console.print(table)
+    console.print()
+
+
 def _export_idle_vms(export_format: str, export_file: str, full: bool, console):
     """Export idle VM analysis results to CSV or JSON.
 
@@ -1162,8 +1193,13 @@ def _export_to_json(data: list, output_file: str, full: bool, console):
 @app.command()
 def analyze(
     analysis_type: str = typer.Argument(
-        ...,
-        help="Analysis type (e.g., 'idle-vms')"
+        None,
+        help="Analysis type (e.g., 'idle-vms'). Use --list to see all available analyses."
+    ),
+    list_analyses: bool = typer.Option(
+        False,
+        "--list",
+        help="List all available analysis types"
     ),
     threshold: float = typer.Option(
         None,
@@ -1196,8 +1232,7 @@ def analyze(
     Reads inventory data from the database and applies FinOps
     analysis to identify cost optimization opportunities.
 
-    Supported analysis types:
-    - idle-vms: Detect underutilized virtual machines
+    Analysis types are defined in optimization_rules.json.
 
     Export Options:
     - Use --export-format to export results (csv or json)
@@ -1205,25 +1240,69 @@ def analyze(
     - Use --full to include all VM details in export
 
     Example:
+        dfo azure analyze --list
         dfo azure analyze idle-vms
         dfo azure analyze idle-vms --threshold 10.0
         dfo azure analyze idle-vms --min-days 7
         dfo azure analyze idle-vms --export-format csv --export-file results.csv
         dfo azure analyze idle-vms --export-format json --export-file results.json --full
     """
-    if analysis_type != "idle-vms":
-        console.print(f"[red]Error:[/red] Unsupported analysis type: {analysis_type}")
-        console.print("Supported types: idle-vms")
+    from dfo.rules import get_rule_engine
+
+    rule_engine = get_rule_engine()
+
+    # Handle --list flag
+    if list_analyses:
+        _show_available_analyses(rule_engine)
+        return
+
+    # Validate that analysis_type is provided
+    if not analysis_type:
+        console.print("[red]Error:[/red] Analysis type is required")
+        console.print("Use [cyan]dfo azure analyze --list[/cyan] to see available analyses")
         raise typer.Exit(1)
 
+    # Look up the rule by key
+    rule = rule_engine.get_rule_by_key(analysis_type)
+    if not rule:
+        console.print(f"[red]Error:[/red] Unknown analysis type: {analysis_type}")
+        console.print("Use [cyan]dfo azure analyze --list[/cyan] to see available analyses")
+        raise typer.Exit(1)
+
+    # Check if rule is enabled
+    if not rule.enabled:
+        console.print(f"[yellow]Warning:[/yellow] Analysis type '{analysis_type}' is disabled")
+        console.print("Enable it in optimization_rules.json or via environment config")
+        raise typer.Exit(1)
+
+    # Check if module is specified
+    if not rule.module:
+        console.print(f"[red]Error:[/red] No module specified for analysis type: {analysis_type}")
+        raise typer.Exit(1)
+
+    # Dynamically import the analysis module
     try:
+        import importlib
         from rich.progress import Progress, SpinnerColumn, TextColumn
         from rich.table import Table
         from rich.panel import Panel
         from rich.columns import Columns
-        from dfo.analyze.idle_vms import analyze_idle_vms, get_idle_vm_summary, get_idle_vms
         from dfo.core.config import get_settings
         from dfo.common.visualizations import metric_panel
+
+        # Import the module dynamically
+        module_name = f"dfo.analyze.{rule.module}"
+        try:
+            analysis_module = importlib.import_module(module_name)
+        except ImportError:
+            console.print(f"[red]Error:[/red] Cannot import analysis module: {module_name}")
+            console.print(f"Module file should be: src/dfo/analyze/{rule.module}.py")
+            raise typer.Exit(1)
+
+        # Check if required functions exist
+        if not hasattr(analysis_module, 'analyze_idle_vms'):
+            console.print(f"[red]Error:[/red] Module {module_name} missing 'analyze_idle_vms' function")
+            raise typer.Exit(1)
 
         settings = get_settings()
 
@@ -1231,7 +1310,7 @@ def analyze(
         cpu_threshold = threshold if threshold is not None else settings.dfo_idle_cpu_threshold
         required_days = min_days if min_days is not None else settings.dfo_idle_days
 
-        console.print("\n[cyan]Starting idle VM analysis...[/cyan]")
+        console.print(f"\n[cyan]Starting {rule.type}...[/cyan]")
         console.print(f"[dim]CPU threshold:[/dim] {cpu_threshold}%")
         console.print(f"[dim]Minimum days:[/dim] {required_days}\n")
 
@@ -1241,19 +1320,20 @@ def analyze(
             TextColumn("[progress.description]{task.description}"),
             console=console
         ) as progress:
-            task = progress.add_task("Analyzing VMs for idle resources...", total=None)
+            task = progress.add_task(f"Running {rule.type}...", total=None)
 
-            idle_count = analyze_idle_vms(threshold=cpu_threshold, min_days=required_days)
+            # Call the analyze function from the dynamically imported module
+            idle_count = analysis_module.analyze_idle_vms(threshold=cpu_threshold, min_days=required_days)
 
             progress.update(task, description="✓ Analysis complete")
 
         if idle_count == 0:
-            console.print("\n[green]✓[/green] No idle VMs detected")
-            console.print("[dim]All VMs are being utilized efficiently.[/dim]\n")
+            console.print(f"\n[green]✓[/green] No issues detected by {rule.type}")
+            console.print("[dim]All resources are being utilized efficiently.[/dim]\n")
             return
 
-        # Get summary statistics
-        summary = get_idle_vm_summary()
+        # Get summary statistics from the dynamically imported module
+        summary = analysis_module.get_idle_vm_summary()
 
         # Display summary metrics
         console.print("\n[bold cyan]═══ Analysis Summary ═══[/bold cyan]\n")

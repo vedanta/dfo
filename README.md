@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="art/dfo_logo.png" alt="dfo Logo" width="400"/>
+</p>
+
 # dfo - DevFinOps CLI
 
 **Reduce Azure cloud costs by identifying and optimizing underutilized virtual machines.**
@@ -20,20 +24,24 @@ dfo is a command-line tool that discovers Azure VMs, analyzes their CPU usage, i
 | ✅ **Milestone 1** | Complete | Foundation & Infrastructure |
 | ✅ **Milestone 2** | Complete | Authentication & Azure Provider |
 | ✅ **Milestone 3** | Complete | Discovery Layer (VM listing + metrics) |
-| ⏳ **Milestone 4** | Planned | Analysis Layer (idle VM detection) |
-| ⏳ **Milestone 5** | Planned | Reporting Layer (console + JSON) |
+| ✅ **Milestone 4** | Complete | Analysis Layer (idle VM detection + SKU equivalence) |
+| ⏳ **Milestone 5** | Planned | Reporting Layer (enhanced reporting) |
 | ⏳ **Milestone 6** | Planned | Execution Layer (stop/deallocate VMs) |
 
 **Currently Available:**
 - ✓ Configuration management with Pydantic Settings
-- ✓ DuckDB local database integration
+- ✓ DuckDB local database with 5 tables (inventory, analysis, pricing, equivalence, actions)
 - ✓ Azure authentication (DefaultAzureCredential + service principal)
-- ✓ Azure SDK client management (Compute & Monitor)
+- ✓ Azure SDK client management (Compute, Monitor, Pricing)
 - ✓ VM discovery with CPU metrics collection (rules-driven)
+- ✓ **Idle VM analysis with accurate pricing** (Milestone 4)
+- ✓ **Azure VM SKU equivalence mapping** (29 legacy→modern mappings)
+- ✓ **Export to CSV/JSON** with basic and full modes
+- ✓ **Rules-driven CLI architecture** (optimization_rules.json as source of truth)
+- ✓ **Enhanced rules management** (key-based lookup, categories, smart search)
 - ✓ Multi-service optimization rules engine (VMs, databases, storage, networking, AKS)
-- ✓ Rules management commands with service type filtering
 - ✓ Common visualization module (sparklines, charts, dashboards)
-- ✓ CLI commands: `./dfo azure test-auth`, `./dfo azure discover vms`, `./dfo rules list`
+- ✓ CLI commands: discover, analyze, export, rules (list/show/keys/categories)
 
 ## Quick Start
 
@@ -135,18 +143,30 @@ The `dfo` wrapper script allows you to run commands from the root directory:
 ./dfo azure search vms "prod*"   # Search VMs by pattern
 ./dfo azure search vms "web" --power-state running  # Search with filters
 
-# View and manage optimization rules (✓ Available now - M3)
-./dfo rules list                 # List all rules
-./dfo rules list --service-type vm  # Filter by service type
-./dfo rules show "Idle VM Detection"  # Show rule details
-./dfo rules services             # List available service types
-./dfo rules layers               # Show layer descriptions
-./dfo rules enable "Rule Name"   # Enable a rule
-./dfo rules disable "Rule Name"  # Disable a rule
-
-# Coming soon in Milestones 4-6:
+# Analyze VMs for optimization opportunities (✓ Available now - M4)
+./dfo azure analyze --list       # List all available analyses
 ./dfo azure analyze idle-vms     # Analyze for idle VMs
-./dfo azure report idle-vms      # Generate cost report
+./dfo azure analyze idle-vms --threshold 10.0  # Custom CPU threshold
+./dfo azure analyze idle-vms --min-days 7      # Custom minimum days
+
+# Export analysis results (✓ Available now - M4)
+./dfo azure analyze idle-vms --export-format csv                    # Basic CSV export
+./dfo azure analyze idle-vms --export-format json --full           # Full JSON export
+./dfo azure analyze idle-vms --export-format csv --export-file results.csv --full  # Export to file
+
+# View and manage optimization rules (✓ Enhanced in M4)
+./dfo rules list                 # List all rules with keys, service, category
+./dfo rules list --with-keys-only  # Show only CLI-enabled rules
+./dfo rules list --category compute  # Filter by category
+./dfo rules keys                 # List all CLI keys
+./dfo rules categories           # List all categories
+./dfo rules show idle-vms        # Show rule details by key
+./dfo rules show "Idle VM Detection"  # Show rule details by type
+./dfo rules enable idle-vms      # Enable a rule by key
+./dfo rules disable shutdown-vms # Disable a rule by key
+
+# Coming soon in Milestones 5-6:
+./dfo azure report idle-vms      # Generate enhanced reports
 ./dfo azure execute stop-idle-vms  # Take action (dry-run default)
 
 # Get help
@@ -159,6 +179,9 @@ The `dfo` wrapper script allows you to run commands from the root directory:
 
 - **[USER_GUIDE.md](USER_GUIDE.md)** - Complete user guide with workflow, examples, and troubleshooting
 - **[CLAUDE.md](CLAUDE.md)** - Architecture and development guidelines for Claude Code
+- **[docs/rules_driven_cli.md](docs/rules_driven_cli.md)** - Rules-driven CLI architecture guide
+- **[docs/sku_equivalence_implementation.md](docs/sku_equivalence_implementation.md)** - Azure VM SKU equivalence strategy
+- **[docs/azure_vm_selection_strategy.md](docs/azure_vm_selection_strategy.md)** - VM SKU mapping rules and examples
 - **[docs/VISUALIZATIONS.md](docs/VISUALIZATIONS.md)** - Visualization module API reference and usage guide
 - **[docs/MIGRATIONS.md](docs/MIGRATIONS.md)** - Database schema changes and upgrade instructions
 - **[docs/CODE_STYLE.md](docs/CODE_STYLE.md)** - Code standards and conventions
@@ -166,27 +189,54 @@ The `dfo` wrapper script allows you to run commands from the root directory:
 - **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** - System architecture and design patterns
 - **[docs/ROADMAP.md](docs/ROADMAP.md)** - Project roadmap and future plans
 
-## Example Workflow (Once Complete)
+## Example Workflows
 
-### Monthly Cost Review
+### Monthly Cost Review (✓ Available Now)
 ```bash
-# Discover current state
-./dfo azure discover vms
+# 1. Discover current state
+./dfo azure discover
 
-# Analyze for idle VMs
+# 2. Analyze for idle VMs
 ./dfo azure analyze idle-vms
 
-# View findings
-./dfo azure report idle-vms
+# 3. Export findings for management (CSV or JSON)
+./dfo azure analyze idle-vms --export-format csv --export-file monthly-review-2025-01.csv --full
 
-# Generate JSON report for management
-./dfo azure report idle-vms --format json --output monthly-review-2025-01.json
+# 4. View specific rule details
+./dfo rules show idle-vms
 ```
 
-### Automated Cost Optimization
+### Exploring Available Analyses (✓ Available Now)
+```bash
+# 1. See what analyses are available
+./dfo azure analyze --list
+
+# 2. View rule details by key
+./dfo rules show idle-vms
+
+# 3. List all CLI keys
+./dfo rules keys
+
+# 4. List rules by category
+./dfo rules list --category compute
+```
+
+### Custom Analysis Threshold (✓ Available Now)
+```bash
+# Discover VMs
+./dfo azure discover
+
+# Analyze with stricter criteria (10% CPU, 30 days)
+./dfo azure analyze idle-vms --threshold 10.0 --min-days 30
+
+# Export results
+./dfo azure analyze idle-vms --export-format json --full
+```
+
+### Automated Cost Optimization (Coming in M6)
 ```bash
 # Discover and analyze
-./dfo azure discover vms
+./dfo azure discover
 ./dfo azure analyze idle-vms
 
 # Stop critical idle VMs (>$500/month savings)
@@ -262,13 +312,13 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines (coming soon).
 
 ## Roadmap
 
-### Phase 1: MVP (Current)
-- [x] Milestone 1: Foundation & Infrastructure (Week 1) ✅
-- [x] Milestone 2: Authentication & Azure Provider (Week 2) ✅
-- [x] Milestone 3: Discovery Layer (Week 2) ✅
-- [ ] Milestone 4: Analysis Layer (Week 3)
-- [ ] Milestone 5: Reporting Layer (Week 3-4)
-- [ ] Milestone 6: Execution Layer (Week 4)
+### Phase 1: MVP
+- [x] Milestone 1: Foundation & Infrastructure ✅
+- [x] Milestone 2: Authentication & Azure Provider ✅
+- [x] Milestone 3: Discovery Layer ✅
+- [x] Milestone 4: Analysis Layer (Idle VMs + SKU Equivalence) ✅
+- [ ] Milestone 5: Enhanced Reporting Layer (In Progress)
+- [ ] Milestone 6: Execution Layer
 
 ### Phase 2: Enhancement
 - Multi-cloud support (AWS, GCP)
@@ -295,7 +345,7 @@ A: **Reader** role for discovery/analysis (read-only). **Contributor** role for 
 A: All data is stored locally in `dfo.duckdb`. No cloud storage or external services required.
 
 **Q: Is dfo production-ready?**
-A: Milestones 1-3 are complete and tested (119 tests, 97% coverage). VM discovery and rules management are production-ready with read-only access. Milestones 4-6 are in development.
+A: Milestones 1-4 are complete and tested. VM discovery, idle VM analysis with accurate pricing, export functionality, and rules management are production-ready. Analysis is read-only. Milestones 5-6 (enhanced reporting and execution) are in development.
 
 See [USER_GUIDE.md - FAQ](USER_GUIDE.md#faq) for more questions.
 
@@ -312,7 +362,42 @@ See [USER_GUIDE.md - FAQ](USER_GUIDE.md#faq) for more questions.
 
 ## Changelog
 
-### v0.0.5 (Current - Visualization Module)
+### v0.0.6 (Current - Rules-Driven CLI & Milestone 4)
+- ✅ **Milestone 4 Complete**: Analysis Layer with idle VM detection
+- ✅ **Azure VM SKU Equivalence**: 29 legacy-to-modern VM SKU mappings
+  - New module: `src/dfo/analyze/compute_mapper.py`
+  - New table: `vm_equivalence` with B/A/D/E-series mappings
+  - Auto-initialization via `init_data.sql`
+- ✅ **Enhanced Pricing Module**:
+  - Fixed Azure Retail Prices API integration
+  - Pricing cache table (`vm_pricing_cache`)
+  - Accurate cost calculations for legacy SKUs
+- ✅ **Export Functionality**:
+  - CSV and JSON export formats
+  - Basic export (9 fields) and Full export (16 fields)
+  - Export to file or stdout
+- ✅ **Rules-Driven CLI Architecture**:
+  - `optimization_rules.json` as single source of truth
+  - Dynamic CLI command generation
+  - New fields: key, category, description, module, actions, export_formats
+  - Smart lookup: supports both keys and rule types
+- ✅ **Enhanced Rules Commands**:
+  - New: `./dfo rules keys` - List all CLI keys
+  - New: `./dfo rules categories` - List all categories
+  - Updated: `./dfo rules list` - Shows key, service, category columns
+  - Updated: `./dfo rules show` - Smart lookup by key or type
+  - Updated: `./dfo rules enable/disable` - Accepts keys or types
+  - New filters: `--category`, `--with-keys-only`
+- ✅ **Database Schema Updates**:
+  - 5 tables total: vm_inventory, vm_idle_analysis, vm_pricing_cache, vm_equivalence, vm_actions
+  - Dynamic `db info` command
+- ✅ **Directory Consolidation**: Verb forms (discover/, analyze/) for consistency
+- ✅ **Documentation**:
+  - `docs/rules_driven_cli.md` - Complete architecture guide
+  - `docs/sku_equivalence_implementation.md` - SKU mapping implementation
+  - `docs/azure_vm_selection_strategy.md` - VM SKU selection rules
+
+### v0.0.5 (Visualization Module)
 - ✅ **Common Visualization Module**: Reusable terminal visualization library
 - ✅ **Micro-visualizations**: Sparklines, progress bars, color indicators
 - ✅ **Chart Visualizations**: Horizontal bar charts, time-series charts, histograms

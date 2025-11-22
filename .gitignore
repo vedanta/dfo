@@ -67,5 +67,6 @@ Thumbs.db
 
 # misc binaries
 *.xlsx
-
+*.log
+*.csv
 report.csv
