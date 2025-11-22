@@ -280,12 +280,142 @@ def test_azure_discover_empty_inventory(setup_env):
         assert "VMs with metrics" in result.stdout
 
 
-def test_azure_analyze_stub(setup_env):
-    """Test azure analyze stub command."""
-    result = runner.invoke(app, ["azure", "analyze", "idle-vms"])
+def test_azure_analyze_idle_vms_success(setup_env, test_db):
+    """Test successful idle VM analysis."""
+    from unittest.mock import patch
+    from datetime import datetime, timezone, timedelta
+    from dfo.db.duck import DuckDBManager
+
+    db = DuckDBManager()
+
+    # Generate 14 days of hourly CPU data with low usage
+    import json
+    base_time = datetime(2024, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
+    cpu_data = []
+    for day in range(14):
+        for hour in range(24):
+            timestamp = base_time + timedelta(days=day, hours=hour)
+            cpu_data.append({
+                "timestamp": timestamp.isoformat(),
+                "average": 2.5  # Low CPU usage
+            })
+
+    db.execute_query(
+        """
+        INSERT INTO vm_inventory
+        (vm_id, name, resource_group, location, size, power_state,
+         os_type, priority, cpu_timeseries, discovered_at, subscription_id, tags)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            "vm-123", "idle-vm-1", "test-rg", "eastus", "Standard_B1s",
+            "VM running", "Linux", "Regular", json.dumps(cpu_data),
+            datetime.now(timezone.utc), "sub-123", "{}"
+        )
+    )
+
+    with patch('dfo.analysis.idle_vms.get_vm_monthly_cost', return_value=30.37):
+        result = runner.invoke(app, ["azure", "analyze", "idle-vms"])
+
     assert result.exit_code == 0
-    assert "TODO" in result.stdout
-    assert "Milestone 4" in result.stdout
+    assert "Starting idle VM analysis" in result.stdout
+    assert "Analysis complete" in result.stdout
+    assert "idle VMs identified" in result.stdout
+
+
+def test_azure_analyze_no_idle_vms(setup_env, test_db):
+    """Test analysis when no idle VMs found."""
+    from datetime import datetime, timezone, timedelta
+    from dfo.db.duck import DuckDBManager
+    import json
+
+    db = DuckDBManager()
+
+    # Generate 14 days of hourly CPU data with high usage
+    base_time = datetime(2024, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
+    cpu_data = []
+    for day in range(14):
+        for hour in range(24):
+            timestamp = base_time + timedelta(days=day, hours=hour)
+            cpu_data.append({
+                "timestamp": timestamp.isoformat(),
+                "average": 45.0  # High CPU usage
+            })
+
+    db.execute_query(
+        """
+        INSERT INTO vm_inventory
+        (vm_id, name, resource_group, location, size, power_state,
+         os_type, priority, cpu_timeseries, discovered_at, subscription_id, tags)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            "vm-456", "busy-vm-1", "test-rg", "eastus", "Standard_B2s",
+            "VM running", "Windows", "Regular", json.dumps(cpu_data),
+            datetime.now(timezone.utc), "sub-123", "{}"
+        )
+    )
+
+    result = runner.invoke(app, ["azure", "analyze", "idle-vms"])
+
+    assert result.exit_code == 0
+    assert "Starting idle VM analysis" in result.stdout
+    assert "No idle VMs detected" in result.stdout
+
+
+def test_azure_analyze_unsupported_type(setup_env):
+    """Test analyze with unsupported analysis type."""
+    result = runner.invoke(app, ["azure", "analyze", "unsupported-type"])
+
+    assert result.exit_code == 1
+    assert "Unsupported analysis type" in result.stdout
+    assert "Supported types: idle-vms" in result.stdout
+
+
+def test_azure_analyze_custom_threshold(setup_env, test_db):
+    """Test analysis with custom threshold."""
+    from unittest.mock import patch
+    from datetime import datetime, timezone, timedelta
+    from dfo.db.duck import DuckDBManager
+    import json
+
+    db = DuckDBManager()
+
+    # Generate 14 days of hourly CPU data with 8% usage
+    base_time = datetime(2024, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
+    cpu_data = []
+    for day in range(14):
+        for hour in range(24):
+            timestamp = base_time + timedelta(days=day, hours=hour)
+            cpu_data.append({
+                "timestamp": timestamp.isoformat(),
+                "average": 8.0  # Above default 5%, below custom 10%
+            })
+
+    db.execute_query(
+        """
+        INSERT INTO vm_inventory
+        (vm_id, name, resource_group, location, size, power_state,
+         os_type, priority, cpu_timeseries, discovered_at, subscription_id, tags)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            "vm-789", "medium-cpu-vm", "test-rg", "eastus", "Standard_B1s",
+            "VM running", "Linux", "Regular", json.dumps(cpu_data),
+            datetime.now(timezone.utc), "sub-123", "{}"
+        )
+    )
+
+    with patch('dfo.analysis.idle_vms.get_vm_monthly_cost', return_value=30.37):
+        # Should not detect with default threshold (5%)
+        result = runner.invoke(app, ["azure", "analyze", "idle-vms"])
+        assert result.exit_code == 0
+        assert "No idle VMs detected" in result.stdout
+
+        # Should detect with custom threshold (10%)
+        result = runner.invoke(app, ["azure", "analyze", "idle-vms", "--threshold", "10.0"])
+        assert result.exit_code == 0
+        assert "idle VMs identified" in result.stdout
 
 
 def test_azure_report_stub(setup_env):
