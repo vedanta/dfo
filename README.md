@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="art/dfo_logo.png" alt="dfo Logo" width="400"/>
+</p>
+
 # dfo - DevFinOps CLI
 
 **Reduce Azure cloud costs by identifying and optimizing underutilized virtual machines.**
