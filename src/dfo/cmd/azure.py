@@ -1291,12 +1291,12 @@ def analyze(
         from dfo.common.visualizations import metric_panel
 
         # Import the module dynamically
-        module_name = f"dfo.analysis.{rule.module}"
+        module_name = f"dfo.analyze.{rule.module}"
         try:
             analysis_module = importlib.import_module(module_name)
         except ImportError:
             console.print(f"[red]Error:[/red] Cannot import analysis module: {module_name}")
-            console.print(f"Module file should be: src/dfo/analysis/{rule.module}.py")
+            console.print(f"Module file should be: src/dfo/analyze/{rule.module}.py")
             raise typer.Exit(1)
 
         # Check if required functions exist
