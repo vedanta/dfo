@@ -66,12 +66,12 @@ def mock_metrics():
 
 def test_discover_vms_success(mock_env, mock_vms, mock_metrics):
     """Test successful VM discovery."""
-    with patch('dfo.discovery.vms.list_vms') as mock_list, \
-         patch('dfo.discovery.vms.get_cpu_metrics') as mock_metrics_fn, \
-         patch('dfo.discovery.vms.get_cached_credential') as mock_cred, \
-         patch('dfo.discovery.vms.get_compute_client') as mock_compute, \
-         patch('dfo.discovery.vms.get_monitor_client') as mock_monitor, \
-         patch('dfo.discovery.vms.get_db') as mock_db:
+    with patch('dfo.discover.vms.list_vms') as mock_list, \
+         patch('dfo.discover.vms.get_cpu_metrics') as mock_metrics_fn, \
+         patch('dfo.discover.vms.get_cached_credential') as mock_cred, \
+         patch('dfo.discover.vms.get_compute_client') as mock_compute, \
+         patch('dfo.discover.vms.get_monitor_client') as mock_monitor, \
+         patch('dfo.discover.vms.get_db') as mock_db:
 
         mock_list.return_value = mock_vms
         mock_metrics_fn.return_value = mock_metrics
@@ -105,12 +105,12 @@ def test_discover_vms_uses_rule_period(mock_env, mock_vms, mock_metrics, monkeyp
     reset_settings()
     reset_rule_engine()
 
-    with patch('dfo.discovery.vms.list_vms') as mock_list, \
-         patch('dfo.discovery.vms.get_cpu_metrics') as mock_metrics_fn, \
-         patch('dfo.discovery.vms.get_cached_credential') as mock_cred, \
-         patch('dfo.discovery.vms.get_compute_client') as mock_compute, \
-         patch('dfo.discovery.vms.get_monitor_client') as mock_monitor, \
-         patch('dfo.discovery.vms.get_db') as mock_db:
+    with patch('dfo.discover.vms.list_vms') as mock_list, \
+         patch('dfo.discover.vms.get_cpu_metrics') as mock_metrics_fn, \
+         patch('dfo.discover.vms.get_cached_credential') as mock_cred, \
+         patch('dfo.discover.vms.get_compute_client') as mock_compute, \
+         patch('dfo.discover.vms.get_monitor_client') as mock_monitor, \
+         patch('dfo.discover.vms.get_db') as mock_db:
 
         mock_list.return_value = mock_vms
         mock_metrics_fn.return_value = mock_metrics
@@ -132,12 +132,12 @@ def test_discover_vms_config_override(mock_env, mock_vms, mock_metrics, monkeypa
     # User overrides period to 14 days
     monkeypatch.setenv("DFO_IDLE_DAYS", "14")
 
-    with patch('dfo.discovery.vms.list_vms') as mock_list, \
-         patch('dfo.discovery.vms.get_cpu_metrics') as mock_metrics_fn, \
-         patch('dfo.discovery.vms.get_cached_credential') as mock_cred, \
-         patch('dfo.discovery.vms.get_compute_client') as mock_compute, \
-         patch('dfo.discovery.vms.get_monitor_client') as mock_monitor, \
-         patch('dfo.discovery.vms.get_db') as mock_db:
+    with patch('dfo.discover.vms.list_vms') as mock_list, \
+         patch('dfo.discover.vms.get_cpu_metrics') as mock_metrics_fn, \
+         patch('dfo.discover.vms.get_cached_credential') as mock_cred, \
+         patch('dfo.discover.vms.get_compute_client') as mock_compute, \
+         patch('dfo.discover.vms.get_monitor_client') as mock_monitor, \
+         patch('dfo.discover.vms.get_db') as mock_db:
 
         # Reset singletons to pick up new config
         reset_settings()
@@ -159,12 +159,12 @@ def test_discover_vms_config_override(mock_env, mock_vms, mock_metrics, monkeypa
 
 def test_discover_vms_metrics_failure(mock_env, mock_vms):
     """Test discovery continues when metrics fail for some VMs."""
-    with patch('dfo.discovery.vms.list_vms') as mock_list, \
-         patch('dfo.discovery.vms.get_cpu_metrics') as mock_metrics_fn, \
-         patch('dfo.discovery.vms.get_cached_credential') as mock_cred, \
-         patch('dfo.discovery.vms.get_compute_client') as mock_compute, \
-         patch('dfo.discovery.vms.get_monitor_client') as mock_monitor, \
-         patch('dfo.discovery.vms.get_db') as mock_db:
+    with patch('dfo.discover.vms.list_vms') as mock_list, \
+         patch('dfo.discover.vms.get_cpu_metrics') as mock_metrics_fn, \
+         patch('dfo.discover.vms.get_cached_credential') as mock_cred, \
+         patch('dfo.discover.vms.get_compute_client') as mock_compute, \
+         patch('dfo.discover.vms.get_monitor_client') as mock_monitor, \
+         patch('dfo.discover.vms.get_db') as mock_db:
 
         mock_list.return_value = mock_vms
         # First VM succeeds, second VM fails
@@ -189,12 +189,12 @@ def test_discover_vms_metrics_failure(mock_env, mock_vms):
 
 def test_discover_vms_no_refresh(mock_env, mock_vms, mock_metrics):
     """Test discovery without clearing existing data."""
-    with patch('dfo.discovery.vms.list_vms') as mock_list, \
-         patch('dfo.discovery.vms.get_cpu_metrics') as mock_metrics_fn, \
-         patch('dfo.discovery.vms.get_cached_credential') as mock_cred, \
-         patch('dfo.discovery.vms.get_compute_client') as mock_compute, \
-         patch('dfo.discovery.vms.get_monitor_client') as mock_monitor, \
-         patch('dfo.discovery.vms.get_db') as mock_db:
+    with patch('dfo.discover.vms.list_vms') as mock_list, \
+         patch('dfo.discover.vms.get_cpu_metrics') as mock_metrics_fn, \
+         patch('dfo.discover.vms.get_cached_credential') as mock_cred, \
+         patch('dfo.discover.vms.get_compute_client') as mock_compute, \
+         patch('dfo.discover.vms.get_monitor_client') as mock_monitor, \
+         patch('dfo.discover.vms.get_db') as mock_db:
 
         mock_list.return_value = mock_vms
         mock_metrics_fn.return_value = mock_metrics
@@ -213,11 +213,11 @@ def test_discover_vms_no_refresh(mock_env, mock_vms, mock_metrics):
 
 def test_discover_vms_empty_subscription(mock_env):
     """Test discovery with no VMs."""
-    with patch('dfo.discovery.vms.list_vms') as mock_list, \
-         patch('dfo.discovery.vms.get_cached_credential') as mock_cred, \
-         patch('dfo.discovery.vms.get_compute_client') as mock_compute, \
-         patch('dfo.discovery.vms.get_monitor_client') as mock_monitor, \
-         patch('dfo.discovery.vms.get_db') as mock_db:
+    with patch('dfo.discover.vms.list_vms') as mock_list, \
+         patch('dfo.discover.vms.get_cached_credential') as mock_cred, \
+         patch('dfo.discover.vms.get_compute_client') as mock_compute, \
+         patch('dfo.discover.vms.get_monitor_client') as mock_monitor, \
+         patch('dfo.discover.vms.get_db') as mock_db:
 
         mock_list.return_value = []  # No VMs
         mock_cred.return_value = Mock()
@@ -238,12 +238,12 @@ def test_discover_vms_with_custom_subscription(mock_env, mock_vms, mock_metrics)
     """Test discovery with custom subscription ID."""
     custom_sub = "custom-sub-id"
 
-    with patch('dfo.discovery.vms.list_vms') as mock_list, \
-         patch('dfo.discovery.vms.get_cpu_metrics') as mock_metrics_fn, \
-         patch('dfo.discovery.vms.get_cached_credential') as mock_cred, \
-         patch('dfo.discovery.vms.get_compute_client') as mock_compute, \
-         patch('dfo.discovery.vms.get_monitor_client') as mock_monitor, \
-         patch('dfo.discovery.vms.get_db') as mock_db:
+    with patch('dfo.discover.vms.list_vms') as mock_list, \
+         patch('dfo.discover.vms.get_cpu_metrics') as mock_metrics_fn, \
+         patch('dfo.discover.vms.get_cached_credential') as mock_cred, \
+         patch('dfo.discover.vms.get_compute_client') as mock_compute, \
+         patch('dfo.discover.vms.get_monitor_client') as mock_monitor, \
+         patch('dfo.discover.vms.get_db') as mock_db:
 
         mock_list.return_value = mock_vms
         mock_metrics_fn.return_value = mock_metrics

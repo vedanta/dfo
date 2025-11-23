@@ -59,7 +59,7 @@ def test_azure_discover_vms_success(setup_env):
         )
     ]
 
-    with patch('dfo.discovery.vms.discover_vms') as mock_discover, \
+    with patch('dfo.discover.vms.discover_vms') as mock_discover, \
          patch('dfo.rules.get_rule_engine') as mock_engine:
 
         mock_discover.return_value = mock_inventory
@@ -102,7 +102,7 @@ def test_azure_discover_failure(setup_env):
     """Test discover command when discovery fails."""
     from unittest.mock import patch, Mock
 
-    with patch('dfo.discovery.vms.discover_vms') as mock_discover, \
+    with patch('dfo.discover.vms.discover_vms') as mock_discover, \
          patch('dfo.rules.get_rule_engine') as mock_engine:
 
         # Mock rule engine
@@ -127,7 +127,7 @@ def test_azure_discover_authorization_error(setup_env):
     from unittest.mock import patch, Mock
     from azure.core.exceptions import HttpResponseError
 
-    with patch('dfo.discovery.vms.discover_vms') as mock_discover, \
+    with patch('dfo.discover.vms.discover_vms') as mock_discover, \
          patch('dfo.rules.get_rule_engine') as mock_engine:
 
         # Mock rule engine
@@ -154,7 +154,7 @@ def test_azure_discover_authentication_error(setup_env):
     from unittest.mock import patch, Mock
     from azure.core.exceptions import ClientAuthenticationError
 
-    with patch('dfo.discovery.vms.discover_vms') as mock_discover, \
+    with patch('dfo.discover.vms.discover_vms') as mock_discover, \
          patch('dfo.rules.get_rule_engine') as mock_engine:
 
         # Mock rule engine
@@ -197,7 +197,7 @@ def test_azure_discover_no_refresh(setup_env):
         )
     ]
 
-    with patch('dfo.discovery.vms.discover_vms') as mock_discover, \
+    with patch('dfo.discover.vms.discover_vms') as mock_discover, \
          patch('dfo.rules.get_rule_engine') as mock_engine:
 
         mock_discover.return_value = mock_inventory
@@ -238,7 +238,7 @@ def test_azure_discover_custom_subscription(setup_env):
         )
     ]
 
-    with patch('dfo.discovery.vms.discover_vms') as mock_discover, \
+    with patch('dfo.discover.vms.discover_vms') as mock_discover, \
          patch('dfo.rules.get_rule_engine') as mock_engine:
 
         mock_discover.return_value = mock_inventory
@@ -262,7 +262,7 @@ def test_azure_discover_empty_inventory(setup_env):
     """Test discover with no VMs found."""
     from unittest.mock import Mock, patch
 
-    with patch('dfo.discovery.vms.discover_vms') as mock_discover, \
+    with patch('dfo.discover.vms.discover_vms') as mock_discover, \
          patch('dfo.rules.get_rule_engine') as mock_engine:
 
         mock_discover.return_value = []  # No VMs
@@ -314,7 +314,7 @@ def test_azure_analyze_idle_vms_success(setup_env, test_db):
         )
     )
 
-    with patch('dfo.analysis.idle_vms.get_vm_monthly_cost', return_value=30.37):
+    with patch('dfo.providers.azure.pricing.get_vm_monthly_cost_with_metadata', return_value=30.37):
         result = runner.invoke(app, ["azure", "analyze", "idle-vms"])
 
     assert result.exit_code == 0
@@ -406,7 +406,7 @@ def test_azure_analyze_custom_threshold(setup_env, test_db):
         )
     )
 
-    with patch('dfo.analysis.idle_vms.get_vm_monthly_cost', return_value=30.37):
+    with patch('dfo.providers.azure.pricing.get_vm_monthly_cost_with_metadata', return_value=30.37):
         # Should not detect with default threshold (5%)
         result = runner.invoke(app, ["azure", "analyze", "idle-vms"])
         assert result.exit_code == 0
