@@ -101,7 +101,7 @@ The `./dfo azure analyze` command is now completely dynamic:
    - Check if rule exists
    - Check if rule is enabled
    - Check if module is specified
-4. **Dynamic import**: `module = importlib.import_module(f"dfo.analysis.{rule.module}")`
+4. **Dynamic import**: `module = importlib.import_module(f"dfo.analyze.{rule.module}")`
 5. **Execute analysis**: `module.analyze_idle_vms(...)`
 6. **Display results**: Using data from `module.get_idle_vm_summary()`
 
@@ -117,7 +117,7 @@ To add a new analysis type, follow these 3 steps:
 
 ### Step 1: Create Analysis Module
 
-Create `src/dfo/analysis/new_analysis.py`:
+Create `src/dfo/analyze/new_analysis.py`:
 
 ```python
 """New analysis module."""
@@ -180,7 +180,7 @@ The `--list` command automatically shows all available analyses from the rules f
 
 ### 2. Zero CLI Code Changes
 Add new analyses by:
-- Creating a module in `src/dfo/analysis/`
+- Creating a module in `src/dfo/analyze/`
 - Adding a rule entry to `optimization_rules.json`
 
 No modifications to `src/dfo/cmd/azure.py` required.
@@ -214,10 +214,10 @@ Rules specify provider-specific details, making multi-cloud support straightforw
 @app.command()
 def analyze(analysis_type: str):
     if analysis_type == "idle-vms":
-        from dfo.analysis.idle_vms import analyze_idle_vms
+        from dfo.analyze.idle_vms import analyze_idle_vms
         analyze_idle_vms()
     elif analysis_type == "rightsize":
-        from dfo.analysis.rightsize import analyze_rightsize
+        from dfo.analyze.rightsize import analyze_rightsize
         analyze_rightsize()
     # ... more elif blocks
 ```
@@ -228,7 +228,7 @@ def analyze(analysis_type: str):
 @app.command()
 def analyze(analysis_type: str):
     rule = rule_engine.get_rule_by_key(analysis_type)
-    module = importlib.import_module(f"dfo.analysis.{rule.module}")
+    module = importlib.import_module(f"dfo.analyze.{rule.module}")
     module.analyze_idle_vms()  # Generic call based on rule
 ```
 
