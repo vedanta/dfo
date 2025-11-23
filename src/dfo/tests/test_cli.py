@@ -45,7 +45,8 @@ def test_help_command(setup_env):
 def test_no_args_shows_help(setup_env):
     """Test that running with no args shows help."""
     result = runner.invoke(app, [])
-    assert result.exit_code == 0
+    # Typer returns exit code 2 for missing command (usage error)
+    assert result.exit_code == 2
     assert "DevFinOps CLI" in result.stdout
 
 

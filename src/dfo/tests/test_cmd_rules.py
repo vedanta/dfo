@@ -33,15 +33,10 @@ def test_rules_list_all(setup_env):
 
     assert result.exit_code == 0
     assert "Optimization Rules" in result.stdout
-    assert "total)" in result.stdout
-    assert "Layer" in result.stdout
-    assert "Type" in result.stdout
-    assert "Metric" in result.stdout
-    assert "Threshold" in result.stdout
-    assert "Period" in result.stdout
-    assert "Status" in result.stdout
-    assert "Enabled:" in result.stdout
-    assert "Disabled:" in result.stdout
+    assert "29 total" in result.stdout  # All rules enhanced now
+    assert "vm(29)" in result.stdout  # Service type count
+    assert "Enabled: 3" in result.stdout  # 3 enabled rules
+    assert "Disabled: 26" in result.stdout  # 26 disabled rules
 
 
 def test_rules_list_by_layer(setup_env):
@@ -50,8 +45,9 @@ def test_rules_list_by_layer(setup_env):
 
     assert result.exit_code == 0
     assert "Optimization Rules" in result.stdout
-    # Should only show Layer 1 rules
-    assert "L1" in result.stdout
+    # Should only show Layer 1 rules (10 rules in layer 1)
+    assert "10 total" in result.stdout
+    assert "vm(10)" in result.stdout
 
 
 def test_rules_list_enabled_only(setup_env):
@@ -244,7 +240,7 @@ def test_rules_enable_command(setup_env, tmp_path, monkeypatch):
 
     assert result.exit_code == 0
     assert "Enabled rule: Test Rule" in result.stdout
-    assert "Updated vm_rules.json" in result.stdout
+    assert "Updated optimization_rules.json" in result.stdout
 
     # Verify file was updated
     with open(temp_rules_file) as f:
@@ -299,7 +295,7 @@ def test_rules_disable_command(setup_env, tmp_path, monkeypatch):
 
     assert result.exit_code == 0
     assert "Disabled rule: Test Rule" in result.stdout
-    assert "Updated vm_rules.json" in result.stdout
+    assert "Updated optimization_rules.json" in result.stdout
 
     # Verify file was updated
     with open(temp_rules_file) as f:

@@ -38,7 +38,7 @@ def mock_vm_inventory_data():
             "test-rg",  # resource_group
             "eastus",  # location
             "Standard_B1s",  # size
-            "VM running",  # power_state
+            "running",  # power_state
             "Linux",  # os_type
             "Regular",  # priority
             json.dumps(cpu_timeseries)  # cpu_timeseries
@@ -67,7 +67,7 @@ def mock_high_cpu_vm():
             "test-rg",
             "eastus",
             "Standard_B2s",
-            "VM running",
+            "running",
             "Windows",
             "Regular",
             json.dumps(cpu_timeseries)
@@ -154,7 +154,7 @@ def test_analyze_idle_vms_no_cpu_metrics(test_db):
         """,
         (
             "vm-789", "no-metrics-vm", "test-rg", "eastus", "Standard_B1s",
-            "VM running", "Linux", "Regular", None,  # No CPU timeseries
+            "running", "Linux", "Regular", None,  # No CPU timeseries
             datetime.now(timezone.utc), "sub-123", "{}"
         )
     )
@@ -191,7 +191,7 @@ def test_analyze_idle_vms_insufficient_days(test_db):
         """,
         (
             "vm-999", "short-data-vm", "test-rg", "eastus", "Standard_B1s",
-            "VM running", "Linux", "Regular", json.dumps(cpu_timeseries),
+            "running", "Linux", "Regular", json.dumps(cpu_timeseries),
             datetime.now(timezone.utc), "sub-123", "{}"
         )
     )
@@ -372,7 +372,7 @@ def test_get_idle_vms(test_db):
         """,
         (
             "vm-123", "idle-vm", "test-rg", "eastus", "Standard_B1s",
-            "VM running", "Linux", "Regular", "[]",
+            "running", "Linux", "Regular", "[]",
             datetime.now(timezone.utc), "sub-123", "{}"
         )
     )
@@ -415,7 +415,7 @@ def test_get_idle_vms_filter_by_severity(test_db):
             """,
             (
                 vm_id, f"vm-{i}", "test-rg", "eastus", "Standard_B1s",
-                "VM running", "Linux", "Regular", "[]",
+                "running", "Linux", "Regular", "[]",
                 datetime.now(timezone.utc), "sub-123", "{}"
             )
         )
@@ -456,7 +456,7 @@ def test_get_idle_vms_with_limit(test_db):
             """,
             (
                 vm_id, f"vm-{i}", "test-rg", "eastus", "Standard_B1s",
-                "VM running", "Linux", "Regular", "[]",
+                "running", "Linux", "Regular", "[]",
                 datetime.now(timezone.utc), "sub-123", "{}"
             )
         )
@@ -502,7 +502,7 @@ def test_get_idle_vm_summary_with_results(test_db):
             """,
             (
                 vm_id, vm_id, "test-rg", "eastus", "Standard_B1s",
-                "VM running", "Linux", "Regular", "[]",
+                "running", "Linux", "Regular", "[]",
                 datetime.now(timezone.utc), "sub-123", "{}"
             )
         )
