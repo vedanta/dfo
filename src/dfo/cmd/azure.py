@@ -9,6 +9,205 @@ app = typer.Typer(help="Azure cloud provider commands")
 console = Console()
 
 
+def _create_simple_progress_handler(progress, task):
+    """Create progress handler for narrow terminals (simple mode).
+
+    Shows compact single-line progress:
+    ⠹ Collecting metrics (7/10)...
+
+    Args:
+        progress: Rich Progress instance
+        task: Task ID from progress.add_task()
+
+    Returns:
+        Callable progress handler function
+    """
+    # Track failures for summary
+    state = {"failed_vms": [], "success_count": 0, "failed_count": 0}
+
+    def handle_progress(stage: str, status: str, data: dict):
+        if stage == "list_vms":
+            if status == "started":
+                progress.update(task, description="Listing VMs...")
+            elif status == "complete":
+                progress.update(task,
+                    description=f"✓ Listed {data['count']} VMs")
+
+        elif stage == "metrics":
+            if status == "started":
+                progress.update(task,
+                    description=f"Collecting metrics (0/{data['total']})...")
+            elif status == "fetching":
+                progress.update(task,
+                    description=f"Collecting metrics ({data['index']}/{data['total']})...")
+            elif status == "complete":
+                state["success_count"] += 1
+            elif status == "failed":
+                state["failed_count"] += 1
+                state["failed_vms"].append({
+                    "name": data["vm_name"],
+                    "error": data.get("error", "Unknown error")
+                })
+
+        elif stage == "database":
+            if status == "started":
+                progress.update(task, description="Storing in database...")
+            elif status == "complete":
+                if state["failed_count"] > 0:
+                    progress.update(task,
+                        description=f"✓ Discovery complete ({state['failed_count']} failures)")
+                else:
+                    progress.update(task, description="✓ Discovery complete")
+
+    # Attach state for access after completion
+    handle_progress.state = state
+    return handle_progress
+
+
+def _create_rich_progress_handler(live):
+    """Create progress handler for wide terminals (rich mode).
+
+    Shows detailed tree view with VM-level progress:
+    ⠹ Listing VMs...              ✓ 10 found
+    ⠸ Collecting metrics:          [━━━━━━━━━━━━━━          ] 70%
+      ├─ testvm1...testvm6         ✓ Complete
+      ├─ testvm7                   ⠹ Active
+      └─ testvm8...testvm10        ⏸ Pending
+    ⠴ Storing in database...       ⏸ Pending
+
+    Args:
+        live: Rich Live display instance
+
+    Returns:
+        Callable progress handler function
+    """
+    from rich.tree import Tree
+
+    # State tracking
+    state = {
+        "total_vms": 0,
+        "completed": 0,
+        "failed": 0,
+        "current_vm": None,
+        "vm_statuses": {},  # {vm_name: {"status": "complete", "points": 336}}
+        "completed_vms": [],
+        "failed_vms": []
+    }
+
+    def update_display():
+        """Regenerate and update the live display."""
+        tree = Tree("📊 Discovery Progress")
+
+        # Stage 1: List VMs
+        if state["total_vms"] > 0:
+            tree.add(f"✓ Listed {state['total_vms']} VMs")
+        else:
+            tree.add("⠹ Listing VMs...")
+
+        # Stage 2: Collect Metrics
+        if state["total_vms"] > 0:
+            completed = state["completed"]
+            failed = state["failed"]
+            total = state["total_vms"]
+            pct = (completed + failed) / total * 100 if total > 0 else 0
+
+            metrics_label = f"Collecting metrics: [cyan]{completed}/{total}[/cyan]"
+            if failed > 0:
+                metrics_label += f" [red](failures: {failed})[/red]"
+
+            metrics_node = tree.add(metrics_label)
+
+            # Show progress bar
+            bar_width = 30
+            filled = int(bar_width * pct / 100)
+            bar = "━" * filled + " " * (bar_width - filled)
+            metrics_node.add(f"[{bar}] {pct:.0f}%")
+
+            # Group completed VMs if > 3
+            if len(state["completed_vms"]) > 3:
+                first_vm = state["completed_vms"][0]
+                last_vm = state["completed_vms"][-1]
+                metrics_node.add(
+                    f"✓ {first_vm}...{last_vm} ({len(state['completed_vms'])} complete)"
+                )
+            else:
+                for vm in state["completed_vms"]:
+                    points = state["vm_statuses"][vm].get("points", 0)
+                    metrics_node.add(f"✓ {vm} - {points} points")
+
+            # Show current VM
+            if state["current_vm"]:
+                metrics_node.add(f"⠹ {state['current_vm']} - Collecting...")
+
+            # Show failed VMs inline
+            for vm in state["failed_vms"]:
+                error = state["vm_statuses"][vm].get("error", "Unknown error")
+                metrics_node.add(f"[red]✗ {vm} - {error[:50]}[/red]")
+
+        # Stage 3: Database
+        if state["completed"] + state["failed"] == state["total_vms"] and state["total_vms"] > 0:
+            tree.add("✓ Stored in database")
+        elif state["total_vms"] > 0:
+            tree.add("⏸ Storing in database (pending)")
+
+        live.update(tree)
+
+    def handle_progress(stage: str, status: str, data: dict):
+        if stage == "list_vms":
+            if status == "complete":
+                state["total_vms"] = data["count"]
+                update_display()
+
+        elif stage == "metrics":
+            if status == "fetching":
+                state["current_vm"] = data["vm_name"]
+                update_display()
+
+            elif status == "complete":
+                vm_name = data["vm_name"]
+                state["vm_statuses"][vm_name] = {
+                    "status": "complete",
+                    "points": data.get("data_points", 0)
+                }
+                state["completed_vms"].append(vm_name)
+                state["completed"] += 1
+                state["current_vm"] = None
+                update_display()
+
+            elif status == "failed":
+                vm_name = data["vm_name"]
+                state["vm_statuses"][vm_name] = {
+                    "status": "failed",
+                    "error": data.get("error", "Unknown error")
+                }
+                state["failed_vms"].append(vm_name)
+                state["failed"] += 1
+                state["current_vm"] = None
+                update_display()
+
+        elif stage == "database":
+            if status == "complete":
+                update_display()
+
+    # Attach state for access after completion
+    # Convert failed_vms to include error details for summary
+    def get_failed_vms_with_errors():
+        return [
+            {
+                "name": vm_name,
+                "error": state["vm_statuses"][vm_name].get("error", "Unknown error")
+            }
+            for vm_name in state["failed_vms"]
+        ]
+
+    handle_progress.state = {
+        "failed_vms": get_failed_vms_with_errors,  # Callable to get current state
+        "get_state": lambda: state  # Access to full state if needed
+    }
+
+    return handle_progress
+
+
 def _show_discovery_visual_summary():
     """Show visual summary of discovered VMs using visualization module."""
     from rich.table import Table
@@ -188,20 +387,50 @@ def discover(
         console.print(f"[dim]Collection period:[/dim] {idle_rule.period_days} days")
         console.print(f"[dim]Metric source:[/dim] Azure Monitor - Percentage CPU\n")
 
-        with Progress(
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
-            console=console
-        ) as progress:
-            task = progress.add_task("Discovering VMs...", total=None)
+        # Detect display mode based on terminal width
+        from dfo.common.terminal import get_display_mode
+        display_mode = get_display_mode(min_width=100)
 
-            # Run discovery
-            inventory = discover_vms(
-                subscription_id=subscription_id,
-                refresh=refresh
-            )
+        # Use appropriate progress display
+        handler = None
+        if display_mode == "simple":
+            # Simple progress for narrow terminals
+            with Progress(
+                SpinnerColumn(),
+                TextColumn("[progress.description]{task.description}"),
+                console=console
+            ) as progress:
+                task = progress.add_task("Starting discovery...", total=None)
+                handler = _create_simple_progress_handler(progress, task)
 
-            progress.update(task, description="✓ Discovery complete")
+                inventory = discover_vms(
+                    subscription_id=subscription_id,
+                    refresh=refresh,
+                    progress_callback=handler
+                )
+
+        else:  # display_mode == "rich"
+            # Rich progress for wide terminals
+            from rich.live import Live
+
+            with Live(console=console, refresh_per_second=4) as live:
+                handler = _create_rich_progress_handler(live)
+
+                inventory = discover_vms(
+                    subscription_id=subscription_id,
+                    refresh=refresh,
+                    progress_callback=handler
+                )
+
+        # Get failure information from handler state
+        failed_vms = []
+        if handler and hasattr(handler, 'state'):
+            state_failed = handler.state.get("failed_vms", [])
+            # Handle both list (simple mode) and callable (rich mode)
+            if callable(state_failed):
+                failed_vms = state_failed()
+            else:
+                failed_vms = state_failed
 
         # Display summary
         summary = Table.grid(padding=(0, 2))
@@ -222,13 +451,61 @@ def discover(
             f"{idle_rule.period_days} days"
         )
 
+        # Add failure count to summary if any
+        if failed_vms:
+            summary.add_row(
+                "Metrics failures:",
+                f"[yellow]{len(failed_vms)}[/yellow]"
+            )
+
         console.print("\n")
+
+        # Choose border color based on failures
+        border_color = "yellow" if failed_vms else "green"
+        summary_title = "[bold]Discovery Summary[/bold]"
+        if failed_vms:
+            summary_title += " [yellow](with warnings)[/yellow]"
+
         console.print(Panel(
             summary,
-            title="[bold]Discovery Summary[/bold]",
-            border_style="green"
+            title=summary_title,
+            border_style=border_color
         ))
-        console.print("\n[green]✓[/green] VM inventory updated in database\n")
+
+        if failed_vms:
+            console.print("\n[yellow]⚠[/yellow]  Discovery completed with some errors\n")
+        else:
+            console.print("\n[green]✓[/green] VM inventory updated in database\n")
+
+        # Show detailed failure information if any errors occurred
+        if failed_vms:
+            console.print("[bold yellow]Metric Collection Failures:[/bold yellow]\n")
+
+            failure_table = Table(show_header=True, header_style="bold yellow")
+            failure_table.add_column("VM Name", style="cyan", width=30)
+            failure_table.add_column("Error", style="red", width=60)
+
+            for failure in failed_vms[:10]:  # Show first 10 failures
+                error_msg = failure.get("error", "Unknown error")
+                # Make common errors more actionable
+                if "ResourceNotFound" in error_msg:
+                    error_msg = "VM not found - may have been deleted"
+                elif "AuthorizationFailed" in error_msg:
+                    error_msg = "Permission denied - check Azure Monitor permissions"
+                elif "Throttled" in error_msg or "TooManyRequests" in error_msg:
+                    error_msg = "Rate limited - try again later or reduce concurrent requests"
+                elif "NetworkError" in error_msg or "timeout" in error_msg.lower():
+                    error_msg = "Network timeout - check connectivity"
+
+                failure_table.add_row(failure["name"], error_msg[:60])
+
+            console.print(failure_table)
+
+            if len(failed_vms) > 10:
+                console.print(f"\n[dim]... and {len(failed_vms) - 10} more failures[/dim]")
+
+            console.print("\n[dim]💡 Tip: Failed VMs are still added to inventory without metrics[/dim]")
+            console.print("[dim]   You can retry discovery to collect missing metrics[/dim]\n")
 
         # Show visual summary if requested
         if visual:
