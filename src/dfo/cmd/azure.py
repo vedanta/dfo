@@ -22,6 +22,9 @@ def _create_simple_progress_handler(progress, task):
     Returns:
         Callable progress handler function
     """
+    # Track failures for summary
+    state = {"failed_vms": [], "success_count": 0, "failed_count": 0}
+
     def handle_progress(stage: str, status: str, data: dict):
         if stage == "list_vms":
             if status == "started":
@@ -37,14 +40,27 @@ def _create_simple_progress_handler(progress, task):
             elif status == "fetching":
                 progress.update(task,
                     description=f"Collecting metrics ({data['index']}/{data['total']})...")
-            # For complete/failed, keep description (just for counting)
+            elif status == "complete":
+                state["success_count"] += 1
+            elif status == "failed":
+                state["failed_count"] += 1
+                state["failed_vms"].append({
+                    "name": data["vm_name"],
+                    "error": data.get("error", "Unknown error")
+                })
 
         elif stage == "database":
             if status == "started":
                 progress.update(task, description="Storing in database...")
             elif status == "complete":
-                progress.update(task, description="✓ Discovery complete")
+                if state["failed_count"] > 0:
+                    progress.update(task,
+                        description=f"✓ Discovery complete ({state['failed_count']} failures)")
+                else:
+                    progress.update(task, description="✓ Discovery complete")
 
+    # Attach state for access after completion
+    handle_progress.state = state
     return handle_progress
 
 
@@ -172,6 +188,22 @@ def _create_rich_progress_handler(live):
         elif stage == "database":
             if status == "complete":
                 update_display()
+
+    # Attach state for access after completion
+    # Convert failed_vms to include error details for summary
+    def get_failed_vms_with_errors():
+        return [
+            {
+                "name": vm_name,
+                "error": state["vm_statuses"][vm_name].get("error", "Unknown error")
+            }
+            for vm_name in state["failed_vms"]
+        ]
+
+    handle_progress.state = {
+        "failed_vms": get_failed_vms_with_errors,  # Callable to get current state
+        "get_state": lambda: state  # Access to full state if needed
+    }
 
     return handle_progress
 
@@ -360,6 +392,7 @@ def discover(
         display_mode = get_display_mode(min_width=100)
 
         # Use appropriate progress display
+        handler = None
         if display_mode == "simple":
             # Simple progress for narrow terminals
             with Progress(
@@ -389,6 +422,16 @@ def discover(
                     progress_callback=handler
                 )
 
+        # Get failure information from handler state
+        failed_vms = []
+        if handler and hasattr(handler, 'state'):
+            state_failed = handler.state.get("failed_vms", [])
+            # Handle both list (simple mode) and callable (rich mode)
+            if callable(state_failed):
+                failed_vms = state_failed()
+            else:
+                failed_vms = state_failed
+
         # Display summary
         summary = Table.grid(padding=(0, 2))
         summary.add_column(style="cyan", justify="right")
@@ -408,13 +451,61 @@ def discover(
             f"{idle_rule.period_days} days"
         )
 
+        # Add failure count to summary if any
+        if failed_vms:
+            summary.add_row(
+                "Metrics failures:",
+                f"[yellow]{len(failed_vms)}[/yellow]"
+            )
+
         console.print("\n")
+
+        # Choose border color based on failures
+        border_color = "yellow" if failed_vms else "green"
+        summary_title = "[bold]Discovery Summary[/bold]"
+        if failed_vms:
+            summary_title += " [yellow](with warnings)[/yellow]"
+
         console.print(Panel(
             summary,
-            title="[bold]Discovery Summary[/bold]",
-            border_style="green"
+            title=summary_title,
+            border_style=border_color
         ))
-        console.print("\n[green]✓[/green] VM inventory updated in database\n")
+
+        if failed_vms:
+            console.print("\n[yellow]⚠[/yellow]  Discovery completed with some errors\n")
+        else:
+            console.print("\n[green]✓[/green] VM inventory updated in database\n")
+
+        # Show detailed failure information if any errors occurred
+        if failed_vms:
+            console.print("[bold yellow]Metric Collection Failures:[/bold yellow]\n")
+
+            failure_table = Table(show_header=True, header_style="bold yellow")
+            failure_table.add_column("VM Name", style="cyan", width=30)
+            failure_table.add_column("Error", style="red", width=60)
+
+            for failure in failed_vms[:10]:  # Show first 10 failures
+                error_msg = failure.get("error", "Unknown error")
+                # Make common errors more actionable
+                if "ResourceNotFound" in error_msg:
+                    error_msg = "VM not found - may have been deleted"
+                elif "AuthorizationFailed" in error_msg:
+                    error_msg = "Permission denied - check Azure Monitor permissions"
+                elif "Throttled" in error_msg or "TooManyRequests" in error_msg:
+                    error_msg = "Rate limited - try again later or reduce concurrent requests"
+                elif "NetworkError" in error_msg or "timeout" in error_msg.lower():
+                    error_msg = "Network timeout - check connectivity"
+
+                failure_table.add_row(failure["name"], error_msg[:60])
+
+            console.print(failure_table)
+
+            if len(failed_vms) > 10:
+                console.print(f"\n[dim]... and {len(failed_vms) - 10} more failures[/dim]")
+
+            console.print("\n[dim]💡 Tip: Failed VMs are still added to inventory without metrics[/dim]")
+            console.print("[dim]   You can retry discovery to collect missing metrics[/dim]\n")
 
         # Show visual summary if requested
         if visual:
