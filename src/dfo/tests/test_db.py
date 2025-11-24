@@ -35,9 +35,22 @@ def test_db(tmp_path, monkeypatch):
 
 def test_db_initialization(test_db):
     """Test database is initialized with schema."""
+    # Discovery tables
     assert test_db.table_exists("vm_inventory")
+
+    # Analysis tables
     assert test_db.table_exists("vm_idle_analysis")
+    assert test_db.table_exists("vm_low_cpu_analysis")
+    assert test_db.table_exists("vm_stopped_vms_analysis")
+
+    # Execution tables
     assert test_db.table_exists("vm_actions")
+
+    # Cache tables
+    assert test_db.table_exists("vm_pricing_cache")
+
+    # Reference tables
+    assert test_db.table_exists("vm_equivalence")
 
 
 def test_db_file_creation(tmp_path, monkeypatch):

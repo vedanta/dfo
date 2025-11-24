@@ -66,9 +66,9 @@
       "type": "Idle VM Detection",
       "key": "idle-vms",
       "category": "compute",
-      "description": "Detect underutilized VMs based on CPU and RAM metrics over time",
+      "description": "Detect underutilized VMs based on CPU metrics over time",
       "module": "idle_vms",
-      "metric": "CPU/RAM <5%",
+      "metric": "CPU utilization",
       "threshold": "<5%",
       "period": "7d",
       "unit": "percent",
@@ -83,7 +83,7 @@
         "json"
       ],
       "providers": {
-        "azure": "CPU% + RAM% time series",
+        "azure": "Azure Monitor - Percentage CPU",
         "aws": "AWS: CPUUtilization + mem_used_percent",
         "gcp": "GCP: low CPU+RAM"
       }

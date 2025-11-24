@@ -318,11 +318,23 @@ def test_azure_analyze_idle_vms_success(setup_env, test_db):
                return_value={"monthly_cost": 30.37, "equivalent_sku": None, "hourly_price": 0.0416}):
         result = runner.invoke(app, ["azure", "analyze", "idle-vms"])
 
-    assert result.exit_code == 0
+    # Debug failing test
+    if result.exit_code != 0:
+        print("\n=== DEBUG INFO ===")
+        print(f"Exit code: {result.exit_code}")
+        print(f"Stdout length: {len(result.stdout)}")
+        print(f"Stdout: {result.stdout[:1000]}")  # First 1000 chars
+        if hasattr(result, 'stderr'):
+            print(f"Stderr: {result.stderr}")
+        if result.exception:
+            print(f"Exception type: {type(result.exception)}")
+            print(f"Exception: {result.exception}")
+
+    assert result.exit_code == 0, f"Command failed with exit code {result.exit_code}. Output: {result.stdout[:200]}"
     assert "Starting Idle VM Detection" in result.stdout
     assert "Analysis complete" in result.stdout
     # Note: Test data may not trigger idle detection due to DuckDB query logic
-    assert ("Idle VMs" in result.stdout or "No issues detected" in result.stdout)
+    assert ("idle vms identified" in result.stdout.lower() or "No issues detected" in result.stdout)
 
 
 def test_azure_analyze_no_idle_vms(setup_env, test_db):
@@ -418,7 +430,86 @@ def test_azure_analyze_custom_threshold(setup_env, test_db):
         # Should detect with custom threshold (10%)
         result = runner.invoke(app, ["azure", "analyze", "idle-vms", "--threshold", "10.0"])
         assert result.exit_code == 0
-        assert ("Idle VMs" in result.stdout or "No issues detected" in result.stdout)
+        assert ("idle vms identified" in result.stdout.lower() or "No issues detected" in result.stdout)
+
+
+def test_azure_analyze_low_cpu_success(setup_env, test_db):
+    """Test successful low-cpu VM analysis."""
+    from unittest.mock import patch
+    from datetime import datetime, timezone, timedelta
+    from dfo.db.duck import DuckDBManager
+    import json
+
+    db = DuckDBManager()
+
+    # Generate 14 days of hourly CPU data with low usage (15%)
+    base_time = datetime(2024, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
+    cpu_data = []
+    for day in range(14):
+        for hour in range(24):
+            timestamp = base_time + timedelta(days=day, hours=hour)
+            cpu_data.append({
+                "timestamp": timestamp.isoformat(),
+                "average": 15.0  # Low CPU but above idle threshold
+            })
+
+    db.execute_query(
+        """
+        INSERT INTO vm_inventory
+        (vm_id, name, resource_group, location, size, power_state,
+         os_type, priority, cpu_timeseries, discovered_at, subscription_id, tags)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            "vm-456", "low-cpu-vm", "test-rg", "eastus", "Standard_D4s_v5",
+            "running", "Linux", "Regular", json.dumps(cpu_data),
+            datetime.now(timezone.utc), "sub-123", "{}"
+        )
+    )
+
+    with patch('dfo.analyze.low_cpu.get_vm_monthly_cost_with_metadata',
+               return_value={"monthly_cost": 140.16, "equivalent_sku": None, "hourly_price": 0.192}):
+        result = runner.invoke(app, ["azure", "analyze", "low-cpu"])
+
+    assert result.exit_code == 0, f"Command failed: {result.stdout}"
+    assert "Starting Right-Sizing (CPU)" in result.stdout
+    assert "Analysis complete" in result.stdout
+    assert ("low cpu identified" in result.stdout.lower() or "No issues detected" in result.stdout)
+
+
+def test_azure_analyze_stopped_vms_success(setup_env, test_db):
+    """Test successful stopped VMs analysis."""
+    from unittest.mock import patch
+    from datetime import datetime, timezone, timedelta
+    from dfo.db.duck import DuckDBManager
+
+    db = DuckDBManager()
+
+    # Insert a VM that was stopped 60 days ago
+    stopped_date = datetime.now(timezone.utc) - timedelta(days=60)
+
+    db.execute_query(
+        """
+        INSERT INTO vm_inventory
+        (vm_id, name, resource_group, location, size, power_state,
+         os_type, priority, cpu_timeseries, discovered_at, subscription_id, tags)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            "vm-789", "stopped-vm", "test-rg", "eastus", "Standard_B2s",
+            "deallocated", "Linux", "Regular", "[]",
+            stopped_date, "sub-123", "{}"
+        )
+    )
+
+    with patch('dfo.analyze.stopped_vms.get_vm_monthly_cost_with_metadata',
+               return_value={"monthly_cost": 30.37, "equivalent_sku": None, "hourly_price": 0.0416}):
+        result = runner.invoke(app, ["azure", "analyze", "stopped-vms"])
+
+    assert result.exit_code == 0, f"Command failed: {result.stdout}"
+    assert "Starting Shutdown Detection" in result.stdout
+    assert "Analysis complete" in result.stdout
+    assert ("stopped vms identified" in result.stdout.lower() or "No issues detected" in result.stdout)
 
 
 def test_azure_report_stub(setup_env):
