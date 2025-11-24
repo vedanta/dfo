@@ -184,9 +184,9 @@ def discover(
         idle_rule = engine.get_rule_by_type("Idle VM Detection")
 
         console.print("\n[cyan]Starting VM discovery...[/cyan]")
-        console.print(f"[dim]Collecting metrics:[/dim] CPU utilization")
+        console.print(f"[dim]Collecting metrics:[/dim] CPU utilization (hourly)")
         console.print(f"[dim]Collection period:[/dim] {idle_rule.period_days} days")
-        console.print(f"[dim]Metric source:[/dim] {idle_rule.providers['azure']}\n")
+        console.print(f"[dim]Metric source:[/dim] Azure Monitor - Percentage CPU\n")
 
         with Progress(
             SpinnerColumn(),
