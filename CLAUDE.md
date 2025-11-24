@@ -185,6 +185,98 @@ Configurable via environment:
 - `DFO_IDLE_DAYS` – minimum days below threshold (default: 14)
 - `DFO_DRY_RUN_DEFAULT` – execution safety flag (default: true)
 
+### Progress Callbacks and Terminal Adaptation
+
+Long-running operations (e.g., VM discovery) use a callback-based progress system that adapts to terminal capabilities:
+
+**Architecture:**
+1. **Event System**: Business logic emits progress events via callback
+   - Type: `Callable[[stage: str, status: str, data: Dict[str, Any]], None]`
+   - Events: `(stage, status, data)` tuples
+   - Example stages: "list_vms", "metrics", "database"
+   - Example statuses: "started", "complete", "fetching", "failed"
+
+2. **Terminal Detection**: `common/terminal.py` provides `get_display_mode()`
+   - Checks terminal width (via `shutil.get_terminal_size()`)
+   - Checks TTY status (via `sys.stdout.isatty()`)
+   - Returns "simple" or "rich" based on capabilities
+   - Graceful fallback to "simple" on errors
+
+3. **Display Handlers**: CLI creates appropriate handler based on mode
+   - **Simple**: Single-line spinner (Rich Progress)
+   - **Rich**: Tree view with live updates (Rich Live + Tree)
+   - Both track failures for post-completion summary
+
+4. **Error Handling**: Failed operations emit "failed" events
+   - Handlers track failures separately
+   - CLI shows detailed failure table after completion
+   - Error messages mapped to actionable suggestions
+
+**Implementation Pattern:**
+
+```python
+# In business logic module (discover/vms.py)
+def discover_vms(
+    subscription_id: str,
+    progress_callback: Optional[ProgressCallback] = None
+) -> List[VMInventory]:
+    if progress_callback:
+        progress_callback("list_vms", "started", {})
+
+    vms = list_vms(client)
+
+    if progress_callback:
+        progress_callback("list_vms", "complete", {"count": len(vms)})
+
+    for idx, vm in enumerate(vms):
+        try:
+            if progress_callback:
+                progress_callback("metrics", "fetching", {
+                    "vm_name": vm["name"],
+                    "index": idx + 1,
+                    "total": len(vms)
+                })
+
+            metrics = get_cpu_metrics(client, vm["vm_id"])
+
+            if progress_callback:
+                progress_callback("metrics", "complete", {
+                    "vm_name": vm["name"],
+                    "data_points": len(metrics)
+                })
+        except Exception as e:
+            if progress_callback:
+                progress_callback("metrics", "failed", {
+                    "vm_name": vm["name"],
+                    "error": str(e)
+                })
+
+# In CLI command (cmd/azure.py)
+from dfo.common.terminal import get_display_mode
+
+display_mode = get_display_mode(min_width=100)
+
+if display_mode == "simple":
+    with Progress(...) as progress:
+        handler = _create_simple_progress_handler(progress, task)
+        inventory = discover_vms(progress_callback=handler)
+else:  # rich
+    with Live(...) as live:
+        handler = _create_rich_progress_handler(live)
+        inventory = discover_vms(progress_callback=handler)
+
+# Show failure summary if errors occurred
+if handler.state["failed_vms"]:
+    console.print("[yellow]Metric Collection Failures:[/yellow]")
+    # Display actionable error messages
+```
+
+**Testing**: See `tests/test_discovery_progress.py` for patterns on testing:
+- Terminal detection with mocked `shutil.get_terminal_size()`
+- Progress callback events with event capture
+- Handler state tracking
+- Error message mapping
+
 ## Extensibility
 
 ### Adding New Cloud Providers

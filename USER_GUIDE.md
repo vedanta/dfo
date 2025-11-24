@@ -309,6 +309,29 @@ You're ready! 🎉
 ./dfo azure discover --no-refresh    # Append (don't drop existing data)
 ```
 
+**Progress Display Modes**
+
+Discovery automatically adapts its progress display based on your terminal:
+
+- **Rich Mode** (≥100 columns, interactive terminal):
+  - Tree view with real-time VM progress
+  - Progress bar showing completion percentage
+  - Live success/failure counts
+  - Failed VMs shown inline with error messages
+  - Ideal for interactive sessions
+
+- **Simple Mode** (< 100 columns, pipes, CI):
+  - Single-line spinner with counts
+  - Compact progress updates
+  - Failure count in final message
+  - Ideal for narrow terminals or automation
+
+**After Discovery**:
+- Summary panel shows total VMs, metrics coverage, and failures
+- Detailed failure table if any errors occurred
+- Actionable error messages (permissions, rate limits, network issues)
+- Tips for retrying failed metric collections
+
 #### Browse Inventory
 
 ```bash
