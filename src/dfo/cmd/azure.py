@@ -9,6 +9,173 @@ app = typer.Typer(help="Azure cloud provider commands")
 console = Console()
 
 
+def _create_simple_progress_handler(progress, task):
+    """Create progress handler for narrow terminals (simple mode).
+
+    Shows compact single-line progress:
+    ⠹ Collecting metrics (7/10)...
+
+    Args:
+        progress: Rich Progress instance
+        task: Task ID from progress.add_task()
+
+    Returns:
+        Callable progress handler function
+    """
+    def handle_progress(stage: str, status: str, data: dict):
+        if stage == "list_vms":
+            if status == "started":
+                progress.update(task, description="Listing VMs...")
+            elif status == "complete":
+                progress.update(task,
+                    description=f"✓ Listed {data['count']} VMs")
+
+        elif stage == "metrics":
+            if status == "started":
+                progress.update(task,
+                    description=f"Collecting metrics (0/{data['total']})...")
+            elif status == "fetching":
+                progress.update(task,
+                    description=f"Collecting metrics ({data['index']}/{data['total']})...")
+            # For complete/failed, keep description (just for counting)
+
+        elif stage == "database":
+            if status == "started":
+                progress.update(task, description="Storing in database...")
+            elif status == "complete":
+                progress.update(task, description="✓ Discovery complete")
+
+    return handle_progress
+
+
+def _create_rich_progress_handler(live):
+    """Create progress handler for wide terminals (rich mode).
+
+    Shows detailed tree view with VM-level progress:
+    ⠹ Listing VMs...              ✓ 10 found
+    ⠸ Collecting metrics:          [━━━━━━━━━━━━━━          ] 70%
+      ├─ testvm1...testvm6         ✓ Complete
+      ├─ testvm7                   ⠹ Active
+      └─ testvm8...testvm10        ⏸ Pending
+    ⠴ Storing in database...       ⏸ Pending
+
+    Args:
+        live: Rich Live display instance
+
+    Returns:
+        Callable progress handler function
+    """
+    from rich.tree import Tree
+
+    # State tracking
+    state = {
+        "total_vms": 0,
+        "completed": 0,
+        "failed": 0,
+        "current_vm": None,
+        "vm_statuses": {},  # {vm_name: {"status": "complete", "points": 336}}
+        "completed_vms": [],
+        "failed_vms": []
+    }
+
+    def update_display():
+        """Regenerate and update the live display."""
+        tree = Tree("📊 Discovery Progress")
+
+        # Stage 1: List VMs
+        if state["total_vms"] > 0:
+            tree.add(f"✓ Listed {state['total_vms']} VMs")
+        else:
+            tree.add("⠹ Listing VMs...")
+
+        # Stage 2: Collect Metrics
+        if state["total_vms"] > 0:
+            completed = state["completed"]
+            failed = state["failed"]
+            total = state["total_vms"]
+            pct = (completed + failed) / total * 100 if total > 0 else 0
+
+            metrics_label = f"Collecting metrics: [cyan]{completed}/{total}[/cyan]"
+            if failed > 0:
+                metrics_label += f" [red](failures: {failed})[/red]"
+
+            metrics_node = tree.add(metrics_label)
+
+            # Show progress bar
+            bar_width = 30
+            filled = int(bar_width * pct / 100)
+            bar = "━" * filled + " " * (bar_width - filled)
+            metrics_node.add(f"[{bar}] {pct:.0f}%")
+
+            # Group completed VMs if > 3
+            if len(state["completed_vms"]) > 3:
+                first_vm = state["completed_vms"][0]
+                last_vm = state["completed_vms"][-1]
+                metrics_node.add(
+                    f"✓ {first_vm}...{last_vm} ({len(state['completed_vms'])} complete)"
+                )
+            else:
+                for vm in state["completed_vms"]:
+                    points = state["vm_statuses"][vm].get("points", 0)
+                    metrics_node.add(f"✓ {vm} - {points} points")
+
+            # Show current VM
+            if state["current_vm"]:
+                metrics_node.add(f"⠹ {state['current_vm']} - Collecting...")
+
+            # Show failed VMs inline
+            for vm in state["failed_vms"]:
+                error = state["vm_statuses"][vm].get("error", "Unknown error")
+                metrics_node.add(f"[red]✗ {vm} - {error[:50]}[/red]")
+
+        # Stage 3: Database
+        if state["completed"] + state["failed"] == state["total_vms"] and state["total_vms"] > 0:
+            tree.add("✓ Stored in database")
+        elif state["total_vms"] > 0:
+            tree.add("⏸ Storing in database (pending)")
+
+        live.update(tree)
+
+    def handle_progress(stage: str, status: str, data: dict):
+        if stage == "list_vms":
+            if status == "complete":
+                state["total_vms"] = data["count"]
+                update_display()
+
+        elif stage == "metrics":
+            if status == "fetching":
+                state["current_vm"] = data["vm_name"]
+                update_display()
+
+            elif status == "complete":
+                vm_name = data["vm_name"]
+                state["vm_statuses"][vm_name] = {
+                    "status": "complete",
+                    "points": data.get("data_points", 0)
+                }
+                state["completed_vms"].append(vm_name)
+                state["completed"] += 1
+                state["current_vm"] = None
+                update_display()
+
+            elif status == "failed":
+                vm_name = data["vm_name"]
+                state["vm_statuses"][vm_name] = {
+                    "status": "failed",
+                    "error": data.get("error", "Unknown error")
+                }
+                state["failed_vms"].append(vm_name)
+                state["failed"] += 1
+                state["current_vm"] = None
+                update_display()
+
+        elif stage == "database":
+            if status == "complete":
+                update_display()
+
+    return handle_progress
+
+
 def _show_discovery_visual_summary():
     """Show visual summary of discovered VMs using visualization module."""
     from rich.table import Table
