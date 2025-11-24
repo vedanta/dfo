@@ -163,7 +163,7 @@ The `dfo` wrapper script allows you to run commands from the root directory:
 ./dfo rules show idle-vms        # Show rule details by key
 ./dfo rules show "Idle VM Detection"  # Show rule details by type
 ./dfo rules enable idle-vms      # Enable a rule by key
-./dfo rules disable shutdown-vms # Disable a rule by key
+./dfo rules disable stopped-vms # Disable a rule by key
 
 # Coming soon in Milestones 5-6:
 ./dfo azure report idle-vms      # Generate enhanced reports
