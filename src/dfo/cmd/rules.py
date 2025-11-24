@@ -275,6 +275,187 @@ def show_rule(
         raise typer.Exit(1)
 
 
+@app.command("validate")
+def validate_rules(
+    verbose: bool = typer.Option(
+        False,
+        "--verbose", "-v",
+        help="Show detailed validation results"
+    )
+):
+    """Validate all rules files in the rules directory.
+
+    Checks:
+    - File schema (service, version, rules fields)
+    - Rule structure (required fields)
+    - Duplicate keys across files
+    - Duplicate rule types
+    - JSON syntax errors
+
+    Example:
+        dfo rules validate
+        dfo rules validate --verbose
+    """
+    import json
+    from pathlib import Path
+    from collections import defaultdict
+
+    console.print("[bold cyan]Validating Rules Files[/bold cyan]\n")
+
+    rules_dir = Path(__file__).parent.parent / "rules"
+    rule_files = sorted(rules_dir.glob("*_rules.json"))
+
+    if not rule_files:
+        console.print("[red]✗[/red] No rules files found matching pattern *_rules.json")
+        raise typer.Exit(1)
+
+    total_files = 0
+    valid_files = 0
+    total_rules = 0
+    errors = []
+    warnings = []
+
+    # Track duplicates across all files
+    all_keys = defaultdict(list)  # key -> [file1, file2, ...]
+    all_types = defaultdict(list)  # type -> [file1, file2, ...]
+
+    for rule_file in rule_files:
+        total_files += 1
+        file_valid = True
+        service_name = rule_file.stem.replace("_rules", "")
+
+        if verbose:
+            console.print(f"[dim]Validating {rule_file.name}...[/dim]")
+
+        # 1. Check JSON syntax
+        try:
+            with open(rule_file) as f:
+                data = json.load(f)
+        except json.JSONDecodeError as e:
+            errors.append(f"{rule_file.name}: Invalid JSON - {e}")
+            file_valid = False
+            continue
+
+        # 2. Check schema - required top-level fields
+        required_fields = ["service", "rules"]
+        missing_fields = [f for f in required_fields if f not in data]
+        if missing_fields:
+            errors.append(f"{rule_file.name}: Missing required fields: {', '.join(missing_fields)}")
+            file_valid = False
+            continue
+
+        # 3. Check optional but recommended fields
+        if "version" not in data:
+            warnings.append(f"{rule_file.name}: Missing optional field 'version'")
+        if "description" not in data:
+            warnings.append(f"{rule_file.name}: Missing optional field 'description'")
+
+        # 4. Validate service field matches filename
+        if data.get("service") != service_name:
+            warnings.append(
+                f"{rule_file.name}: Service field '{data.get('service')}' "
+                f"doesn't match filename (expected '{service_name}')"
+            )
+
+        # 5. Check rules array
+        if not isinstance(data.get("rules"), list):
+            errors.append(f"{rule_file.name}: 'rules' must be an array")
+            file_valid = False
+            continue
+
+        if len(data["rules"]) == 0:
+            warnings.append(f"{rule_file.name}: No rules defined (empty array)")
+
+        # 6. Validate each rule
+        rule_required_fields = [
+            "service_type", "layer", "sub_layer", "type",
+            "metric", "threshold", "period", "unit", "providers"
+        ]
+
+        for idx, rule in enumerate(data["rules"]):
+            rule_num = idx + 1
+
+            # Check required fields
+            missing = [f for f in rule_required_fields if f not in rule]
+            if missing:
+                errors.append(
+                    f"{rule_file.name} rule #{rule_num}: Missing required fields: {', '.join(missing)}"
+                )
+                file_valid = False
+                continue
+
+            # Track keys and types for duplicate detection
+            if "key" in rule and rule["key"]:
+                all_keys[rule["key"]].append(rule_file.name)
+            if "type" in rule:
+                all_types[rule["type"]].append(rule_file.name)
+
+            # Validate providers is a dict
+            if not isinstance(rule.get("providers"), dict):
+                errors.append(f"{rule_file.name} rule #{rule_num}: 'providers' must be an object")
+                file_valid = False
+
+            # Check for recommended fields
+            if "key" not in rule or not rule.get("key"):
+                warnings.append(f"{rule_file.name} rule #{rule_num} ({rule.get('type', 'unknown')}): No CLI key defined")
+
+            if "module" not in rule or not rule.get("module"):
+                warnings.append(f"{rule_file.name} rule #{rule_num} ({rule.get('type', 'unknown')}): No module specified")
+
+            total_rules += 1
+
+        if file_valid:
+            valid_files += 1
+            if verbose:
+                console.print(f"  [green]✓[/green] {rule_file.name} - {len(data['rules'])} rules")
+
+    # Check for duplicate keys across all files
+    duplicate_keys = {k: files for k, files in all_keys.items() if len(files) > 1}
+    if duplicate_keys:
+        for key, files in duplicate_keys.items():
+            errors.append(f"Duplicate key '{key}' found in: {', '.join(files)}")
+
+    # Check for duplicate types across all files
+    duplicate_types = {t: files for t, files in all_types.items() if len(files) > 1}
+    if duplicate_types:
+        for rule_type, files in duplicate_types.items():
+            warnings.append(f"Duplicate rule type '{rule_type}' found in: {', '.join(files)}")
+
+    # Print summary
+    console.print()
+    console.print("[bold]Validation Summary[/bold]")
+    console.print(f"  Files validated: {total_files}")
+    console.print(f"  Valid files: [green]{valid_files}[/green]")
+    console.print(f"  Invalid files: [red]{total_files - valid_files}[/red]")
+    console.print(f"  Total rules: {total_rules}")
+    console.print(f"  Errors: [red]{len(errors)}[/red]")
+    console.print(f"  Warnings: [yellow]{len(warnings)}[/yellow]")
+    console.print()
+
+    # Print errors
+    if errors:
+        console.print("[bold red]Errors:[/bold red]")
+        for error in errors:
+            console.print(f"  [red]✗[/red] {error}")
+        console.print()
+
+    # Print warnings
+    if warnings:
+        console.print("[bold yellow]Warnings:[/bold yellow]")
+        for warning in warnings:
+            console.print(f"  [yellow]⚠[/yellow] {warning}")
+        console.print()
+
+    # Final result
+    if errors:
+        console.print("[red]✗ Validation failed[/red]")
+        raise typer.Exit(1)
+    elif warnings:
+        console.print("[yellow]⚠ Validation passed with warnings[/yellow]")
+    else:
+        console.print("[green]✓ All rules files are valid[/green]")
+
+
 @app.command("layers")
 def show_layers():
     """Show rule layers and their descriptions.

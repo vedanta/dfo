@@ -349,3 +349,33 @@ def test_dfo_disable_rules_env_var(setup_env, monkeypatch):
     assert result.exit_code == 0
     # The rule should show as disabled due to env override
     assert "Disabled" in result.stdout
+
+
+def test_rules_validate_command(setup_env):
+    """Test validate command with valid rules."""
+    result = runner.invoke(app, ["rules", "validate"])
+
+    assert result.exit_code == 0
+    assert "Validation Summary" in result.stdout
+    assert "Valid files:" in result.stdout
+    assert "✓ All rules files are valid" in result.stdout or "Validation passed with warnings" in result.stdout
+
+
+def test_rules_validate_verbose(setup_env):
+    """Test validate command with verbose output."""
+    result = runner.invoke(app, ["rules", "validate", "--verbose"])
+
+    assert result.exit_code == 0
+    assert "Validating vm_rules.json" in result.stdout
+    assert "Validation Summary" in result.stdout
+
+
+def test_rules_validate_help(setup_env):
+    """Test validate command help."""
+    result = runner.invoke(app, ["rules", "validate", "--help"])
+
+    assert result.exit_code == 0
+    assert "Validate all rules files" in result.stdout
+    assert "--verbose" in result.stdout
+    assert "File schema" in result.stdout
+    assert "Duplicate keys" in result.stdout
