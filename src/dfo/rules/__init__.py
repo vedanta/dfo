@@ -147,25 +147,130 @@ class OptimizationRule(BaseModel):
 class RuleEngine:
     """Load and manage optimization rules."""
 
-    def __init__(self, rules_file: str = "optimization_rules.json"):
+    def __init__(self, service_filter: Optional[str] = None, rules_file: Optional[str] = None):
         """Initialize rule engine.
 
         Args:
-            rules_file: Path to rules JSON file (relative to dfo/rules/)
+            service_filter: Optional service name to load only specific rules
+                          (e.g., "vm", "storage"). If None, loads all.
+            rules_file: DEPRECATED. Path to legacy rules JSON file.
+                       For backward compatibility only.
         """
-        self.rules_path = Path(__file__).parent / rules_file
         self._rules: List[OptimizationRule] = []
-        self._load_rules()
+        self._service_filter = service_filter
+
+        # Load from service-specific files (new method)
+        self._load_service_rules()
+
+        # Backward compatibility: Load from legacy file if no rules loaded
+        if not self._rules and rules_file:
+            import warnings
+            warnings.warn(
+                f"Using legacy rules_file parameter is deprecated. "
+                f"Rules are now loaded from service-specific files (vm_rules.json, etc.)",
+                DeprecationWarning,
+                stacklevel=2
+            )
+            self.rules_path = Path(__file__).parent / rules_file
+            self._load_legacy_rules()
+
+        # Fallback: Load from legacy optimization_rules.json if still no rules
+        if not self._rules:
+            self._load_legacy_rules_fallback()
+
         self._apply_config_overrides()
 
-    def _load_rules(self) -> None:
-        """Load rules from JSON file."""
+    def _load_service_rules(self) -> None:
+        """Load rules from service-specific *_rules.json files."""
+        rules_dir = Path(__file__).parent
+
+        # Find all service rule files matching pattern *_rules.json
+        rule_files = sorted(rules_dir.glob("*_rules.json"))
+
+        for rule_file in rule_files:
+            # Extract service name from filename (e.g., "vm" from "vm_rules.json")
+            service_name = rule_file.stem.replace("_rules", "")
+
+            # Skip if filtering for specific service
+            if self._service_filter and service_name != self._service_filter:
+                continue
+
+            try:
+                with open(rule_file) as f:
+                    data = json.load(f)
+
+                # Validate schema
+                if "service" not in data or "rules" not in data:
+                    import warnings
+                    warnings.warn(
+                        f"Invalid schema in {rule_file}: missing 'service' or 'rules' field. "
+                        f"Expected format: {{'service': 'vm', 'version': '1.0', 'rules': [...]}}",
+                        UserWarning
+                    )
+                    continue
+
+                # Load rules from this service file
+                for rule_dict in data.get("rules", []):
+                    rule = OptimizationRule(**rule_dict)
+                    self._rules.append(rule)
+
+            except json.JSONDecodeError as e:
+                import warnings
+                warnings.warn(
+                    f"Failed to parse {rule_file}: {e}",
+                    UserWarning
+                )
+                continue
+            except Exception as e:
+                import warnings
+                warnings.warn(
+                    f"Error loading rules from {rule_file}: {e}",
+                    UserWarning
+                )
+                continue
+
+    def _load_legacy_rules(self) -> None:
+        """Load rules from legacy optimization_rules.json format.
+
+        DEPRECATED: For backward compatibility only.
+        """
+        if not hasattr(self, 'rules_path') or not self.rules_path.exists():
+            return
+
         with open(self.rules_path) as f:
             data = json.load(f)
 
-        for rule_data in data["optimizations"]:
+        for rule_data in data.get("optimizations", []):
             rule = OptimizationRule(**rule_data)
             self._rules.append(rule)
+
+    def _load_legacy_rules_fallback(self) -> None:
+        """Fallback: Load from optimization_rules.json if no service files found.
+
+        DEPRECATED: For backward compatibility during migration period.
+        """
+        legacy_file = Path(__file__).parent / "optimization_rules.json"
+
+        if legacy_file.exists():
+            import warnings
+            warnings.warn(
+                "Loading rules from optimization_rules.json (legacy format). "
+                "Please migrate to service-specific files (vm_rules.json, storage_rules.json, etc.). "
+                "See docs/service_based_rules_refactor.md for migration guide.",
+                DeprecationWarning,
+                stacklevel=3
+            )
+
+            with open(legacy_file) as f:
+                data = json.load(f)
+
+            for rule_data in data.get("optimizations", []):
+                # Apply service filter if specified
+                if self._service_filter and rule_data.get("service_type") != self._service_filter:
+                    continue
+
+                rule = OptimizationRule(**rule_data)
+                self._rules.append(rule)
 
     def _apply_config_overrides(self) -> None:
         """Apply user configuration overrides to rules.
@@ -387,56 +492,77 @@ class RuleEngine:
         return False
 
     def save_rules(self) -> None:
-        """Save current rules state back to JSON file.
+        """Save current rules state back to service-specific JSON files.
 
         This persists any enable/disable changes made via enable_rule/disable_rule.
+        Rules are saved to their respective service files (vm_rules.json, etc.)
         """
-        # Build output structure
-        rules_data = []
+        rules_dir = Path(__file__).parent
+
+        # Group rules by service type
+        rules_by_service = {}
         for rule in self._rules:
-            rule_dict = {
-                "service_type": rule.service_type,
-                "layer": rule.layer,
-                "sub_layer": rule.sub_layer,
-                "type": rule.type,
+            service = rule.service_type
+            if service not in rules_by_service:
+                rules_by_service[service] = []
+            rules_by_service[service].append(rule)
+
+        # Save each service's rules to its own file
+        for service, service_rules in rules_by_service.items():
+            service_file = rules_dir / f"{service}_rules.json"
+
+            # Build rule data
+            rules_data = []
+            for rule in service_rules:
+                rule_dict = {
+                    "service_type": rule.service_type,
+                    "layer": rule.layer,
+                    "sub_layer": rule.sub_layer,
+                    "type": rule.type,
+                }
+
+                # Add optional new fields if present
+                if rule.key:
+                    rule_dict["key"] = rule.key
+                if rule.category:
+                    rule_dict["category"] = rule.category
+                if rule.description:
+                    rule_dict["description"] = rule.description
+                if rule.module:
+                    rule_dict["module"] = rule.module
+
+                # Add core fields
+                rule_dict.update({
+                    "metric": rule.metric,
+                    "threshold": rule.threshold,
+                    "period": rule.period,
+                    "unit": rule.unit,
+                    "enabled": rule.enabled,
+                })
+
+                # Add actions and export_formats if present
+                if rule.actions:
+                    rule_dict["actions"] = rule.actions
+                if rule.export_formats:
+                    rule_dict["export_formats"] = rule.export_formats
+
+                # Add providers last
+                rule_dict["providers"] = rule.providers
+
+                rules_data.append(rule_dict)
+
+            # Create service file structure
+            output = {
+                "service": service,
+                "version": "1.0",
+                "description": f"{service.upper()} optimization rules",
+                "rules": rules_data
             }
 
-            # Add optional new fields if present
-            if rule.key:
-                rule_dict["key"] = rule.key
-            if rule.category:
-                rule_dict["category"] = rule.category
-            if rule.description:
-                rule_dict["description"] = rule.description
-            if rule.module:
-                rule_dict["module"] = rule.module
-
-            # Add core fields
-            rule_dict.update({
-                "metric": rule.metric,
-                "threshold": rule.threshold,
-                "period": rule.period,
-                "unit": rule.unit,
-                "enabled": rule.enabled,
-            })
-
-            # Add actions and export_formats if present
-            if rule.actions:
-                rule_dict["actions"] = rule.actions
-            if rule.export_formats:
-                rule_dict["export_formats"] = rule.export_formats
-
-            # Add providers last
-            rule_dict["providers"] = rule.providers
-
-            rules_data.append(rule_dict)
-
-        output = {"optimizations": rules_data}
-
-        # Write to file
-        with open(self.rules_path, 'w') as f:
-            json.dump(output, f, indent=2)
-            f.write('\n')  # Add trailing newline
+            # Write to service-specific file
+            with open(service_file, 'w') as f:
+                json.dump(output, f, indent=2)
+                f.write('\n')  # Add trailing newline
 
 
 # Singleton instance

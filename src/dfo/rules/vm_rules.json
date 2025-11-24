@@ -1,14 +1,30 @@
 {
-  "optimizations": [
+  "service": "vm",
+  "version": "1.0",
+  "description": "Virtual Machine optimization rules across compute, cost, storage, networking, and architecture domains",
+  "rules": [
     {
+      "service_type": "vm",
       "layer": 1,
       "sub_layer": "Self-Contained VM",
       "type": "Right-Sizing (CPU)",
+      "key": "low-cpu",
+      "category": "compute",
+      "description": "Identify VMs with consistently low CPU utilization for downsizing",
+      "module": "low_cpu",
       "metric": "CPU utilization",
       "threshold": "<20%",
       "period": "14d",
       "unit": "percent",
       "enabled": true,
+      "actions": [
+        "resize",
+        "report"
+      ],
+      "export_formats": [
+        "csv",
+        "json"
+      ],
       "providers": {
         "azure": "Azure Monitor: Percentage CPU",
         "aws": "AWS: CPUUtilization",
@@ -16,14 +32,27 @@
       }
     },
     {
+      "service_type": "vm",
       "layer": 1,
       "sub_layer": "Self-Contained VM",
       "type": "Right-Sizing (Memory)",
+      "key": "low-memory",
+      "category": "compute",
+      "description": "Identify VMs with consistently low memory utilization for downsizing",
+      "module": "low_memory",
       "metric": "Memory utilization",
       "threshold": "<30%",
       "period": "14d",
       "unit": "percent",
       "enabled": false,
+      "actions": [
+        "resize",
+        "report"
+      ],
+      "export_formats": [
+        "csv",
+        "json"
+      ],
       "providers": {
         "azure": "Azure Monitor: Memory Percent Used",
         "aws": "AWS: mem_used_percent",
@@ -31,14 +60,28 @@
       }
     },
     {
+      "service_type": "vm",
       "layer": 1,
       "sub_layer": "Self-Contained VM",
       "type": "Idle VM Detection",
+      "key": "idle-vms",
+      "category": "compute",
+      "description": "Detect underutilized VMs based on CPU and RAM metrics over time",
+      "module": "idle_vms",
       "metric": "CPU/RAM <5%",
       "threshold": "<5%",
       "period": "7d",
       "unit": "percent",
       "enabled": true,
+      "actions": [
+        "stop",
+        "deallocate",
+        "delete"
+      ],
+      "export_formats": [
+        "csv",
+        "json"
+      ],
       "providers": {
         "azure": "CPU% + RAM% time series",
         "aws": "AWS: CPUUtilization + mem_used_percent",
@@ -46,14 +89,27 @@
       }
     },
     {
+      "service_type": "vm",
       "layer": 1,
       "sub_layer": "Self-Contained VM",
       "type": "Shutdown Detection",
+      "key": "stopped-vms",
+      "category": "compute",
+      "description": "Detect VMs that have been powered off for extended periods",
+      "module": "stopped_vms",
       "metric": "Powered-off days",
       "threshold": "0",
       "period": "30d",
       "unit": "days",
       "enabled": true,
+      "actions": [
+        "delete",
+        "report"
+      ],
+      "export_formats": [
+        "csv",
+        "json"
+      ],
       "providers": {
         "azure": "Azure powerState timeline",
         "aws": "AWS: EC2 state transition",
@@ -61,14 +117,27 @@
       }
     },
     {
+      "service_type": "vm",
       "layer": 1,
       "sub_layer": "Self-Contained VM",
       "type": "Family Optimization",
+      "key": "wrong-family",
+      "category": "compute",
+      "description": "Identify VMs using wrong VM family for their workload profile",
+      "module": "wrong_family",
       "metric": "CPU/mem fit",
       "threshold": "mismatch>30%",
       "period": "na",
       "unit": "ratio",
       "enabled": false,
+      "actions": [
+        "resize",
+        "report"
+      ],
+      "export_formats": [
+        "csv",
+        "json"
+      ],
       "providers": {
         "azure": "Azure SKU API",
         "aws": "AWS instance types",
@@ -76,14 +145,27 @@
       }
     },
     {
+      "service_type": "vm",
       "layer": 1,
       "sub_layer": "Self-Contained VM",
       "type": "Generation Upgrade",
+      "key": "old-generation",
+      "category": "cost",
+      "description": "Identify VMs using older generation SKUs with better price/performance alternatives",
+      "module": "old_generation",
       "metric": "Price/performance",
       "threshold": "improve",
       "period": "na",
       "unit": "index",
       "enabled": false,
+      "actions": [
+        "resize",
+        "report"
+      ],
+      "export_formats": [
+        "csv",
+        "json"
+      ],
       "providers": {
         "azure": "Azure Retail API",
         "aws": "AWS Pricing API",
@@ -91,14 +173,27 @@
       }
     },
     {
+      "service_type": "vm",
       "layer": 1,
       "sub_layer": "Self-Contained VM",
       "type": "Reserved Instance Optimization",
+      "key": "no-reservation",
+      "category": "cost",
+      "description": "Identify VMs with stable usage patterns suitable for reserved instances",
+      "module": "no_reservation",
       "metric": "Commit coverage",
       "threshold": "<70%",
       "period": "30d",
       "unit": "percent",
       "enabled": false,
+      "actions": [
+        "purchase",
+        "report"
+      ],
+      "export_formats": [
+        "csv",
+        "json"
+      ],
       "providers": {
         "azure": "Azure Reservation Utilization",
         "aws": "AWS RI/SP utilization",
@@ -106,14 +201,27 @@
       }
     },
     {
+      "service_type": "vm",
       "layer": 1,
       "sub_layer": "Self-Contained VM",
       "type": "Spot Optimization",
+      "key": "spot-eligible",
+      "category": "cost",
+      "description": "Identify VMs suitable for spot/preemptible instances based on interruption tolerance",
+      "module": "spot_eligible",
       "metric": "Interruption rate",
       "threshold": ">10%",
       "period": "na",
       "unit": "percent",
       "enabled": false,
+      "actions": [
+        "convert",
+        "report"
+      ],
+      "export_formats": [
+        "csv",
+        "json"
+      ],
       "providers": {
         "azure": "Azure Spot eviction API",
         "aws": "AWS spot interruption",
@@ -121,14 +229,27 @@
       }
     },
     {
+      "service_type": "vm",
       "layer": 1,
       "sub_layer": "Self-Contained VM",
       "type": "OS Cost Optimization",
+      "key": "expensive-os",
+      "category": "cost",
+      "description": "Identify Windows VMs that could run on Linux for significant cost savings",
+      "module": "expensive_os",
       "metric": "Linux vs Windows delta",
       "threshold": "linux>30%cheaper",
       "period": "na",
       "unit": "usd/hr",
       "enabled": false,
+      "actions": [
+        "migrate",
+        "report"
+      ],
+      "export_formats": [
+        "csv",
+        "json"
+      ],
       "providers": {
         "azure": "Azure Retail API",
         "aws": "AWS Pricing",
@@ -136,14 +257,27 @@
       }
     },
     {
+      "service_type": "vm",
       "layer": 1,
       "sub_layer": "Self-Contained VM",
       "type": "License Optimization",
+      "key": "high-license-cost",
+      "category": "cost",
+      "description": "Identify VMs with expensive licensing that could be optimized",
+      "module": "high_license_cost",
       "metric": "Cost per core",
       "threshold": "high",
       "period": "na",
       "unit": "usd/core",
       "enabled": false,
+      "actions": [
+        "optimize",
+        "report"
+      ],
+      "export_formats": [
+        "csv",
+        "json"
+      ],
       "providers": {
         "azure": "Core count + license model",
         "aws": "AWS SQL/Windows licensing",
@@ -151,14 +285,27 @@
       }
     },
     {
+      "service_type": "vm",
       "layer": 2,
       "sub_layer": "Adjacent",
       "type": "Disk Tiering",
+      "key": "high-tier-disk",
+      "category": "storage",
+      "description": "Identify over-provisioned disk tiers based on actual IOPS usage",
+      "module": "high_tier_disk",
       "metric": "IOPS vs provisioned",
       "threshold": "<20%",
       "period": "na",
       "unit": "iops",
       "enabled": false,
+      "actions": [
+        "downgrade",
+        "report"
+      ],
+      "export_formats": [
+        "csv",
+        "json"
+      ],
       "providers": {
         "azure": "Azure Disk IOPS",
         "aws": "AWS VolumeReadOps",
@@ -166,14 +313,27 @@
       }
     },
     {
+      "service_type": "vm",
       "layer": 2,
       "sub_layer": "Adjacent",
       "type": "Disk Size Reduction",
+      "key": "oversized-disk",
+      "category": "storage",
+      "description": "Identify over-sized disks with low utilization that can be reduced",
+      "module": "oversized_disk",
       "metric": "Disk utilization",
       "threshold": "<40%",
       "period": "na",
       "unit": "percent",
       "enabled": false,
+      "actions": [
+        "resize",
+        "report"
+      ],
+      "export_formats": [
+        "csv",
+        "json"
+      ],
       "providers": {
         "azure": "Azure guest metrics",
         "aws": "AWS disk_used_percent",
@@ -181,14 +341,28 @@
       }
     },
     {
+      "service_type": "vm",
       "layer": 2,
       "sub_layer": "Adjacent",
       "type": "Orphaned Disk Cleanup",
+      "key": "orphaned-disks",
+      "category": "storage",
+      "description": "Detect unattached disks accumulating costs without providing value",
+      "module": "orphaned_disks",
       "metric": "Days unattached",
       "threshold": ">0",
       "period": "14d",
       "unit": "days",
       "enabled": false,
+      "actions": [
+        "delete",
+        "snapshot",
+        "report"
+      ],
+      "export_formats": [
+        "csv",
+        "json"
+      ],
       "providers": {
         "azure": "Azure unattached disks",
         "aws": "AWS EBS state=available",
@@ -196,14 +370,27 @@
       }
     },
     {
+      "service_type": "vm",
       "layer": 2,
       "sub_layer": "Adjacent",
       "type": "Public IP Cleanup",
+      "key": "orphaned-ips",
+      "category": "networking",
+      "description": "Detect unattached public IPs incurring unnecessary costs",
+      "module": "orphaned_ips",
       "metric": "Unattached IPs",
       "threshold": ">0",
       "period": "7d",
       "unit": "count",
       "enabled": false,
+      "actions": [
+        "delete",
+        "report"
+      ],
+      "export_formats": [
+        "csv",
+        "json"
+      ],
       "providers": {
         "azure": "Azure ip null config",
         "aws": "AWS EIP no AssociationId",
@@ -211,14 +398,27 @@
       }
     },
     {
+      "service_type": "vm",
       "layer": 2,
       "sub_layer": "Adjacent",
       "type": "Load Balancer Tier Optimization",
+      "key": "overprovisioned-lb",
+      "category": "networking",
+      "description": "Identify over-provisioned load balancers based on actual throughput",
+      "module": "overprovisioned_lb",
       "metric": "LB throughput vs SKU",
       "threshold": "<20%",
       "period": "na",
       "unit": "bytes/sec",
       "enabled": false,
+      "actions": [
+        "downgrade",
+        "report"
+      ],
+      "export_formats": [
+        "csv",
+        "json"
+      ],
       "providers": {
         "azure": "Azure ByteCount/FlowCount",
         "aws": "AWS BytesProcessed",
@@ -226,14 +426,27 @@
       }
     },
     {
+      "service_type": "vm",
       "layer": 2,
       "sub_layer": "Adjacent",
       "type": "Network Throughput Optimization",
+      "key": "low-network-usage",
+      "category": "networking",
+      "description": "Identify VMs with over-provisioned network interfaces based on usage",
+      "module": "low_network_usage",
       "metric": "NIC throughput",
       "threshold": "low",
       "period": "na",
       "unit": "bytes",
       "enabled": false,
+      "actions": [
+        "optimize",
+        "report"
+      ],
+      "export_formats": [
+        "csv",
+        "json"
+      ],
       "providers": {
         "azure": "Azure Network In/Out",
         "aws": "AWS NetworkIn/Out",
@@ -241,14 +454,27 @@
       }
     },
     {
+      "service_type": "vm",
       "layer": 2,
       "sub_layer": "Adjacent",
       "type": "Redundancy Optimization",
+      "key": "excess-redundancy",
+      "category": "architecture",
+      "description": "Identify excessive VM redundancy in scale sets or auto-scaling groups",
+      "module": "excess_redundancy",
       "metric": "Active vs required nodes",
       "threshold": "excess>20%",
       "period": "na",
       "unit": "count",
       "enabled": false,
+      "actions": [
+        "scale-down",
+        "report"
+      ],
+      "export_formats": [
+        "csv",
+        "json"
+      ],
       "providers": {
         "azure": "Azure VMSS capacity",
         "aws": "AWS ASG desired/util",
@@ -256,14 +482,27 @@
       }
     },
     {
+      "service_type": "vm",
       "layer": 2,
       "sub_layer": "Adjacent",
       "type": "Region Optimization",
+      "key": "expensive-region",
+      "category": "cost",
+      "description": "Identify workloads in expensive regions with cheaper alternatives available",
+      "module": "expensive_region",
       "metric": "Regional cost variance",
       "threshold": ">20%",
       "period": "na",
       "unit": "usd/hr",
       "enabled": false,
+      "actions": [
+        "migrate",
+        "report"
+      ],
+      "export_formats": [
+        "csv",
+        "json"
+      ],
       "providers": {
         "azure": "Azure pricing",
         "aws": "AWS pricing",
@@ -271,14 +510,27 @@
       }
     },
     {
+      "service_type": "vm",
       "layer": 2,
       "sub_layer": "Adjacent",
       "type": "Zonal Optimization",
+      "key": "high-cross-zone-traffic",
+      "category": "networking",
+      "description": "Identify high inter-zone network costs that could be optimized",
+      "module": "high_cross_zone_traffic",
       "metric": "AZ cost/egress",
       "threshold": "high",
       "period": "na",
       "unit": "gb",
       "enabled": false,
+      "actions": [
+        "relocate",
+        "report"
+      ],
+      "export_formats": [
+        "csv",
+        "json"
+      ],
       "providers": {
         "azure": "Azure inter-AZ metrics",
         "aws": "AWS InterZoneIn/Out",
@@ -286,14 +538,27 @@
       }
     },
     {
+      "service_type": "vm",
       "layer": 2,
       "sub_layer": "Adjacent",
       "type": "Unattached Resource Cleanup",
+      "key": "unattached-resources",
+      "category": "cost",
+      "description": "Detect all unattached resources (NICs, NSGs, etc.) incurring costs",
+      "module": "unattached_resources",
       "metric": "Days unattached",
       "threshold": ">0",
       "period": "7d",
       "unit": "days",
       "enabled": false,
+      "actions": [
+        "delete",
+        "report"
+      ],
+      "export_formats": [
+        "csv",
+        "json"
+      ],
       "providers": {
         "azure": "Azure RG asset delta",
         "aws": "AWS Config inventory",
@@ -301,14 +566,27 @@
       }
     },
     {
+      "service_type": "vm",
       "layer": 3,
       "sub_layer": "Architecture",
       "type": "Non-Prod Scheduling",
+      "key": "always-on-nonprod",
+      "category": "cost",
+      "description": "Identify non-production VMs running 24/7 that could be scheduled",
+      "module": "always_on_nonprod",
       "metric": "Runtime hours",
       "threshold": "<50%",
       "period": "7d",
       "unit": "hours",
       "enabled": false,
+      "actions": [
+        "schedule",
+        "report"
+      ],
+      "export_formats": [
+        "csv",
+        "json"
+      ],
       "providers": {
         "azure": "Azure activity logs",
         "aws": "AWS CloudTrail",
@@ -316,14 +594,27 @@
       }
     },
     {
+      "service_type": "vm",
       "layer": 3,
       "sub_layer": "Architecture",
       "type": "Autoscaling Optimization",
+      "key": "poor-autoscaling",
+      "category": "architecture",
+      "description": "Identify poorly configured autoscaling rules causing over-provisioning",
+      "module": "poor_autoscaling",
       "metric": "Scaling vs load",
       "threshold": "mismatch>25%",
       "period": "na",
       "unit": "ratio",
       "enabled": false,
+      "actions": [
+        "reconfigure",
+        "report"
+      ],
+      "export_formats": [
+        "csv",
+        "json"
+      ],
       "providers": {
         "azure": "Azure VMSS autoscale",
         "aws": "AWS ASG scaling",
@@ -331,14 +622,28 @@
       }
     },
     {
+      "service_type": "vm",
       "layer": 3,
       "sub_layer": "Architecture",
       "type": "Zero Usage Shutdown",
+      "key": "zero-usage",
+      "category": "compute",
+      "description": "Detect VMs with zero activity across all metrics (CPU, network, disk)",
+      "module": "zero_usage",
       "metric": "No CPU/Net/IO",
       "threshold": "0",
       "period": "7d",
       "unit": "composite",
       "enabled": false,
+      "actions": [
+        "stop",
+        "delete",
+        "report"
+      ],
+      "export_formats": [
+        "csv",
+        "json"
+      ],
       "providers": {
         "azure": "Azure composite metric",
         "aws": "AWS composite",
@@ -346,14 +651,27 @@
       }
     },
     {
+      "service_type": "vm",
       "layer": 3,
       "sub_layer": "Architecture",
       "type": "Containerization",
+      "key": "container-candidate",
+      "category": "architecture",
+      "description": "Identify workloads suitable for containerization with lower costs",
+      "module": "container_candidate",
       "metric": "Node utilization",
       "threshold": "<30%",
       "period": "na",
       "unit": "percent",
       "enabled": false,
+      "actions": [
+        "migrate",
+        "report"
+      ],
+      "export_formats": [
+        "csv",
+        "json"
+      ],
       "providers": {
         "azure": "AKS node metrics",
         "aws": "EKS node metrics",
@@ -361,14 +679,27 @@
       }
     },
     {
+      "service_type": "vm",
       "layer": 3,
       "sub_layer": "Architecture",
       "type": "Serverless Shift",
+      "key": "serverless-candidate",
+      "category": "architecture",
+      "description": "Identify workloads suitable for serverless with better economics",
+      "module": "serverless_candidate",
       "metric": "VM vs FaaS cost",
       "threshold": "faas_cheaper",
       "period": "na",
       "unit": "usd",
       "enabled": false,
+      "actions": [
+        "migrate",
+        "report"
+      ],
+      "export_formats": [
+        "csv",
+        "json"
+      ],
       "providers": {
         "azure": "Azure Functions",
         "aws": "AWS Lambda",
@@ -376,14 +707,27 @@
       }
     },
     {
+      "service_type": "vm",
       "layer": 3,
       "sub_layer": "Architecture",
       "type": "Stateless Architecture",
+      "key": "stateful-vms",
+      "category": "architecture",
+      "description": "Identify VMs storing session state that should use external stores",
+      "module": "stateful_vms",
       "metric": "Session externalization",
       "threshold": "externalized",
       "period": "na",
       "unit": "count",
       "enabled": false,
+      "actions": [
+        "refactor",
+        "report"
+      ],
+      "export_formats": [
+        "csv",
+        "json"
+      ],
       "providers": {
         "azure": "Azure Redis",
         "aws": "AWS Elasticache",
@@ -391,14 +735,27 @@
       }
     },
     {
+      "service_type": "vm",
       "layer": 3,
       "sub_layer": "Architecture",
       "type": "Horizontal Scaling",
+      "key": "vertical-only",
+      "category": "architecture",
+      "description": "Identify vertically scaled VMs that should scale horizontally",
+      "module": "vertical_only",
       "metric": "Requests per instance",
       "threshold": "low",
       "period": "na",
       "unit": "requests",
       "enabled": false,
+      "actions": [
+        "architect",
+        "report"
+      ],
+      "export_formats": [
+        "csv",
+        "json"
+      ],
       "providers": {
         "azure": "Azure App Gateway",
         "aws": "AWS ALB",
@@ -406,14 +763,27 @@
       }
     },
     {
+      "service_type": "vm",
       "layer": 3,
       "sub_layer": "Architecture",
       "type": "Compute Storage Co-location",
+      "key": "data-transfer-cost",
+      "category": "networking",
+      "description": "Identify workloads with high cross-region data transfer costs",
+      "module": "data_transfer_cost",
       "metric": "Cross-region GB",
       "threshold": "high",
       "period": "na",
       "unit": "gb",
       "enabled": false,
+      "actions": [
+        "relocate",
+        "report"
+      ],
+      "export_formats": [
+        "csv",
+        "json"
+      ],
       "providers": {
         "azure": "Azure egress",
         "aws": "AWS bytes out",
@@ -421,14 +791,27 @@
       }
     },
     {
+      "service_type": "vm",
       "layer": 3,
       "sub_layer": "Architecture",
       "type": "Caching Optimization",
+      "key": "poor-caching",
+      "category": "architecture",
+      "description": "Identify workloads with poor cache hit ratios or missing caching layers",
+      "module": "poor_caching",
       "metric": "Cache hit ratio",
       "threshold": "<70%",
       "period": "na",
       "unit": "percent",
       "enabled": false,
+      "actions": [
+        "optimize",
+        "report"
+      ],
+      "export_formats": [
+        "csv",
+        "json"
+      ],
       "providers": {
         "azure": "Azure Redis hits",
         "aws": "AWS Elasticache hits",

@@ -550,7 +550,7 @@ def enable_rule(
 ):
     """Enable a specific rule.
 
-    Updates the rule's enabled status in optimization_rules.json.
+    Updates the rule's enabled status in the service-specific rules file (vm_rules.json, etc.).
     The rule will be active for all future operations.
 
     You can enable rules by key (e.g., 'idle-vms') or by full type name.
@@ -595,7 +595,7 @@ def enable_rule(
         console.print(f"[green]✓[/green] Enabled rule: [bold]{rule.type}[/bold]")
         if rule.key:
             console.print(f"[dim]CLI key: {rule.key}[/dim]")
-        console.print(f"[dim]Updated optimization_rules.json[/dim]\n")
+        console.print(f"[dim]Updated vm_rules.json[/dim]\n")
 
         # Reset singleton so next command loads fresh data
         reset_rule_engine()
@@ -619,7 +619,7 @@ def disable_rule(
 ):
     """Disable a specific rule.
 
-    Updates the rule's enabled status in optimization_rules.json.
+    Updates the rule's enabled status in the service-specific rules file (vm_rules.json, etc.).
     The rule will not be active for future operations.
 
     You can disable rules by key (e.g., 'idle-vms') or by full type name.
@@ -667,7 +667,7 @@ def disable_rule(
         console.print(f"[green]✓[/green] Disabled rule: [bold]{rule.type}[/bold]")
         if rule.key:
             console.print(f"[dim]CLI key: {rule.key}[/dim]")
-        console.print(f"[dim]Updated optimization_rules.json[/dim]\n")
+        console.print(f"[dim]Updated vm_rules.json[/dim]\n")
 
         # Reset singleton so next command loads fresh data
         reset_rule_engine()

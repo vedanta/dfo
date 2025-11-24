@@ -37,7 +37,7 @@ dfo is a command-line tool that discovers Azure VMs, analyzes their CPU usage, i
 - ✓ **Idle VM analysis with accurate pricing** (Milestone 4)
 - ✓ **Azure VM SKU equivalence mapping** (29 legacy→modern mappings)
 - ✓ **Export to CSV/JSON** with basic and full modes
-- ✓ **Rules-driven CLI architecture** (optimization_rules.json as source of truth)
+- ✓ **Rules-driven CLI architecture** (service-based rules: vm_rules.json, storage_rules.json, etc.)
 - ✓ **Enhanced rules management** (key-based lookup, categories, smart search)
 - ✓ Multi-service optimization rules engine (VMs, databases, storage, networking, AKS)
 - ✓ Common visualization module (sparklines, charts, dashboards)
@@ -377,7 +377,8 @@ See [USER_GUIDE.md - FAQ](USER_GUIDE.md#faq) for more questions.
   - Basic export (9 fields) and Full export (16 fields)
   - Export to file or stdout
 - ✅ **Rules-Driven CLI Architecture**:
-  - `optimization_rules.json` as single source of truth
+  - Service-based rules files (`vm_rules.json`, `storage_rules.json`, etc.)
+  - Backward compatible with legacy `optimization_rules.json`
   - Dynamic CLI command generation
   - New fields: key, category, description, module, actions, export_formats
   - Smart lookup: supports both keys and rule types
