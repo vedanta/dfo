@@ -1299,9 +1299,30 @@ def analyze(
             console.print(f"Module file should be: src/dfo/analyze/{rule.module}.py")
             raise typer.Exit(1)
 
+        # Determine dynamic function names based on rule key
+        # Convert rule key (e.g., "idle-vms", "low-cpu") to function base name
+        # Strip "-vms" suffix if present, then convert dashes to underscores
+        if rule.key.endswith('-vms'):
+            # "idle-vms" → "idle", "stopped-vms" → "stopped"
+            func_base = rule.key[:-4].replace('-', '_')
+        else:
+            # "low-cpu" → "low_cpu"
+            func_base = rule.key.replace('-', '_')
+
+        # Build function names (all analyze/get functions end with _vms)
+        analyze_func_name = f"analyze_{func_base}_vms"
+        get_results_func_name = f"get_{func_base}_vms"
+
+        # Summary functions: idle/stopped use _vm_summary (singular), others use _summary
+        if func_base in ['idle', 'stopped']:
+            summary_func_name = f"get_{func_base}_vm_summary"
+        else:
+            summary_func_name = f"get_{func_base}_summary"
+
         # Check if required functions exist
-        if not hasattr(analysis_module, 'analyze_idle_vms'):
-            console.print(f"[red]Error:[/red] Module {module_name} missing 'analyze_idle_vms' function")
+        if not hasattr(analysis_module, analyze_func_name):
+            console.print(f"[red]Error:[/red] Module {module_name} missing '{analyze_func_name}' function")
+            console.print(f"[dim]Expected function name: {analyze_func_name}()[/dim]")
             raise typer.Exit(1)
 
         settings = get_settings()
@@ -1311,7 +1332,7 @@ def analyze(
         required_days = min_days if min_days is not None else settings.dfo_idle_days
 
         console.print(f"\n[cyan]Starting {rule.type}...[/cyan]")
-        console.print(f"[dim]CPU threshold:[/dim] {cpu_threshold}%")
+        console.print(f"[dim]Threshold:[/dim] {cpu_threshold if threshold or 'cpu' in func_base else 'N/A'}")
         console.print(f"[dim]Minimum days:[/dim] {required_days}\n")
 
         # Run analysis
@@ -1323,30 +1344,61 @@ def analyze(
             task = progress.add_task(f"Running {rule.type}...", total=None)
 
             # Call the analyze function from the dynamically imported module
-            idle_count = analysis_module.analyze_idle_vms(threshold=cpu_threshold, min_days=required_days)
+            analyze_func = getattr(analysis_module, analyze_func_name)
+
+            # Determine which parameters to pass based on analysis type
+            import inspect
+            sig = inspect.signature(analyze_func)
+            kwargs = {}
+            if 'threshold' in sig.parameters:
+                kwargs['threshold'] = cpu_threshold
+            if 'min_days' in sig.parameters:
+                kwargs['min_days'] = required_days
+
+            result_count = analyze_func(**kwargs)
 
             progress.update(task, description="✓ Analysis complete")
 
-        if idle_count == 0:
+        if result_count == 0:
             console.print(f"\n[green]✓[/green] No issues detected by {rule.type}")
             console.print("[dim]All resources are being utilized efficiently.[/dim]\n")
             return
 
         # Get summary statistics from the dynamically imported module
-        summary = analysis_module.get_idle_vm_summary()
+        summary_func = getattr(analysis_module, summary_func_name)
+        summary = summary_func()
 
         # Display summary metrics
         console.print("\n[bold cyan]═══ Analysis Summary ═══[/bold cyan]\n")
 
+        # Determine the total count key dynamically
+        # Try common patterns: total_idle_vms, total_vms, total_stopped_vms
+        total_key = None
+        for key in ["total_idle_vms", "total_vms", "total_stopped_vms", "total_low_cpu_vms"]:
+            if key in summary:
+                total_key = key
+                break
+
+        if total_key is None:
+            # Fallback: find any key starting with "total_" and ending with "vms"
+            total_key = next((k for k in summary.keys() if k.startswith("total_") and "vm" in k.lower()), None)
+
+        # Create display label from total key
+        if total_key:
+            label = total_key.replace("total_", "").replace("_", " ").title()
+        else:
+            label = "VMs Found"
+            total_key = "count"  # Fallback
+
         metrics = [
             metric_panel(
-                "Idle VMs",
-                summary["total_idle_vms"],
+                label,
+                summary.get(total_key, 0),
                 color="yellow"
             ),
             metric_panel(
                 "Potential Savings",
-                f"${summary['total_potential_savings']:.2f}",
+                f"${summary.get('total_potential_savings', 0.0):.2f}",
                 subtitle="per month",
                 color="green"
             )
@@ -1388,8 +1440,8 @@ def analyze(
             console.print(severity_table)
             console.print()
 
-        # Breakdown by recommended action
-        if summary["by_action"]:
+        # Breakdown by recommended action (if available)
+        if "by_action" in summary and summary["by_action"]:
             console.print("[bold]Breakdown by Recommended Action[/bold]")
 
             action_table = Table(show_header=True, header_style="bold cyan")
@@ -1407,22 +1459,32 @@ def analyze(
             console.print(action_table)
             console.print()
 
-        # Show top idle VMs (limit to 10)
-        top_idle_vms = analysis_module.get_idle_vms(limit=10)
+        # Show top results (limit to 10)
+        get_results_func = getattr(analysis_module, get_results_func_name)
+        top_results = get_results_func(limit=10)
 
-        if top_idle_vms:
-            console.print("[bold]Top 10 Idle VMs (by Savings)[/bold]")
+        if top_results:
+            console.print(f"[bold]Top 10 {label} (by Savings)[/bold]")
 
-            idle_table = Table(show_header=True, header_style="bold cyan")
-            idle_table.add_column("VM Name", style="cyan", width=25)
-            idle_table.add_column("Location", width=12)
-            idle_table.add_column("Size", width=15)
-            idle_table.add_column("Avg CPU", justify="right", width=10)
-            idle_table.add_column("Savings/mo", justify="right", width=12)
-            idle_table.add_column("Severity", width=10)
-            idle_table.add_column("Action", width=12)
+            results_table = Table(show_header=True, header_style="bold cyan")
+            results_table.add_column("VM Name", style="cyan", width=25)
+            results_table.add_column("Location", width=12)
+            results_table.add_column("Size", width=15)
 
-            for vm in top_idle_vms:
+            # Add dynamic columns based on available fields
+            sample_vm = top_results[0]
+            if "cpu_avg" in sample_vm:
+                results_table.add_column("Avg CPU", justify="right", width=10)
+            if "days_stopped" in sample_vm:
+                results_table.add_column("Days", justify="right", width=8)
+            if "current_sku" in sample_vm and "recommended_sku" in sample_vm:
+                results_table.add_column("Current→Recommended", width=20)
+            results_table.add_column("Savings/mo", justify="right", width=12)
+            results_table.add_column("Severity", width=10)
+            if "recommended_action" in sample_vm:
+                results_table.add_column("Action", width=12)
+
+            for vm in top_results:
                 # Color code severity
                 severity = vm["severity"]
                 if severity == "Critical":
@@ -1434,17 +1496,29 @@ def analyze(
                 else:
                     severity_display = f"[dim]{severity}[/dim]"
 
-                idle_table.add_row(
+                # Build row dynamically based on available fields
+                row = [
                     vm["name"],
                     vm["location"],
-                    vm["size"],
-                    f"{vm['cpu_avg']:.1f}%",
-                    f"${vm['estimated_monthly_savings']:.2f}",
-                    severity_display,
-                    vm["recommended_action"]
-                )
+                    vm["size"]
+                ]
 
-            console.print(idle_table)
+                if "cpu_avg" in vm:
+                    row.append(f"{vm['cpu_avg']:.1f}%")
+                if "days_stopped" in vm:
+                    row.append(str(vm["days_stopped"]))
+                if "current_sku" in vm and "recommended_sku" in vm:
+                    row.append(f"{vm['current_sku']}→{vm['recommended_sku']}")
+
+                row.append(f"${vm['estimated_monthly_savings']:.2f}")
+                row.append(severity_display)
+
+                if "recommended_action" in vm:
+                    row.append(vm["recommended_action"])
+
+                results_table.add_row(*row)
+
+            console.print(results_table)
             console.print()
 
         # Export results if requested
@@ -1454,9 +1528,9 @@ def analyze(
         # Next steps
         console.print("[dim]💡 Next steps:[/dim]")
         console.print("[dim]   • ./dfo azure show vm <name> - View VM details[/dim]")
-        console.print("[dim]   • Query vm_idle_analysis table for full results[/dim]\n")
+        console.print(f"[dim]   • Query vm_{rule.module}_analysis table for full results[/dim]\n")
 
-        console.print(f"[green]✓[/green] Analysis complete: {idle_count} idle VMs identified\n")
+        console.print(f"[green]✓[/green] Analysis complete: {result_count} {label.lower()} identified\n")
 
     except Exception as e:
         console.print(f"\n[red]✗ Analysis failed:[/red] {e}")

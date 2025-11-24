@@ -24,17 +24,17 @@ dfo is a command-line tool that discovers Azure VMs, analyzes their CPU usage, i
 | ✅ **Milestone 1** | Complete | Foundation & Infrastructure |
 | ✅ **Milestone 2** | Complete | Authentication & Azure Provider |
 | ✅ **Milestone 3** | Complete | Discovery Layer (VM listing + metrics) |
-| ✅ **Milestone 4** | Complete | Analysis Layer (idle VM detection + SKU equivalence) |
+| ✅ **Milestone 4** | Complete | Analysis Layer (3 VM analyses: idle, low-CPU, stopped) |
 | ⏳ **Milestone 5** | Planned | Reporting Layer (enhanced reporting) |
 | ⏳ **Milestone 6** | Planned | Execution Layer (stop/deallocate VMs) |
 
 **Currently Available:**
 - ✓ Configuration management with Pydantic Settings
-- ✓ DuckDB local database with 5 tables (inventory, analysis, pricing, equivalence, actions)
+- ✓ DuckDB local database with 7 tables (inventory, 3 analysis tables, pricing, equivalence, actions)
 - ✓ Azure authentication (DefaultAzureCredential + service principal)
 - ✓ Azure SDK client management (Compute, Monitor, Pricing)
 - ✓ VM discovery with CPU metrics collection (rules-driven)
-- ✓ **Idle VM analysis with accurate pricing** (Milestone 4)
+- ✓ **3 VM analysis types** (Milestone 4): idle detection, low-CPU rightsizing, stopped VM cleanup
 - ✓ **Azure VM SKU equivalence mapping** (29 legacy→modern mappings)
 - ✓ **Export to CSV/JSON** with basic and full modes
 - ✓ **Rules-driven CLI architecture** (service-based rules: vm_rules.json, storage_rules.json, etc.)
@@ -145,9 +145,11 @@ The `dfo` wrapper script allows you to run commands from the root directory:
 
 # Analyze VMs for optimization opportunities (✓ Available now - M4)
 ./dfo azure analyze --list       # List all available analyses
-./dfo azure analyze idle-vms     # Analyze for idle VMs
+./dfo azure analyze idle-vms     # Analyze for idle VMs (<5% CPU)
+./dfo azure analyze low-cpu      # Analyze for rightsizing opportunities (<20% CPU)
+./dfo azure analyze stopped-vms  # Analyze VMs stopped for 30+ days
 ./dfo azure analyze idle-vms --threshold 10.0  # Custom CPU threshold
-./dfo azure analyze idle-vms --min-days 7      # Custom minimum days
+./dfo azure analyze low-cpu --min-days 7      # Custom minimum days
 
 # Export analysis results (✓ Available now - M4)
 ./dfo azure analyze idle-vms --export-format csv                    # Basic CSV export
