@@ -10,6 +10,59 @@ Since we're using DuckDB for local storage in the MVP phase, migrations are hand
 
 ## Migration History
 
+### Migration 004 - Service-Based Rules Architecture (2025-01-24)
+
+**Commit:** 3426220 (and removal commit)
+
+**Change:**
+Refactored from single `optimization_rules.json` to service-specific files (`vm_rules.json`, `storage_rules.json`, etc.) for better scalability and maintainability.
+
+**File Structure:**
+```bash
+# Before
+src/dfo/rules/
+├── __init__.py
+└── optimization_rules.json  (all rules)
+
+# After
+src/dfo/rules/
+├── __init__.py
+├── vm_rules.json            (VM-specific rules)
+├── storage_rules.json       (future)
+└── database_rules.json      (future)
+```
+
+**Schema Change:**
+```json
+// Old format (optimization_rules.json) - REMOVED
+{
+  "optimizations": [...]
+}
+
+// New format (vm_rules.json, etc.)
+{
+  "service": "vm",
+  "version": "1.0",
+  "description": "Virtual Machine optimization rules",
+  "rules": [...]
+}
+```
+
+**Migration Required:** No - service files already exist
+
+**Breaking Change:** No - old file has been completely removed, but all functionality preserved
+
+**Impact:**
+- Rules now organized by service for better maintainability
+- RuleEngine automatically discovers all `*_rules.json` files
+- Better schema validation with service metadata
+- Prepared for multi-service expansion (storage, database, networking)
+
+**Documentation:**
+- See `docs/service_based_rules_refactor.md` for complete architecture details
+
+---
+
 ### Migration 003 - Add service_type to optimization rules (2025-01-20)
 
 **Commit:** (pending)

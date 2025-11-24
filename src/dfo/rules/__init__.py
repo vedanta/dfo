@@ -147,36 +147,25 @@ class OptimizationRule(BaseModel):
 class RuleEngine:
     """Load and manage optimization rules."""
 
-    def __init__(self, service_filter: Optional[str] = None, rules_file: Optional[str] = None):
+    def __init__(self, service_filter: Optional[str] = None):
         """Initialize rule engine.
 
         Args:
             service_filter: Optional service name to load only specific rules
                           (e.g., "vm", "storage"). If None, loads all.
-            rules_file: DEPRECATED. Path to legacy rules JSON file.
-                       For backward compatibility only.
         """
         self._rules: List[OptimizationRule] = []
         self._service_filter = service_filter
 
-        # Load from service-specific files (new method)
+        # Load from service-specific files
         self._load_service_rules()
 
-        # Backward compatibility: Load from legacy file if no rules loaded
-        if not self._rules and rules_file:
-            import warnings
-            warnings.warn(
-                f"Using legacy rules_file parameter is deprecated. "
-                f"Rules are now loaded from service-specific files (vm_rules.json, etc.)",
-                DeprecationWarning,
-                stacklevel=2
-            )
-            self.rules_path = Path(__file__).parent / rules_file
-            self._load_legacy_rules()
-
-        # Fallback: Load from legacy optimization_rules.json if still no rules
+        # Ensure rules were loaded
         if not self._rules:
-            self._load_legacy_rules_fallback()
+            raise ValueError(
+                "No rules loaded. Please ensure service-specific rules files exist "
+                "(e.g., vm_rules.json, storage_rules.json) in the rules directory."
+            )
 
         self._apply_config_overrides()
 
@@ -228,49 +217,6 @@ class RuleEngine:
                     UserWarning
                 )
                 continue
-
-    def _load_legacy_rules(self) -> None:
-        """Load rules from legacy optimization_rules.json format.
-
-        DEPRECATED: For backward compatibility only.
-        """
-        if not hasattr(self, 'rules_path') or not self.rules_path.exists():
-            return
-
-        with open(self.rules_path) as f:
-            data = json.load(f)
-
-        for rule_data in data.get("optimizations", []):
-            rule = OptimizationRule(**rule_data)
-            self._rules.append(rule)
-
-    def _load_legacy_rules_fallback(self) -> None:
-        """Fallback: Load from optimization_rules.json if no service files found.
-
-        DEPRECATED: For backward compatibility during migration period.
-        """
-        legacy_file = Path(__file__).parent / "optimization_rules.json"
-
-        if legacy_file.exists():
-            import warnings
-            warnings.warn(
-                "Loading rules from optimization_rules.json (legacy format). "
-                "Please migrate to service-specific files (vm_rules.json, storage_rules.json, etc.). "
-                "See docs/service_based_rules_refactor.md for migration guide.",
-                DeprecationWarning,
-                stacklevel=3
-            )
-
-            with open(legacy_file) as f:
-                data = json.load(f)
-
-            for rule_data in data.get("optimizations", []):
-                # Apply service filter if specified
-                if self._service_filter and rule_data.get("service_type") != self._service_filter:
-                    continue
-
-                rule = OptimizationRule(**rule_data)
-                self._rules.append(rule)
 
     def _apply_config_overrides(self) -> None:
         """Apply user configuration overrides to rules.
