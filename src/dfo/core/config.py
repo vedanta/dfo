@@ -39,8 +39,18 @@ class Settings(BaseSettings):
     dfo_pricing_cache_ttl_days: int = 7
 
     # Analysis Configuration (DFO_ prefix)
+    # Idle VM Detection
     dfo_idle_cpu_threshold: float = 5.0
     dfo_idle_days: int = 14
+
+    # Right-Sizing (CPU)
+    dfo_rightsizing_cpu_threshold: float = 20.0
+    dfo_rightsizing_days: int = 14
+
+    # Shutdown Detection (stopped VMs)
+    dfo_shutdown_days: int = 30
+
+    # General settings
     dfo_dry_run_default: bool = True
     dfo_disable_rules: str = ""  # Comma-separated list of rule types to disable
     dfo_service_types: str = ""  # Comma-separated list of service types to enable (empty = all)
