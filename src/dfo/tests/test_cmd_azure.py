@@ -75,7 +75,7 @@ def test_azure_discover_vms_success(setup_env):
 
         assert result.exit_code == 0
         assert "Starting VM discovery" in result.stdout
-        assert "Discovery complete" in result.stdout
+        assert "VM inventory updated" in result.stdout  # Changed from "Discovery complete"
         assert "VMs discovered" in result.stdout and "2" in result.stdout
         assert "VMs with metrics" in result.stdout and "1" in result.stdout
         assert "VMs without metrics" in result.stdout

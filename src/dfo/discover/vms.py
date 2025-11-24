@@ -60,8 +60,9 @@ def discover_vms(
     rule_engine = get_rule_engine()
     idle_rule = rule_engine.get_rule_by_type("Idle VM Detection")
 
-    # Determine collection period from rule (with config override)
-    # Rule default: 7d, but user can override with DFO_IDLE_DAYS
+    # Determine collection period from rule (with optional env override)
+    # Uses rule period (e.g., "3d" from vm_rules.json)
+    # User can override by setting DFO_IDLE_DAYS environment variable
     collection_days = idle_rule.period_days if idle_rule else settings.dfo_idle_days
 
     # Get Azure clients
@@ -109,7 +110,7 @@ def discover_vms(
             cpu_metrics = get_cpu_metrics(
                 monitor_client,
                 vm_data["vm_id"],
-                days=collection_days  # Uses rule period (7d) or user override
+                days=collection_days  # Uses rule period or DFO_IDLE_DAYS if set
             )
 
             # Create VMInventory model
