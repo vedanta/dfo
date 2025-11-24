@@ -248,15 +248,17 @@ class RuleEngine:
                 rule.enabled = False
 
             # Idle VM Detection: Override with DFO_IDLE_CPU_THRESHOLD and DFO_IDLE_DAYS
-            # Only override if environment variables are explicitly set
+            # Only override if environment variables are explicitly set (shell or .env file)
             if rule.type == "Idle VM Detection":
                 # Override threshold if DFO_IDLE_CPU_THRESHOLD is set
-                if "DFO_IDLE_CPU_THRESHOLD" in os.environ:
+                # Check both os.environ (shell) and non-default value (.env file)
+                if "DFO_IDLE_CPU_THRESHOLD" in os.environ or settings.dfo_idle_cpu_threshold != 5.0:
                     rule.threshold_value = settings.dfo_idle_cpu_threshold
                     rule.threshold_operator = ThresholdOperator.LESS_THAN
 
                 # Override period if DFO_IDLE_DAYS is set
-                if "DFO_IDLE_DAYS" in os.environ:
+                # Check both os.environ (shell) and non-default value (.env file)
+                if "DFO_IDLE_DAYS" in os.environ or settings.dfo_idle_days != 14:
                     rule.period_days = settings.dfo_idle_days
 
             # Right-Sizing (CPU): Could add DFO_RIGHTSIZING_CPU_THRESHOLD
