@@ -202,10 +202,13 @@ def test_rules_enable_command(setup_env, tmp_path, monkeypatch):
     import json
     from pathlib import Path
 
-    # Create a temporary rules file
+    # Create a temporary rules file using new schema
     temp_rules_file = tmp_path / "vm_rules.json"
     rules_data = {
-        "optimizations": [
+        "service": "vm",
+        "version": "1.0",
+        "description": "Test VM rules",
+        "rules": [
             {
                 "service_type": "vm",
                 "layer": 1,
@@ -223,32 +226,29 @@ def test_rules_enable_command(setup_env, tmp_path, monkeypatch):
     with open(temp_rules_file, 'w') as f:
         json.dump(rules_data, f)
 
-    # Monkeypatch the rules file path
+    # Monkeypatch the rules directory to use tmp_path
     from dfo import rules
-    original_init = rules.RuleEngine.__init__
+    original_file = rules.__file__
 
-    def patched_init(self, rules_file="vm_rules.json"):
-        self.rules_path = temp_rules_file
-        self._rules = []
-        self._load_rules()
-        self._apply_config_overrides()
+    def mock_file():
+        return str(tmp_path / "__init__.py")
 
-    monkeypatch.setattr(rules.RuleEngine, "__init__", patched_init)
+    monkeypatch.setattr(rules, "__file__", str(tmp_path / "__init__.py"))
     reset_rule_engine()
 
     result = runner.invoke(app, ["rules", "enable", "Test Rule"])
 
     assert result.exit_code == 0
     assert "Enabled rule: Test Rule" in result.stdout
-    assert "Updated optimization_rules.json" in result.stdout
+    assert "Updated vm_rules.json" in result.stdout
 
     # Verify file was updated
     with open(temp_rules_file) as f:
         updated_data = json.load(f)
-    assert updated_data["optimizations"][0]["enabled"] is True
+    assert updated_data["rules"][0]["enabled"] is True
 
     # Restore
-    monkeypatch.setattr(rules.RuleEngine, "__init__", original_init)
+    monkeypatch.setattr(rules, "__file__", original_file)
     reset_rule_engine()
 
 
@@ -257,10 +257,13 @@ def test_rules_disable_command(setup_env, tmp_path, monkeypatch):
     import json
     from pathlib import Path
 
-    # Create a temporary rules file
+    # Create a temporary rules file using new schema
     temp_rules_file = tmp_path / "vm_rules.json"
     rules_data = {
-        "optimizations": [
+        "service": "vm",
+        "version": "1.0",
+        "description": "Test VM rules",
+        "rules": [
             {
                 "service_type": "vm",
                 "layer": 1,
@@ -278,32 +281,26 @@ def test_rules_disable_command(setup_env, tmp_path, monkeypatch):
     with open(temp_rules_file, 'w') as f:
         json.dump(rules_data, f)
 
-    # Monkeypatch the rules file path
+    # Monkeypatch the rules directory to use tmp_path
     from dfo import rules
-    original_init = rules.RuleEngine.__init__
+    original_file = rules.__file__
 
-    def patched_init(self, rules_file="vm_rules.json"):
-        self.rules_path = temp_rules_file
-        self._rules = []
-        self._load_rules()
-        self._apply_config_overrides()
-
-    monkeypatch.setattr(rules.RuleEngine, "__init__", patched_init)
+    monkeypatch.setattr(rules, "__file__", str(tmp_path / "__init__.py"))
     reset_rule_engine()
 
     result = runner.invoke(app, ["rules", "disable", "Test Rule"])
 
     assert result.exit_code == 0
     assert "Disabled rule: Test Rule" in result.stdout
-    assert "Updated optimization_rules.json" in result.stdout
+    assert "Updated vm_rules.json" in result.stdout
 
     # Verify file was updated
     with open(temp_rules_file) as f:
         updated_data = json.load(f)
-    assert updated_data["optimizations"][0]["enabled"] is False
+    assert updated_data["rules"][0]["enabled"] is False
 
     # Restore
-    monkeypatch.setattr(rules.RuleEngine, "__init__", original_init)
+    monkeypatch.setattr(rules, "__file__", original_file)
     reset_rule_engine()
 
 
@@ -352,3 +349,33 @@ def test_dfo_disable_rules_env_var(setup_env, monkeypatch):
     assert result.exit_code == 0
     # The rule should show as disabled due to env override
     assert "Disabled" in result.stdout
+
+
+def test_rules_validate_command(setup_env):
+    """Test validate command with valid rules."""
+    result = runner.invoke(app, ["rules", "validate"])
+
+    assert result.exit_code == 0
+    assert "Validation Summary" in result.stdout
+    assert "Valid files:" in result.stdout
+    assert "✓ All rules files are valid" in result.stdout or "Validation passed with warnings" in result.stdout
+
+
+def test_rules_validate_verbose(setup_env):
+    """Test validate command with verbose output."""
+    result = runner.invoke(app, ["rules", "validate", "--verbose"])
+
+    assert result.exit_code == 0
+    assert "Validating vm_rules.json" in result.stdout
+    assert "Validation Summary" in result.stdout
+
+
+def test_rules_validate_help(setup_env):
+    """Test validate command help."""
+    result = runner.invoke(app, ["rules", "validate", "--help"])
+
+    assert result.exit_code == 0
+    assert "Validate all rules files" in result.stdout
+    assert "--verbose" in result.stdout
+    assert "File schema" in result.stdout
+    assert "Duplicate keys" in result.stdout
