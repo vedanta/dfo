@@ -33,9 +33,9 @@ def test_rules_list_all(setup_env):
 
     assert result.exit_code == 0
     assert "Optimization Rules" in result.stdout
-    assert "44 total" in result.stdout  # All rules: 29 VM + 15 storage
+    assert "44 total" in result.stdout  # 29 VM + 15 storage rules
     assert "storage(15)" in result.stdout or "vm(29)" in result.stdout  # Service type counts
-    assert "Enabled: 5" in result.stdout  # 5 enabled rules
+    assert "Enabled: 5" in result.stdout  # 5 enabled rules (3 VM + 2 storage)
     assert "Disabled: 39" in result.stdout  # 39 disabled rules
 
 
