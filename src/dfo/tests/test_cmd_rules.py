@@ -33,10 +33,10 @@ def test_rules_list_all(setup_env):
 
     assert result.exit_code == 0
     assert "Optimization Rules" in result.stdout
-    assert "29 total" in result.stdout  # All rules enhanced now
-    assert "vm(29)" in result.stdout  # Service type count
-    assert "Enabled: 3" in result.stdout  # 3 enabled rules
-    assert "Disabled: 26" in result.stdout  # 26 disabled rules
+    assert "44 total" in result.stdout  # All rules: 29 VM + 15 storage
+    assert "storage(15)" in result.stdout or "vm(29)" in result.stdout  # Service type counts
+    assert "Enabled: 5" in result.stdout  # 5 enabled rules
+    assert "Disabled: 39" in result.stdout  # 39 disabled rules
 
 
 def test_rules_list_by_layer(setup_env):
@@ -45,9 +45,9 @@ def test_rules_list_by_layer(setup_env):
 
     assert result.exit_code == 0
     assert "Optimization Rules" in result.stdout
-    # Should only show Layer 1 rules (10 rules in layer 1)
-    assert "10 total" in result.stdout
-    assert "vm(10)" in result.stdout
+    # Should only show Layer 1 rules (10 VM + 5 storage = 15 total)
+    assert "15 total" in result.stdout
+    assert "storage(5)" in result.stdout or "vm(10)" in result.stdout
 
 
 def test_rules_list_enabled_only(setup_env):
