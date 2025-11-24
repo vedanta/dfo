@@ -70,7 +70,7 @@
       "module": "idle_vms",
       "metric": "CPU utilization",
       "threshold": "<5%",
-      "period": "3d",
+      "period": "6d",
       "unit": "percent",
       "enabled": true,
       "actions": [

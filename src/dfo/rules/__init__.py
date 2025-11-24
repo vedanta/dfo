@@ -261,12 +261,22 @@ class RuleEngine:
                 if "DFO_IDLE_DAYS" in os.environ or settings.dfo_idle_days != 14:
                     rule.period_days = settings.dfo_idle_days
 
-            # Right-Sizing (CPU): Could add DFO_RIGHTSIZING_CPU_THRESHOLD
-            # elif rule.type == "Right-Sizing (CPU)":
-            #     if hasattr(settings, 'dfo_rightsizing_cpu_threshold'):
-            #         rule.threshold_value = settings.dfo_rightsizing_cpu_threshold
+            # Right-Sizing (CPU): Override with DFO_RIGHTSIZING_CPU_THRESHOLD and DFO_RIGHTSIZING_DAYS
+            elif rule.type == "Right-Sizing (CPU)":
+                # Override threshold if DFO_RIGHTSIZING_CPU_THRESHOLD is set
+                if "DFO_RIGHTSIZING_CPU_THRESHOLD" in os.environ or settings.dfo_rightsizing_cpu_threshold != 20.0:
+                    rule.threshold_value = settings.dfo_rightsizing_cpu_threshold
+                    rule.threshold_operator = ThresholdOperator.LESS_THAN
 
-            # Add more overrides as needed...
+                # Override period if DFO_RIGHTSIZING_DAYS is set
+                if "DFO_RIGHTSIZING_DAYS" in os.environ or settings.dfo_rightsizing_days != 14:
+                    rule.period_days = settings.dfo_rightsizing_days
+
+            # Shutdown Detection: Override with DFO_SHUTDOWN_DAYS
+            elif rule.type == "Shutdown Detection":
+                # Override period if DFO_SHUTDOWN_DAYS is set
+                if "DFO_SHUTDOWN_DAYS" in os.environ or settings.dfo_shutdown_days != 30:
+                    rule.period_days = settings.dfo_shutdown_days
 
     def get_all_rules(self) -> List[OptimizationRule]:
         """Get all rules (enabled and disabled).
