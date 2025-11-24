@@ -351,24 +351,43 @@ def discover(
         idle_rule = engine.get_rule_by_type("Idle VM Detection")
 
         console.print("\n[cyan]Starting VM discovery...[/cyan]")
-        console.print(f"[dim]Using rule:[/dim] {idle_rule.type}")
+        console.print(f"[dim]Collecting metrics:[/dim] CPU utilization (hourly)")
         console.print(f"[dim]Collection period:[/dim] {idle_rule.period_days} days")
-        console.print(f"[dim]Metric:[/dim] {idle_rule.providers['azure']}\n")
+        console.print(f"[dim]Metric source:[/dim] Azure Monitor - Percentage CPU\n")
 
-        with Progress(
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
-            console=console
-        ) as progress:
-            task = progress.add_task("Discovering VMs...", total=None)
+        # Detect display mode based on terminal width
+        from dfo.common.terminal import get_display_mode
+        display_mode = get_display_mode(min_width=100)
 
-            # Run discovery
-            inventory = discover_vms(
-                subscription_id=subscription_id,
-                refresh=refresh
-            )
+        # Use appropriate progress display
+        if display_mode == "simple":
+            # Simple progress for narrow terminals
+            with Progress(
+                SpinnerColumn(),
+                TextColumn("[progress.description]{task.description}"),
+                console=console
+            ) as progress:
+                task = progress.add_task("Starting discovery...", total=None)
+                handler = _create_simple_progress_handler(progress, task)
 
-            progress.update(task, description="✓ Discovery complete")
+                inventory = discover_vms(
+                    subscription_id=subscription_id,
+                    refresh=refresh,
+                    progress_callback=handler
+                )
+
+        else:  # display_mode == "rich"
+            # Rich progress for wide terminals
+            from rich.live import Live
+
+            with Live(console=console, refresh_per_second=4) as live:
+                handler = _create_rich_progress_handler(live)
+
+                inventory = discover_vms(
+                    subscription_id=subscription_id,
+                    refresh=refresh,
+                    progress_callback=handler
+                )
 
         # Display summary
         summary = Table.grid(padding=(0, 2))
