@@ -314,7 +314,8 @@ def test_azure_analyze_idle_vms_success(setup_env, test_db):
         )
     )
 
-    with patch('dfo.providers.azure.pricing.get_vm_monthly_cost_with_metadata', return_value=30.37):
+    with patch('dfo.analyze.idle_vms.get_vm_monthly_cost_with_metadata',
+               return_value={"monthly_cost": 30.37, "equivalent_sku": None, "hourly_price": 0.0416}):
         result = runner.invoke(app, ["azure", "analyze", "idle-vms"])
 
     assert result.exit_code == 0
@@ -407,7 +408,8 @@ def test_azure_analyze_custom_threshold(setup_env, test_db):
         )
     )
 
-    with patch('dfo.providers.azure.pricing.get_vm_monthly_cost_with_metadata', return_value=30.37):
+    with patch('dfo.analyze.idle_vms.get_vm_monthly_cost_with_metadata',
+               return_value={"monthly_cost": 30.37, "equivalent_sku": None, "hourly_price": 0.0416}):
         # Should not detect with default threshold (5%)
         result = runner.invoke(app, ["azure", "analyze", "idle-vms"])
         assert result.exit_code == 0

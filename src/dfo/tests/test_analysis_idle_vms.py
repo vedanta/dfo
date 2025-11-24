@@ -94,7 +94,8 @@ def test_analyze_idle_vms_success(test_db, mock_vm_inventory_data):
     )
 
     # Mock pricing API
-    with patch('dfo.providers.azure.pricing.get_vm_monthly_cost_with_metadata', return_value=30.37):
+    with patch('dfo.analyze.idle_vms.get_vm_monthly_cost_with_metadata',
+               return_value={"monthly_cost": 30.37, "equivalent_sku": None, "hourly_price": 0.0416}):
         count = analyze_idle_vms(threshold=5.0, min_days=14)
 
     assert count == 1

@@ -1408,7 +1408,7 @@ def analyze(
             console.print()
 
         # Show top idle VMs (limit to 10)
-        top_idle_vms = get_idle_vms(limit=10)
+        top_idle_vms = analysis_module.get_idle_vms(limit=10)
 
         if top_idle_vms:
             console.print("[bold]Top 10 Idle VMs (by Savings)[/bold]")
