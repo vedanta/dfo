@@ -273,8 +273,8 @@ You're ready! 🎉
 ./dfo rules list --category compute
 
 # Enable/disable a rule
-./dfo rules disable shutdown-vms
-./dfo rules enable shutdown-vms
+./dfo rules disable stopped-vms
+./dfo rules enable stopped-vms
 ```
 
 ---
@@ -359,7 +359,7 @@ You're ready! 🎉
 ./dfo rules show "Idle VM Detection"  # Show rule by type
 
 ./dfo rules enable idle-vms      # Enable by key
-./dfo rules disable shutdown-vms # Disable by key
+./dfo rules disable stopped-vms # Disable by key
 ./dfo rules enable "Right-Sizing (CPU)"  # Enable by type
 ```
 

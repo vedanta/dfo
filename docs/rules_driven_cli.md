@@ -87,8 +87,8 @@ The `./dfo azure analyze` command is now completely dynamic:
 
 # Run any analysis by key
 ./dfo azure analyze idle-vms
-./dfo azure analyze rightsize-cpu
-./dfo azure analyze shutdown-vms
+./dfo azure analyze low-cpu
+./dfo azure analyze stopped-vms
 ```
 
 ## How It Works
