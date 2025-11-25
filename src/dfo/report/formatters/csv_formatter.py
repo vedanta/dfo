@@ -7,14 +7,19 @@ import csv
 from io import StringIO
 from typing import Union
 
-from dfo.report.models import RuleViewData, SummaryViewData
+from dfo.report.models import (
+    RuleViewData, SummaryViewData,
+    ResourceViewData, ResourceListViewData
+)
 
 
-def format_to_csv(data: Union[RuleViewData, SummaryViewData]) -> str:
+def format_to_csv(
+    data: Union[RuleViewData, SummaryViewData, ResourceViewData, ResourceListViewData]
+) -> str:
     """Format any view data to CSV.
 
     Args:
-        data: Report data model (RuleViewData or SummaryViewData)
+        data: Report data model
 
     Returns:
         CSV string with header row and data rows
@@ -25,6 +30,10 @@ def format_to_csv(data: Union[RuleViewData, SummaryViewData]) -> str:
         _write_rule_view_csv(data, output)
     elif isinstance(data, SummaryViewData):
         _write_summary_view_csv(data, output)
+    elif isinstance(data, ResourceViewData):
+        _write_resource_view_csv(data, output)
+    elif isinstance(data, ResourceListViewData):
+        _write_resource_list_csv(data, output)
     else:
         raise ValueError(f"Unsupported data type for CSV export: {type(data)}")
 
@@ -182,4 +191,68 @@ def _write_summary_view_csv(data: SummaryViewData, output):
             f"{finding.monthly_savings:.2f}",
             f"{finding.monthly_savings * 12:.2f}",
             finding.analyzed_at.isoformat() if finding.analyzed_at else ""
+        ])
+
+
+def _write_resource_view_csv(data: ResourceViewData, output):
+    """Write resource view to CSV (all findings for one VM).
+
+    Args:
+        data: ResourceViewData object
+        output: StringIO buffer to write to
+    """
+    writer = csv.writer(output)
+
+    # Header
+    writer.writerow([
+        "VM Name", "VM ID", "Resource Group", "Location", "Size", "Power State",
+        "Analysis Type", "Rule Type", "Severity",
+        "Monthly Savings ($)", "Annual Savings ($)",
+        "Analyzed At"
+    ])
+
+    # Rows - one per finding
+    for finding in data.findings:
+        writer.writerow([
+            data.vm_name,
+            data.vm_id,
+            data.resource_group,
+            data.location,
+            data.size,
+            data.power_state,
+            finding.rule_key,
+            finding.rule_type,
+            finding.severity,
+            f"{finding.monthly_savings:.2f}",
+            f"{finding.monthly_savings * 12:.2f}",
+            finding.analyzed_at.isoformat() if finding.analyzed_at else ""
+        ])
+
+
+def _write_resource_list_csv(data: ResourceListViewData, output):
+    """Write resource list to CSV (all VMs with findings).
+
+    Args:
+        data: ResourceListViewData object
+        output: StringIO buffer to write to
+    """
+    writer = csv.writer(output)
+
+    # Header
+    writer.writerow([
+        "VM Name", "Resource Group", "Location",
+        "Finding Count", "Max Severity",
+        "Total Monthly Savings ($)", "Total Annual Savings ($)"
+    ])
+
+    # Rows
+    for resource in data.resources:
+        writer.writerow([
+            resource.vm_name,
+            resource.resource_group,
+            resource.location,
+            resource.finding_count,
+            resource.max_severity,
+            f"{resource.total_savings:.2f}",
+            f"{resource.total_savings * 12:.2f}"
         ])

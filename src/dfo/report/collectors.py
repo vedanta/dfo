@@ -7,7 +7,10 @@ from typing import List, Optional, Dict
 from datetime import datetime
 
 from dfo.db.duck import get_db
-from dfo.report.models import AnalysisFinding, RuleViewData, SummaryViewData
+from dfo.report.models import (
+    AnalysisFinding, RuleViewData, SummaryViewData,
+    ResourceViewData, ResourceSummary, ResourceListViewData
+)
 from dfo.rules import get_rule_engine
 
 
@@ -352,3 +355,121 @@ def _aggregate_by_rule(findings: List[AnalysisFinding]) -> Dict[str, Dict[str, f
         aggregated[rule_key]["savings"] += finding.monthly_savings
 
     return aggregated
+
+
+def get_resource_view_data(
+    vm_name: str,
+    severity_filter: Optional[str] = None
+) -> ResourceViewData:
+    """Build data for --by-resource <name> view.
+
+    Args:
+        vm_name: VM name to get findings for
+        severity_filter: Optional minimum severity filter
+
+    Returns:
+        ResourceViewData for this VM
+
+    Raises:
+        ValueError: If VM not found in inventory
+    """
+    db = get_db()
+
+    # Get VM details from vm_inventory
+    vm_query = """
+        SELECT vm_id, name, resource_group, location, size, power_state
+        FROM vm_inventory
+        WHERE name = ?
+    """
+    vm_rows = db.get_connection().execute(vm_query, [vm_name]).fetchall()
+
+    if not vm_rows:
+        raise ValueError(f"VM not found: {vm_name}")
+
+    vm_row = vm_rows[0]
+
+    # Collect all findings for this VM from all analysis tables
+    all_findings = collect_all_findings(severity_filter=severity_filter)
+    vm_findings = [f for f in all_findings if f.vm_name == vm_name]
+
+    total_savings = sum(f.monthly_savings for f in vm_findings)
+
+    return ResourceViewData(
+        vm_id=vm_row[0],
+        vm_name=vm_row[1],
+        resource_group=vm_row[2],
+        location=vm_row[3],
+        size=vm_row[4],
+        power_state=vm_row[5],
+        total_findings=len(vm_findings),
+        total_monthly_savings=total_savings,
+        findings=vm_findings
+    )
+
+
+def get_all_resources_view_data(
+    severity_filter: Optional[str] = None,
+    limit: Optional[int] = None
+) -> ResourceListViewData:
+    """Build data for --by-resource --all view.
+
+    Args:
+        severity_filter: Optional minimum severity filter
+        limit: Optional limit on number of resources shown
+
+    Returns:
+        ResourceListViewData with all VMs that have findings
+    """
+    # Get all findings
+    all_findings = collect_all_findings(severity_filter)
+
+    # Group by VM
+    vms_with_findings: Dict[str, List[AnalysisFinding]] = {}
+    for finding in all_findings:
+        if finding.vm_name not in vms_with_findings:
+            vms_with_findings[finding.vm_name] = []
+        vms_with_findings[finding.vm_name].append(finding)
+
+    # Build resource summaries
+    resources = []
+    for vm_name, findings in vms_with_findings.items():
+        # Determine max severity
+        severity_order = {"Critical": 0, "High": 1, "Medium": 2, "Low": 3}
+        max_severity = min(
+            findings,
+            key=lambda f: severity_order.get(f.severity, 99)
+        ).severity
+
+        # Get total savings
+        total_savings = sum(f.monthly_savings for f in findings)
+
+        resources.append(ResourceSummary(
+            vm_name=vm_name,
+            resource_group=findings[0].resource_group,  # All same VM
+            location=findings[0].location,
+            finding_count=len(findings),
+            max_severity=max_severity,
+            total_savings=total_savings
+        ))
+
+    # Sort by total savings descending
+    resources.sort(key=lambda r: r.total_savings, reverse=True)
+
+    if limit:
+        resources = resources[:limit]
+
+    # Get total resources analyzed
+    db = get_db()
+    total_vms = db.get_connection().execute(
+        "SELECT COUNT(*) FROM vm_inventory"
+    ).fetchone()[0]
+
+    total_savings = sum(f.monthly_savings for f in all_findings)
+
+    return ResourceListViewData(
+        total_resources=total_vms,
+        resources_with_findings=len(vms_with_findings),
+        total_findings=len(all_findings),
+        total_monthly_savings=total_savings,
+        resources=resources
+    )

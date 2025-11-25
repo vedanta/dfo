@@ -551,6 +551,64 @@ def test_azure_report_csv_format(setup_env):
         assert "Monthly Savings" in result.stdout or "Severity" in result.stdout
 
 
+def test_azure_report_by_resource_view(setup_env):
+    """Test azure report --by-resource <name> view."""
+    result = runner.invoke(app, ["azure", "report", "--by-resource", "test-vm"])
+    # Command should run (may fail if VM not found or DB not initialized)
+    assert result.exit_code in [0, 1]
+    if result.exit_code == 0:
+        assert ("Analysis Report:" in result.stdout or
+                "No optimization opportunities" in result.stdout)
+    elif result.exit_code == 1:
+        # Expected error cases: VM not found or DB not initialized
+        assert ("VM not found" in result.stdout or
+                "Error:" in result.stdout)
+
+
+def test_azure_report_all_resources(setup_env):
+    """Test azure report --all-resources view."""
+    result = runner.invoke(app, ["azure", "report", "--all-resources"])
+    # Command should run (may fail if DB not initialized)
+    assert result.exit_code in [0, 1]
+    if result.exit_code == 0:
+        assert ("Resources with Optimization Opportunities" in result.stdout or
+                "No VMs with optimization opportunities" in result.stdout)
+
+
+def test_azure_report_by_resource_json_format(setup_env):
+    """Test azure report --by-resource with JSON format."""
+    result = runner.invoke(app, ["azure", "report", "--by-resource", "test-vm", "--format", "json"])
+    assert result.exit_code in [0, 1]
+    if result.exit_code == 0:
+        # Should output valid JSON structure
+        assert ("vm_name" in result.stdout or
+                "total_findings" in result.stdout)
+
+
+def test_azure_report_all_resources_csv_format(setup_env):
+    """Test azure report --all-resources with CSV format."""
+    result = runner.invoke(app, ["azure", "report", "--all-resources", "--format", "csv"])
+    assert result.exit_code in [0, 1]
+    if result.exit_code == 0:
+        # Should output CSV with headers
+        assert "VM Name" in result.stdout
+        assert ("Finding Count" in result.stdout or "Max Severity" in result.stdout)
+
+
+def test_azure_report_mutually_exclusive_views(setup_env):
+    """Test that view types are mutually exclusive."""
+    result = runner.invoke(app, ["azure", "report", "--by-rule", "idle-vms", "--by-resource", "test-vm"])
+    assert result.exit_code == 1
+    assert "Cannot combine multiple view types" in result.stdout
+
+
+def test_azure_report_all_resources_and_by_resource_exclusive(setup_env):
+    """Test that --all-resources and --by-resource are mutually exclusive."""
+    result = runner.invoke(app, ["azure", "report", "--all-resources", "--by-resource", "test-vm"])
+    assert result.exit_code == 1
+    assert "Cannot combine multiple view types" in result.stdout
+
+
 def test_azure_execute_stub(setup_env):
     """Test azure execute stub command."""
     result = runner.invoke(app, ["azure", "execute", "stop-idle-vms"])

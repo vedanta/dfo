@@ -54,3 +54,41 @@ class SummaryViewData(BaseModel):
     by_rule: Dict[str, Dict[str, float]]      # {"idle-vms": {"count": 5, "savings": 1200.00}}
     by_severity: Dict[str, Dict[str, float]]  # {"Critical": {"count": 8, "savings": 2300.00}}
     top_issues: List[AnalysisFinding]         # Top N by savings
+
+
+class ResourceViewData(BaseModel):
+    """Data for --by-resource <name> view (single VM).
+
+    Shows all findings for one specific VM across all analysis types.
+    """
+    vm_id: str
+    vm_name: str
+    resource_group: str
+    location: str
+    size: str
+    power_state: str
+    total_findings: int
+    total_monthly_savings: float
+    findings: List[AnalysisFinding]  # All findings for this VM
+
+
+class ResourceSummary(BaseModel):
+    """Summary of one resource for list view."""
+    vm_name: str
+    resource_group: str
+    location: str
+    finding_count: int
+    max_severity: str  # Highest severity among findings
+    total_savings: float
+
+
+class ResourceListViewData(BaseModel):
+    """Data for --by-resource --all view.
+
+    Shows all VMs that have findings across any analysis type.
+    """
+    total_resources: int
+    resources_with_findings: int
+    total_findings: int
+    total_monthly_savings: float
+    resources: List[ResourceSummary]

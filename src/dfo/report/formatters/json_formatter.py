@@ -6,11 +6,14 @@ import json
 from typing import Union, Any
 from datetime import datetime
 
-from dfo.report.models import RuleViewData, SummaryViewData
+from dfo.report.models import (
+    RuleViewData, SummaryViewData,
+    ResourceViewData, ResourceListViewData
+)
 
 
 def format_to_json(
-    data: Union[RuleViewData, SummaryViewData],
+    data: Union[RuleViewData, SummaryViewData, ResourceViewData, ResourceListViewData],
     pretty: bool = True
 ) -> str:
     """Format any view data to JSON.

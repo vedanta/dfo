@@ -8,7 +8,10 @@ from rich.table import Table
 from rich.panel import Panel
 from rich.columns import Columns
 
-from dfo.report.models import RuleViewData, SummaryViewData, AnalysisFinding
+from dfo.report.models import (
+    RuleViewData, SummaryViewData, AnalysisFinding,
+    ResourceViewData, ResourceListViewData
+)
 from dfo.common.visualizations import metric_panel
 
 
@@ -278,3 +281,147 @@ def _format_severity(severity: str) -> str:
         return "[blue]Medium[/blue]"
     else:
         return "[dim]Low[/dim]"
+
+
+def format_resource_view(data: ResourceViewData, console: Console):
+    """Format --by-resource <name> view with all findings for one VM.
+
+    Args:
+        data: ResourceViewData object
+        console: Rich Console instance
+    """
+    console.print(f"\n[bold cyan]═══ Analysis Report: {data.vm_name} ═══[/bold cyan]\n")
+
+    # VM details panel
+    details = Table.grid(padding=(0, 2))
+    details.add_column(style="cyan", justify="right")
+    details.add_column(style="white")
+
+    details.add_row("Resource Group:", data.resource_group)
+    details.add_row("Location:", data.location)
+    details.add_row("Size:", data.size)
+    details.add_row("Power State:", data.power_state)
+
+    console.print(Panel(details, title="VM Details", border_style="cyan"))
+    console.print()
+
+    if data.total_findings == 0:
+        console.print("[green]✓ No optimization opportunities found for this VM[/green]")
+        console.print("[dim]This VM is operating efficiently.[/dim]\n")
+        return
+
+    # Summary metrics
+    metrics = [
+        metric_panel("Findings", data.total_findings, color="yellow"),
+        metric_panel(
+            "Total Savings",
+            f"${data.total_monthly_savings:.2f}",
+            subtitle="per month",
+            color="green"
+        ),
+        metric_panel(
+            "Annual Savings",
+            f"${data.total_monthly_savings * 12:.2f}",
+            subtitle="per year",
+            color="green"
+        ),
+    ]
+    console.print(Columns(metrics, equal=True, expand=True))
+    console.print()
+
+    # Detailed findings
+    console.print("[bold]Optimization Opportunities[/bold]\n")
+
+    for i, finding in enumerate(data.findings, 1):
+        # Severity color
+        severity_style = _format_severity(finding.severity)
+
+        console.print(f"[bold]{i}. {finding.rule_type}[/bold] {severity_style}")
+
+        # Rule-specific details
+        if finding.rule_key == "idle-vms":
+            console.print(f"   CPU Average: {finding.details.get('cpu_avg', 0):.1f}%")
+            console.print(f"   Days below threshold: {finding.details.get('days_under_threshold', 0)}")
+            console.print(f"   Recommendation: {finding.details.get('recommended_action', 'Review')}")
+
+        elif finding.rule_key == "low-cpu":
+            console.print(f"   Current SKU: {finding.details.get('current_sku', 'Unknown')}")
+            console.print(f"   Recommended SKU: {finding.details.get('recommended_sku', 'Unknown')}")
+            console.print(f"   CPU Average: {finding.details.get('cpu_avg', 0):.1f}%")
+            console.print(f"   Savings: {finding.details.get('savings_percentage', 0):.1f}%")
+
+        elif finding.rule_key == "stopped-vms":
+            console.print(f"   Days stopped: {finding.details.get('days_stopped', 0)}")
+            console.print(f"   Disk cost: ${finding.details.get('disk_cost_monthly', 0):.2f}/month")
+            console.print(f"   Recommendation: {finding.details.get('recommended_action', 'Review')}")
+
+        console.print(f"   [green]Potential savings: ${finding.monthly_savings:.2f}/month[/green]")
+        console.print()
+
+    # Export hint
+    console.print(
+        "[dim]💡 Tip: Use [cyan]--format json[/cyan] or [cyan]--format csv[/cyan] "
+        "to export this report[/dim]\n"
+    )
+
+
+def format_resource_list_view(data: ResourceListViewData, console: Console):
+    """Format --by-resource --all view with all VMs that have findings.
+
+    Args:
+        data: ResourceListViewData object
+        console: Rich Console instance
+    """
+    console.print("\n[bold cyan]═══ Resources with Optimization Opportunities ═══[/bold cyan]\n")
+
+    # Summary metrics
+    metrics = [
+        metric_panel("Total VMs", data.total_resources, color="cyan"),
+        metric_panel("VMs with Findings", data.resources_with_findings, color="yellow"),
+        metric_panel("Total Findings", data.total_findings, color="yellow"),
+        metric_panel(
+            "Total Savings",
+            f"${data.total_monthly_savings:.2f}",
+            subtitle="per month",
+            color="green"
+        ),
+    ]
+    console.print(Columns(metrics, equal=True, expand=True))
+    console.print()
+
+    if not data.resources:
+        console.print("[green]✓ No VMs with optimization opportunities[/green]")
+        console.print("[dim]All resources are operating efficiently.[/dim]\n")
+        return
+
+    # Resources table
+    console.print("[bold]Resources Sorted by Savings Potential[/bold]")
+
+    table = Table(show_header=True, header_style="bold cyan")
+    table.add_column("VM Name", style="cyan", no_wrap=True, width=20)
+    table.add_column("Resource Group", no_wrap=True, width=18)
+    table.add_column("Location", width=12)
+    table.add_column("Findings", justify="right", width=10)
+    table.add_column("Max Severity", width=12)
+    table.add_column("Monthly Savings", justify="right", width=15)
+
+    for resource in data.resources:
+        # Color code max severity
+        severity_display = _format_severity(resource.max_severity)
+
+        table.add_row(
+            resource.vm_name,
+            resource.resource_group,
+            resource.location,
+            str(resource.finding_count),
+            severity_display,
+            f"${resource.total_savings:.2f}"
+        )
+
+    console.print(table)
+    console.print()
+
+    console.print(
+        "[dim]💡 Tip: Use [cyan]./dfo azure report --by-resource <vm-name>[/cyan] "
+        "to see detailed findings for a specific VM[/dim]\n"
+    )
