@@ -2025,6 +2025,488 @@ def execute(
     console.print("This command will be implemented in Milestone 6")
 
 
+# ============================================================================
+# PLAN COMMANDS (Milestone 6)
+# ============================================================================
+
+plan_app = typer.Typer(help="Execution plan management")
+app.add_typer(plan_app, name="plan")
+
+
+@plan_app.command(name="create")
+def plan_create(
+    from_analysis: str = typer.Option(
+        ...,
+        "--from-analysis",
+        help="Analysis type(s) to include (comma-separated: idle-vms,low-cpu,stopped-vms)",
+    ),
+    name: str = typer.Option(
+        None,
+        "--name",
+        help="Plan name (auto-generated if not provided)",
+    ),
+    description: str = typer.Option(
+        None,
+        "--description",
+        help="Plan description",
+    ),
+    severity: str = typer.Option(
+        None,
+        "--severity",
+        help="Filter by severity (critical,high,medium,low)",
+    ),
+    limit: int = typer.Option(
+        None,
+        "--limit",
+        help="Maximum number of actions to include",
+    ),
+    force: bool = typer.Option(
+        False,
+        "--force",
+        help="Auto-validate, approve, and execute plan",
+    ),
+    yes: bool = typer.Option(
+        False,
+        "--yes",
+        help="Skip confirmation prompts",
+    ),
+):
+    """Create execution plan from analysis results.
+
+    Creates a new execution plan containing actions from one or more analysis types.
+    Plans can be validated, approved, and executed to perform optimization actions.
+
+    Examples:
+        # Create plan from idle VMs
+        dfo azure plan create --from-analysis idle-vms --name "Q4 Cleanup"
+
+        # Create plan with severity filter
+        dfo azure plan create --from-analysis idle-vms --severity high,critical
+
+        # Create from multiple analyses
+        dfo azure plan create --from-analysis idle-vms,low-cpu --limit 20
+
+        # Create and auto-execute (skip validation/approval)
+        dfo azure plan create --from-analysis idle-vms --force --yes
+    """
+    from dfo.execute.plan_manager import PlanManager
+    from dfo.execute.models import CreatePlanRequest
+    from rich.panel import Panel
+    from rich.table import Table
+
+    try:
+        # Parse analysis types
+        analysis_types = [a.strip() for a in from_analysis.split(",")]
+
+        # Validate analysis types
+        valid_types = ["idle-vms", "low-cpu", "stopped-vms"]
+        for atype in analysis_types:
+            if atype not in valid_types:
+                console.print(f"[red]✗[/red] Invalid analysis type: {atype}")
+                console.print(f"Valid types: {', '.join(valid_types)}")
+                raise typer.Exit(1)
+
+        # Auto-generate name if not provided
+        if not name:
+            from datetime import datetime
+            date_str = datetime.now().strftime("%Y-%m-%d")
+            name = f"Plan {date_str} - {','.join(analysis_types)}"
+
+        # Create plan
+        console.print(f"\n[cyan]Creating execution plan:[/cyan] {name}\n")
+
+        manager = PlanManager()
+        request = CreatePlanRequest(
+            plan_name=name,
+            description=description,
+            analysis_types=analysis_types,
+            severity_filter=severity,
+            limit=limit,
+        )
+
+        plan = manager.create_plan(request)
+
+        # Get actions
+        actions = manager.get_actions(plan.plan_id)
+
+        # Display summary
+        console.print(f"[green]✓[/green] Created execution plan: [bold]{plan.plan_id}[/bold]")
+        console.print(f"  Name: {plan.plan_name}")
+        console.print(f"  Status: {plan.status}")
+        console.print(f"  Actions: {plan.total_actions}")
+        console.print(f"  Estimated Monthly Savings: ${plan.total_estimated_savings:,.2f}\n")
+
+        # Show action breakdown
+        if actions:
+            # Count by action type
+            action_counts = {}
+            for action in actions:
+                atype = action.action_type
+                if atype not in action_counts:
+                    action_counts[atype] = {"count": 0, "savings": 0.0}
+                action_counts[atype]["count"] += 1
+                action_counts[atype]["savings"] += action.estimated_monthly_savings
+
+            console.print("[cyan]Actions Breakdown:[/cyan]")
+            for atype, stats in action_counts.items():
+                icon = "⚠" if atype == "delete" else "✓"
+                warning = " [yellow](IRREVERSIBLE)[/yellow]" if atype == "delete" else ""
+                console.print(
+                    f"  {icon} {atype}: {stats['count']} resources "
+                    f"(${stats['savings']:,.2f}/month){warning}"
+                )
+
+        # Show next steps
+        console.print("\n[cyan]Next steps:[/cyan]")
+        console.print(f"  1. Review: dfo azure plan show {plan.plan_id}")
+        console.print(f"  2. Validate: dfo azure plan validate {plan.plan_id}")
+        console.print(f"  3. Approve: dfo azure plan approve {plan.plan_id}")
+        console.print(f"  4. Execute: dfo azure plan execute {plan.plan_id}")
+
+        # Handle --force flag
+        if force:
+            console.print("\n[yellow]⚠ --force flag detected[/yellow]")
+            console.print("This will validate, approve, and execute the plan immediately.\n")
+
+            if not yes:
+                confirm = typer.confirm("Continue with auto-execution?")
+                if not confirm:
+                    console.print("[yellow]Cancelled[/yellow]")
+                    raise typer.Exit(0)
+
+            console.print("[yellow]TODO:[/yellow] Auto-execution not yet implemented")
+            console.print("Plan created successfully. Use the commands above to proceed manually.")
+
+    except Exception as e:
+        console.print(f"\n[red]✗[/red] Error creating plan: {e}")
+        raise typer.Exit(1)
+
+
+@plan_app.command(name="list")
+def plan_list(
+    status: str = typer.Option(
+        None,
+        "--status",
+        help="Filter by status (draft, validated, approved, executing, completed, failed)",
+    ),
+    limit: int = typer.Option(
+        None,
+        "--limit",
+        help="Maximum number of plans to show",
+    ),
+    sort: str = typer.Option(
+        "created_at",
+        "--sort",
+        help="Sort by field (created_at, total_estimated_savings, plan_name)",
+    ),
+):
+    """List execution plans.
+
+    Shows all execution plans with summary information.
+
+    Examples:
+        # List all plans
+        dfo azure plan list
+
+        # List draft plans
+        dfo azure plan list --status draft
+
+        # List top 10 by savings
+        dfo azure plan list --sort total_estimated_savings --limit 10
+    """
+    from dfo.execute.plan_manager import PlanManager
+    from dfo.execute.models import PlanStatus
+    from rich.table import Table
+
+    try:
+        manager = PlanManager()
+
+        # Parse status filter
+        status_filter = None
+        if status:
+            try:
+                status_filter = PlanStatus(status)
+            except ValueError:
+                console.print(f"[red]✗[/red] Invalid status: {status}")
+                console.print("Valid statuses: draft, validated, approved, executing, completed, failed, cancelled")
+                raise typer.Exit(1)
+
+        # Fetch plans
+        plans = manager.list_plans(status=status_filter, limit=limit, sort_by=sort)
+
+        if not plans:
+            console.print("\n[yellow]No execution plans found[/yellow]")
+            console.print("\nCreate a plan with:")
+            console.print("  dfo azure plan create --from-analysis idle-vms\n")
+            return
+
+        # Create table
+        table = Table(title=f"\n Execution Plans ({len(plans)})")
+        table.add_column("Plan ID", style="cyan")
+        table.add_column("Name", style="white")
+        table.add_column("Status", style="yellow")
+        table.add_column("Actions", justify="right")
+        table.add_column("Savings/Month", justify="right", style="green")
+        table.add_column("Created", style="dim")
+
+        for plan in plans:
+            # Color code status
+            status_colors = {
+                "draft": "dim",
+                "validated": "cyan",
+                "approved": "blue",
+                "executing": "yellow",
+                "completed": "green",
+                "failed": "red",
+                "cancelled": "dim"
+            }
+            status_color = status_colors.get(plan.status, "white")
+            status_display = f"[{status_color}]{plan.status}[/{status_color}]"
+
+            table.add_row(
+                plan.plan_id,
+                plan.plan_name[:40] + "..." if len(plan.plan_name) > 40 else plan.plan_name,
+                status_display,
+                str(plan.total_actions),
+                f"${plan.total_estimated_savings:,.2f}",
+                plan.created_at.strftime("%Y-%m-%d %H:%M"),
+            )
+
+        console.print(table)
+        console.print()
+
+    except Exception as e:
+        console.print(f"\n[red]✗[/red] Error listing plans: {e}")
+        raise typer.Exit(1)
+
+
+@plan_app.command(name="show")
+def plan_show(
+    plan_id: str = typer.Argument(..., help="Plan ID"),
+    detail: bool = typer.Option(
+        False,
+        "--detail",
+        help="Show detailed action list",
+    ),
+    format: str = typer.Option(
+        "table",
+        "--format",
+        help="Output format (table, json, csv)",
+    ),
+    output: str = typer.Option(
+        None,
+        "--output",
+        help="Output file path (for json/csv)",
+    ),
+):
+    """Show execution plan details.
+
+    Displays plan metadata, actions, and savings estimates.
+
+    Examples:
+        # Show plan summary
+        dfo azure plan show plan-20251125-001
+
+        # Show detailed action list
+        dfo azure plan show plan-20251125-001 --detail
+
+        # Export to JSON
+        dfo azure plan show plan-20251125-001 --format json --output plan.json
+    """
+    from dfo.execute.plan_manager import PlanManager
+    from rich.table import Table
+    from rich.panel import Panel
+    import json
+
+    try:
+        manager = PlanManager()
+        plan = manager.get_plan(plan_id)
+        actions = manager.get_actions(plan_id)
+
+        # JSON format
+        if format == "json":
+            data = {
+                "plan": plan.dict(),
+                "actions": [a.dict() for a in actions],
+            }
+            output_json = json.dumps(data, indent=2, default=str)
+
+            if output:
+                with open(output, "w") as f:
+                    f.write(output_json)
+                console.print(f"[green]✓[/green] Exported to {output}")
+            else:
+                console.print(output_json)
+            return
+
+        # CSV format
+        if format == "csv":
+            import csv
+            import sys
+
+            file_handle = open(output, "w") if output else sys.stdout
+            writer = csv.writer(file_handle)
+
+            # Write headers
+            writer.writerow([
+                "action_id", "resource_name", "action_type", "severity",
+                "estimated_savings", "status"
+            ])
+
+            # Write actions
+            for action in actions:
+                writer.writerow([
+                    action.action_id,
+                    action.resource_name,
+                    action.action_type,
+                    action.severity or "",
+                    f"{action.estimated_monthly_savings:.2f}",
+                    action.status,
+                ])
+
+            if output:
+                file_handle.close()
+                console.print(f"[green]✓[/green] Exported to {output}")
+            return
+
+        # Table format (default)
+        # Plan summary panel
+        summary_text = f"""[cyan]Plan ID:[/cyan] {plan.plan_id}
+[cyan]Name:[/cyan] {plan.plan_name}
+[cyan]Status:[/cyan] {plan.status}
+[cyan]Created:[/cyan] {plan.created_at.strftime("%Y-%m-%d %H:%M:%S")}
+[cyan]Analysis Types:[/cyan] {', '.join(plan.analysis_types)}
+
+[cyan]Metrics:[/cyan]
+  Total Actions: {plan.total_actions}
+  Completed: {plan.completed_actions}
+  Failed: {plan.failed_actions}
+  Skipped: {plan.skipped_actions}
+
+[cyan]Savings:[/cyan]
+  Estimated Monthly: ${plan.total_estimated_savings:,.2f}
+  Realized Monthly: ${plan.total_realized_savings:,.2f}"""
+
+        if plan.description:
+            summary_text = f"[cyan]Description:[/cyan] {plan.description}\n\n" + summary_text
+
+        console.print(Panel(summary_text, title="Execution Plan", border_style="cyan"))
+
+        # Actions summary
+        if actions:
+            # Count by action type and status
+            by_type = {}
+            by_status = {}
+
+            for action in actions:
+                # By type
+                atype = action.action_type
+                if atype not in by_type:
+                    by_type[atype] = {"count": 0, "savings": 0.0}
+                by_type[atype]["count"] += 1
+                by_type[atype]["savings"] += action.estimated_monthly_savings
+
+                # By status
+                astatus = action.status
+                if astatus not in by_status:
+                    by_status[astatus] = 0
+                by_status[astatus] += 1
+
+            console.print("\n[cyan]Actions by Type:[/cyan]")
+            for atype, stats in by_type.items():
+                console.print(
+                    f"  {atype}: {stats['count']} (${stats['savings']:,.2f}/month)"
+                )
+
+            console.print("\n[cyan]Actions by Status:[/cyan]")
+            for astatus, count in by_status.items():
+                console.print(f"  {astatus}: {count}")
+
+        # Detailed action list
+        if detail and actions:
+            table = Table(title="\nPlan Actions")
+            table.add_column("Action ID", style="dim")
+            table.add_column("Resource", style="cyan")
+            table.add_column("Action", style="yellow")
+            table.add_column("Severity", style="white")
+            table.add_column("Savings/Month", justify="right", style="green")
+            table.add_column("Status", style="blue")
+
+            for action in actions:
+                table.add_row(
+                    action.action_id,
+                    action.resource_name,
+                    action.action_type,
+                    action.severity or "-",
+                    f"${action.estimated_monthly_savings:,.2f}",
+                    action.status,
+                )
+
+            console.print(table)
+
+        console.print()
+
+    except ValueError as e:
+        console.print(f"\n[red]✗[/red] {e}")
+        raise typer.Exit(1)
+    except Exception as e:
+        console.print(f"\n[red]✗[/red] Error showing plan: {e}")
+        raise typer.Exit(1)
+
+
+@plan_app.command(name="delete")
+def plan_delete(
+    plan_id: str = typer.Argument(..., help="Plan ID"),
+    force: bool = typer.Option(
+        False,
+        "--force",
+        help="Skip confirmation prompt",
+    ),
+):
+    """Delete execution plan.
+
+    Only draft or validated plans can be deleted. Approved, executing, or
+    completed plans cannot be deleted for audit trail purposes.
+
+    Examples:
+        # Delete draft plan
+        dfo azure plan delete plan-20251125-001
+
+        # Delete without confirmation
+        dfo azure plan delete plan-20251125-001 --force
+    """
+    from dfo.execute.plan_manager import PlanManager
+
+    try:
+        manager = PlanManager()
+        plan = manager.get_plan(plan_id)
+
+        # Show plan info
+        console.print(f"\n[yellow]Plan to delete:[/yellow]")
+        console.print(f"  ID: {plan.plan_id}")
+        console.print(f"  Name: {plan.plan_name}")
+        console.print(f"  Status: {plan.status}")
+        console.print(f"  Actions: {plan.total_actions}\n")
+
+        # Confirm deletion
+        if not force:
+            confirm = typer.confirm("Are you sure you want to delete this plan?")
+            if not confirm:
+                console.print("[yellow]Cancelled[/yellow]")
+                raise typer.Exit(0)
+
+        # Delete
+        manager.delete_plan(plan_id)
+        console.print(f"[green]✓[/green] Plan deleted: {plan_id}\n")
+
+    except ValueError as e:
+        console.print(f"\n[red]✗[/red] {e}\n")
+        raise typer.Exit(1)
+    except Exception as e:
+        console.print(f"\n[red]✗[/red] Error deleting plan: {e}")
+        raise typer.Exit(1)
+
+
 @app.command(name="test-auth")
 def test_auth():
     """Test Azure authentication and client creation.

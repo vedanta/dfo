@@ -149,7 +149,7 @@ class PlanAction(BaseModel):
     # Analysis linkage
     analysis_id: Optional[str] = None
     analysis_type: str
-    severity: Optional[Severity] = None
+    severity: Optional[str] = None  # critical, high, medium, low
 
     # Action details
     action_type: ActionType

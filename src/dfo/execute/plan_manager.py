@@ -48,8 +48,8 @@ class PlanManager:
         Args:
             db_path: Path to DuckDB file (defaults to config setting)
         """
-        self.db_path = db_path or get_settings().duckdb_file
-        self.conn = get_db()
+        self.db_path = db_path or get_settings().dfo_duckdb_file
+        self.conn = get_db().get_connection()
 
     # ========================================================================
     # PLAN CRUD OPERATIONS
@@ -104,7 +104,7 @@ class PlanManager:
                 plan.description,
                 plan.created_at,
                 plan.created_by,
-                plan.status.value,
+                plan.status,  # Already a string due to use_enum_values = True
                 json.dumps(plan.analysis_types),
                 plan.severity_filter,
                 0,  # Will be updated when actions are added
@@ -550,12 +550,14 @@ class PlanManager:
                 params.append(limit)
 
             # Fetch results
-            results = self.conn.execute(query, params).fetchall()
+            result_obj = self.conn.execute(query, params)
+            columns = [desc[0] for desc in result_obj.description]
+            results = result_obj.fetchall()
 
             # Create actions
             for row in results:
                 action = self._analysis_row_to_action(
-                    row, plan_id, analysis_type, action_type, execution_order
+                    row, columns, plan_id, analysis_type, action_type, execution_order
                 )
                 self._insert_action(action)
                 actions.append(action)
@@ -579,14 +581,13 @@ class PlanManager:
     def _analysis_row_to_action(
         self,
         row: tuple,
+        columns: List[str],
         plan_id: str,
         analysis_type: str,
         action_type: ActionType,
         execution_order: int,
     ) -> PlanAction:
         """Convert analysis row to plan action."""
-        # Get column names
-        columns = [desc[0] for desc in self.conn.description]
         data = dict(zip(columns, row))
 
         action_id = generate_action_id()
@@ -637,11 +638,11 @@ class PlanManager:
                 action.subscription_id,
                 action.analysis_id,
                 action.analysis_type,
-                action.severity.value if action.severity else None,
-                action.action_type.value,
+                action.severity,  # Already a string value
+                action.action_type,  # Already a string due to use_enum_values = True
                 json.dumps(action.action_params) if action.action_params else None,
                 action.estimated_monthly_savings,
-                action.status.value,
+                action.status,  # Already a string due to use_enum_values = True
                 action.execution_order,
                 action.rollback_possible,
             ],
@@ -656,8 +657,8 @@ class PlanManager:
                 SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed,
                 SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) as failed,
                 SUM(CASE WHEN status = 'skipped' THEN 1 ELSE 0 END) as skipped,
-                SUM(estimated_monthly_savings) as estimated_savings,
-                SUM(realized_monthly_savings) as realized_savings
+                COALESCE(SUM(estimated_monthly_savings), 0.0) as estimated_savings,
+                COALESCE(SUM(realized_monthly_savings), 0.0) as realized_savings
             FROM plan_actions
             WHERE plan_id = ?
             """,
@@ -747,12 +748,12 @@ class PlanManager:
             resource_filters=json.loads(data["resource_filters"])
             if data.get("resource_filters")
             else None,
-            total_actions=data.get("total_actions", 0),
-            completed_actions=data.get("completed_actions", 0),
-            failed_actions=data.get("failed_actions", 0),
-            skipped_actions=data.get("skipped_actions", 0),
-            total_estimated_savings=data.get("total_estimated_savings", 0.0),
-            total_realized_savings=data.get("total_realized_savings", 0.0),
+            total_actions=data.get("total_actions") or 0,
+            completed_actions=data.get("completed_actions") or 0,
+            failed_actions=data.get("failed_actions") or 0,
+            skipped_actions=data.get("skipped_actions") or 0,
+            total_estimated_savings=data.get("total_estimated_savings") or 0.0,
+            total_realized_savings=data.get("total_realized_savings") or 0.0,
             executed_at=data.get("executed_at"),
             completed_at=data.get("completed_at"),
             execution_duration_seconds=data.get("execution_duration_seconds"),
@@ -778,7 +779,7 @@ class PlanManager:
             subscription_id=data.get("subscription_id"),
             analysis_id=data.get("analysis_id"),
             analysis_type=data["analysis_type"],
-            severity=Severity(data["severity"]) if data.get("severity") else None,
+            severity=data.get("severity"),  # Already a string from database
             action_type=ActionType(data["action_type"]),
             action_params=json.loads(data["action_params"])
             if data.get("action_params")
