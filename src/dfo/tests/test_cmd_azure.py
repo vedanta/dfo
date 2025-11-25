@@ -541,6 +541,16 @@ def test_azure_report_json_format(setup_env):
         assert "rule_key" in result.stdout or "total_findings" in result.stdout
 
 
+def test_azure_report_csv_format(setup_env):
+    """Test azure report with CSV format."""
+    result = runner.invoke(app, ["azure", "report", "--by-rule", "idle-vms", "--format", "csv"])
+    assert result.exit_code in [0, 1]
+    if result.exit_code == 0:
+        # Should output CSV with headers
+        assert "VM Name" in result.stdout
+        assert "Monthly Savings" in result.stdout or "Severity" in result.stdout
+
+
 def test_azure_execute_stub(setup_env):
     """Test azure execute stub command."""
     result = runner.invoke(app, ["azure", "execute", "stop-idle-vms"])

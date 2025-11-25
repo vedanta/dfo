@@ -1834,7 +1834,7 @@ def report(
     format: str = typer.Option(
         "console",
         "--format", "-f",
-        help="Output format: console, json"
+        help="Output format: console, json, csv"
     ),
     output: str = typer.Option(
         None,
@@ -1864,10 +1864,12 @@ def report(
         ./dfo azure report --by-rule idle-vms        # Idle VMs report
         ./dfo azure report --by-rule low-cpu --severity high
         ./dfo azure report --format json --output report.json
+        ./dfo azure report --by-rule idle-vms --format csv --output report.csv
     """
     from dfo.report.collectors import get_summary_view_data, get_rule_view_data
     from dfo.report.formatters.console import format_summary_view, format_rule_view
     from dfo.report.formatters.json_formatter import format_to_json
+    from dfo.report.formatters.csv_formatter import format_to_csv
     from dfo.rules import get_rule_engine
 
     try:
@@ -1904,9 +1906,19 @@ def report(
             else:
                 console.print(json_output)
 
+        elif format == "csv":
+            csv_output = format_to_csv(view_data)
+
+            if output:
+                with open(output, 'w') as f:
+                    f.write(csv_output)
+                console.print(f"[green]✓[/green] Report exported to: {output}")
+            else:
+                console.print(csv_output)
+
         else:
             console.print(f"[red]Error:[/red] Unsupported format: {format}")
-            console.print("Supported formats: console, json")
+            console.print("Supported formats: console, json, csv")
             raise typer.Exit(1)
 
     except FileNotFoundError as e:
