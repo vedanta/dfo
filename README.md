@@ -25,7 +25,7 @@ dfo is a command-line tool that discovers Azure VMs, analyzes their CPU usage, i
 | ✅ **Milestone 2** | Complete | Authentication & Azure Provider |
 | ✅ **Milestone 3** | Complete | Discovery Layer (VM listing + metrics) |
 | ✅ **Milestone 4** | Complete | Analysis Layer (3 VM analyses: idle, low-CPU, stopped) |
-| ⏳ **Milestone 5** | Planned | Reporting Layer (enhanced reporting) |
+| ✅ **Milestone 5** | Complete | Reporting Layer (4 views, 3 formats, filters) |
 | ⏳ **Milestone 6** | Planned | Execution Layer (stop/deallocate VMs) |
 
 **Currently Available:**
@@ -35,13 +35,13 @@ dfo is a command-line tool that discovers Azure VMs, analyzes their CPU usage, i
 - ✓ Azure SDK client management (Compute, Monitor, Pricing)
 - ✓ VM discovery with CPU metrics collection (rules-driven)
 - ✓ **3 VM analysis types** (Milestone 4): idle detection, low-CPU rightsizing, stopped VM cleanup
+- ✓ **Unified reporting system** (Milestone 5): 4 view types, 3 output formats (console/JSON/CSV)
 - ✓ **Azure VM SKU equivalence mapping** (29 legacy→modern mappings)
-- ✓ **Export to CSV/JSON** with basic and full modes
 - ✓ **Rules-driven CLI architecture** (service-based rules: vm_rules.json, storage_rules.json, etc.)
 - ✓ **Enhanced rules management** (key-based lookup, categories, smart search)
 - ✓ Multi-service optimization rules engine (VMs, databases, storage, networking, AKS)
 - ✓ Common visualization module (sparklines, charts, dashboards)
-- ✓ CLI commands: discover, analyze, export, rules (list/show/keys/categories)
+- ✓ CLI commands: discover, analyze, report, rules (list/show/keys/categories)
 
 ## Quick Start
 
@@ -151,10 +151,15 @@ The `dfo` wrapper script allows you to run commands from the root directory:
 ./dfo azure analyze idle-vms --threshold 10.0  # Custom CPU threshold
 ./dfo azure analyze low-cpu --min-days 7      # Custom minimum days
 
-# Export analysis results (✓ Available now - M4)
-./dfo azure analyze idle-vms --export-format csv                    # Basic CSV export
-./dfo azure analyze idle-vms --export-format json --full           # Full JSON export
-./dfo azure analyze idle-vms --export-format csv --export-file results.csv --full  # Export to file
+# Generate reports from analysis results (✓ Available now - M5)
+./dfo azure report                                  # Default summary view
+./dfo azure report --by-rule idle-vms               # Findings for specific analysis
+./dfo azure report --by-rule low-cpu --severity high  # Filter by severity
+./dfo azure report --by-resource vm-prod-001        # All findings for one VM
+./dfo azure report --all-resources                  # All VMs with findings
+./dfo azure report --format json --output report.json  # Export to JSON
+./dfo azure report --by-rule idle-vms --format csv --output report.csv  # Export to CSV
+./dfo azure report --by-rule idle-vms --limit 20    # Limit results
 
 # View and manage optimization rules (✓ Enhanced in M4)
 ./dfo rules list                 # List all rules with keys, service, category
@@ -167,9 +172,9 @@ The `dfo` wrapper script allows you to run commands from the root directory:
 ./dfo rules enable idle-vms      # Enable a rule by key
 ./dfo rules disable stopped-vms # Disable a rule by key
 
-# Coming soon in Milestones 5-6:
-./dfo azure report idle-vms      # Generate enhanced reports
+# Coming soon in Milestone 6:
 ./dfo azure execute stop-idle-vms  # Take action (dry-run default)
+./dfo azure execute stop-idle-vms --no-dry-run --yes  # Execute with confirmation
 
 # Get help
 ./dfo --help
@@ -196,16 +201,22 @@ The `dfo` wrapper script allows you to run commands from the root directory:
 ### Monthly Cost Review (✓ Available Now)
 ```bash
 # 1. Discover current state
-./dfo azure discover
+./dfo azure discover vms
 
-# 2. Analyze for idle VMs
+# 2. Analyze for optimization opportunities
 ./dfo azure analyze idle-vms
+./dfo azure analyze low-cpu
+./dfo azure analyze stopped-vms
 
-# 3. Export findings for management (CSV or JSON)
-./dfo azure analyze idle-vms --export-format csv --export-file monthly-review-2025-01.csv --full
+# 3. Generate comprehensive report
+./dfo azure report                      # Summary view
 
-# 4. View specific rule details
-./dfo rules show idle-vms
+# 4. Export findings for management
+./dfo azure report --format csv --output monthly-review-2025-11.csv
+./dfo azure report --by-rule idle-vms --format json --output idle-vms.json
+
+# 5. View specific VM details
+./dfo azure report --by-resource vm-prod-001
 ```
 
 ### Exploring Available Analyses (✓ Available Now)
@@ -235,17 +246,22 @@ The `dfo` wrapper script allows you to run commands from the root directory:
 ./dfo azure analyze idle-vms --export-format json --full
 ```
 
-### Automated Cost Optimization (Coming in M6)
+### Automated Cost Optimization (✓ Reporting Available, Execution Coming in M6)
 ```bash
 # Discover and analyze
-./dfo azure discover
+./dfo azure discover vms
 ./dfo azure analyze idle-vms
+./dfo azure analyze low-cpu
 
-# Stop critical idle VMs (>$500/month savings)
+# Review findings
+./dfo azure report                      # Summary view
+./dfo azure report --by-rule idle-vms --severity critical  # High-value targets
+
+# Export pre-execution audit
+./dfo azure report --by-rule idle-vms --format json --output pre-execution-audit.json
+
+# Execute actions (Coming in M6)
 ./dfo azure execute stop-idle-vms --no-dry-run --yes --min-severity critical
-
-# Generate audit log
-./dfo azure report idle-vms --format json --output executed-actions.json
 ```
 
 ## Project Structure
@@ -291,7 +307,7 @@ PYTHONPATH=src pytest src/dfo/tests/ -v
 # With coverage
 PYTHONPATH=src pytest --cov=dfo src/dfo/tests/
 
-# Current status: 119 tests passing
+# Current status: 349 tests passing
 ```
 
 ### Code Quality
@@ -318,8 +334,8 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines (coming soon).
 - [x] Milestone 1: Foundation & Infrastructure ✅
 - [x] Milestone 2: Authentication & Azure Provider ✅
 - [x] Milestone 3: Discovery Layer ✅
-- [x] Milestone 4: Analysis Layer (Idle VMs + SKU Equivalence) ✅
-- [ ] Milestone 5: Enhanced Reporting Layer (In Progress)
+- [x] Milestone 4: Analysis Layer (3 Analyses + SKU Equivalence) ✅
+- [x] Milestone 5: Reporting Layer (4 Views, 3 Formats) ✅
 - [ ] Milestone 6: Execution Layer
 
 ### Phase 2: Enhancement
@@ -347,7 +363,7 @@ A: **Reader** role for discovery/analysis (read-only). **Contributor** role for 
 A: All data is stored locally in `dfo.duckdb`. No cloud storage or external services required.
 
 **Q: Is dfo production-ready?**
-A: Milestones 1-4 are complete and tested. VM discovery, idle VM analysis with accurate pricing, export functionality, and rules management are production-ready. Analysis is read-only. Milestones 5-6 (enhanced reporting and execution) are in development.
+A: Milestones 1-5 are complete and tested. VM discovery, 3 types of analysis (idle, low-CPU, stopped), comprehensive reporting (console/JSON/CSV), and rules management are production-ready. All commands are read-only. Milestone 6 (execution) is in development.
 
 See [USER_GUIDE.md - FAQ](USER_GUIDE.md#faq) for more questions.
 
@@ -364,7 +380,29 @@ See [USER_GUIDE.md - FAQ](USER_GUIDE.md#faq) for more questions.
 
 ## Changelog
 
-### v0.0.6 (Current - Rules-Driven CLI & Milestone 4)
+### v0.1.0 (Current - Milestone 5: Reporting Layer Complete)
+- ✅ **Milestone 5 Complete**: Unified reporting system with 4 view types
+- ✅ **Unified Report Command**: Single entry point for all report types
+  - Default summary view with portfolio-wide statistics
+  - `--by-rule` view for specific analysis findings
+  - `--by-resource <vm-name>` view for single VM analysis
+  - `--all-resources` view for all VMs sorted by savings
+- ✅ **Multiple Output Formats**:
+  - Rich formatted console output (tables, panels, metrics)
+  - JSON export with datetime serialization
+  - CSV export with rule-specific columns
+- ✅ **Advanced Features**:
+  - Severity filtering (`--severity`)
+  - Result limiting (`--limit`)
+  - File output (`--output` for JSON/CSV)
+- ✅ **Data Architecture**:
+  - Normalized data models across all analysis types
+  - Data collectors for querying analysis results
+  - Formatters for console, JSON, and CSV output
+- ✅ **Testing**: 349 tests passing (+6 new report tests)
+- ✅ **Documentation**: Comprehensive user guide updates
+
+### v0.0.6 (Rules-Driven CLI & Milestone 4)
 - ✅ **Milestone 4 Complete**: Analysis Layer with idle VM detection
 - ✅ **Azure VM SKU Equivalence**: 29 legacy-to-modern VM SKU mappings
   - New module: `src/dfo/analyze/compute_mapper.py`

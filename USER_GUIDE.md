@@ -458,53 +458,271 @@ See [docs/rules_driven_cli.md](docs/rules_driven_cli.md) for complete details.
 
 ## Export and Reporting
 
-### Export Formats
+dfo provides a comprehensive reporting system with multiple view types and output formats.
 
-dfo supports two export formats:
+### Report Command Overview
 
-#### CSV Export
+The unified `./dfo azure report` command supports:
+- **4 View Types**: Summary, by-rule, by-resource, all-resources
+- **3 Output Formats**: console (Rich formatted), JSON, CSV
+- **Filters**: severity, limit
+- **File Output**: Export to JSON or CSV files
+
+### View Types
+
+#### 1. Summary View (Default)
+
+Shows portfolio-wide statistics across all analyses:
 
 ```bash
-# Basic CSV (9 fields)
-./dfo azure analyze idle-vms --export-format csv
-
-# Full CSV (16 fields)
-./dfo azure analyze idle-vms --export-format csv --full
-
-# Export to file
-./dfo azure analyze idle-vms --export-format csv --export-file report.csv --full
+./dfo azure report
 ```
 
-**Basic CSV Fields:**
-- name, resource_group, location, size
-- cpu_avg, estimated_monthly_savings
-- severity, recommended_action, equivalent_sku
+**Output includes:**
+- Total VMs analyzed
+- Total findings and potential savings
+- Breakdown by analysis type (idle-vms, low-cpu, stopped-vms)
+- Breakdown by severity
+- Top 10 issues by savings potential
 
-**Full CSV Fields (adds):**
-- vm_id, power_state, os_type, priority
-- days_under_threshold, analyzed_at, tags
+#### 2. By-Rule View
 
-#### JSON Export
+Shows findings for a specific analysis type:
 
 ```bash
-# Basic JSON
-./dfo azure analyze idle-vms --export-format json
+# Idle VM findings
+./dfo azure report --by-rule idle-vms
 
-# Full JSON with all metadata
-./dfo azure analyze idle-vms --export-format json --full
+# Low-CPU rightsizing opportunities
+./dfo azure report --by-rule low-cpu
 
-# Export to file
-./dfo azure analyze idle-vms --export-format json --export-file report.json
+# Stopped VM cleanup recommendations
+./dfo azure report --by-rule stopped-vms
 ```
 
-### Export to Stdout vs File
+**Output includes:**
+- Summary metrics for this rule
+- Severity breakdown
+- Detailed findings table with rule-specific columns
+
+#### 3. By-Resource View
+
+Shows all findings for a specific VM:
 
 ```bash
-# To stdout (pipe to other tools)
-./dfo azure analyze idle-vms --export-format csv | grep "Critical"
+./dfo azure report --by-resource vm-prod-001
+```
 
-# To file
-./dfo azure analyze idle-vms --export-format csv --export-file results.csv
+**Output includes:**
+- VM details (resource group, location, size, power state)
+- All findings across all analysis types
+- Total monthly and annual savings for this VM
+
+#### 4. All-Resources View
+
+Shows all VMs with findings, sorted by savings potential:
+
+```bash
+./dfo azure report --all-resources
+```
+
+**Output includes:**
+- Summary metrics
+- Table of all VMs with findings
+- Finding count and max severity per VM
+- Sorted by total savings (descending)
+
+### Output Formats
+
+#### Console Format (Default)
+
+Rich formatted output with tables, panels, and color-coded severity:
+
+```bash
+./dfo azure report
+./dfo azure report --by-rule idle-vms
+```
+
+**Features:**
+- Color-coded severity levels
+- Formatted tables with proper alignment
+- Summary panels with key metrics
+- Progress indicators and tips
+
+#### JSON Format
+
+Structured JSON for automation and integration:
+
+```bash
+# Output to stdout
+./dfo azure report --format json
+
+# Export to file
+./dfo azure report --format json --output report.json
+
+# Specific view with JSON
+./dfo azure report --by-rule idle-vms --format json --output idle-vms.json
+```
+
+**Features:**
+- Valid JSON structure
+- Datetime fields in ISO format
+- Suitable for CI/CD pipelines
+- Easy to parse programmatically
+
+#### CSV Format
+
+Spreadsheet-friendly format with rule-specific columns:
+
+```bash
+# Output to stdout
+./dfo azure report --format csv
+
+# Export to file
+./dfo azure report --format csv --output report.csv
+
+# Specific view with CSV
+./dfo azure report --by-rule idle-vms --format csv --output idle-vms.csv
+```
+
+**CSV Columns (varies by view):**
+
+**Summary View:**
+- VM Name, VM ID, Resource Group, Location
+- Analysis Type, Rule Type, Severity
+- Monthly Savings, Annual Savings, Analyzed At
+
+**Idle VMs:**
+- VM Name, VM ID, Resource Group, Location, Severity
+- CPU Average (%), Days Under Threshold
+- Recommended Action, Equivalent SKU
+- Monthly Savings, Annual Savings, Analyzed At
+
+**Low-CPU:**
+- VM Name, VM ID, Resource Group, Location, Severity
+- CPU Average (%), Days Under Threshold
+- Current SKU, Recommended SKU
+- Current Cost, Recommended Cost
+- Monthly Savings, Savings Percentage, Annual Savings
+
+**Stopped VMs:**
+- VM Name, VM ID, Resource Group, Location, Severity
+- Power State, Days Stopped
+- Disk Cost, Recommended Action
+- Monthly Savings, Annual Savings
+
+**Resource View:**
+- VM Name, VM ID, Resource Group, Location, Size, Power State
+- Analysis Type, Rule Type, Severity
+- Monthly Savings, Annual Savings
+
+**All-Resources:**
+- VM Name, Resource Group, Location
+- Finding Count, Max Severity
+- Total Monthly Savings, Total Annual Savings
+
+### Filters and Options
+
+#### Severity Filter
+
+Filter findings by minimum severity level:
+
+```bash
+# Show only high and critical findings
+./dfo azure report --severity high
+
+# Show only critical findings
+./dfo azure report --by-rule idle-vms --severity critical
+
+# Show low severity and above (all)
+./dfo azure report --severity low
+```
+
+**Severity Levels:** low < medium < high < critical
+
+#### Limit Results
+
+Limit the number of findings shown:
+
+```bash
+# Show top 10 findings
+./dfo azure report --by-rule idle-vms --limit 10
+
+# Show top 5 VMs with most findings
+./dfo azure report --all-resources --limit 5
+```
+
+#### Combining Filters
+
+Filters can be combined:
+
+```bash
+# Top 20 critical idle VMs
+./dfo azure report --by-rule idle-vms --severity critical --limit 20
+
+# High-severity findings across all analyses, export to CSV
+./dfo azure report --severity high --format csv --output high-priority.csv
+```
+
+### Common Reporting Workflows
+
+#### Monthly Executive Report
+
+```bash
+# 1. Generate summary view
+./dfo azure report
+
+# 2. Export to CSV for management
+./dfo azure report --format csv --output monthly-summary-2025-11.csv
+
+# 3. Export detailed findings to JSON
+./dfo azure report --by-rule idle-vms --format json --output idle-details.json
+```
+
+#### Focus on High-Value Targets
+
+```bash
+# Critical findings only
+./dfo azure report --severity critical
+
+# Top 10 idle VMs by savings
+./dfo azure report --by-rule idle-vms --severity critical --limit 10
+
+# Export high-priority targets
+./dfo azure report --severity high --format csv --output action-items.csv
+```
+
+#### VM-Specific Investigation
+
+```bash
+# All findings for one VM
+./dfo azure report --by-resource vm-prod-database-01
+
+# All VMs sorted by impact
+./dfo azure report --all-resources
+
+# Export VM list to CSV
+./dfo azure report --all-resources --format csv --output vms-with-findings.csv
+```
+
+#### Automated Reporting
+
+```bash
+#!/bin/bash
+# Daily report generation script
+
+DATE=$(date +%Y-%m-%d)
+
+# Discovery and analysis
+./dfo azure discover vms
+./dfo azure analyze idle-vms
+./dfo azure analyze low-cpu
+./dfo azure analyze stopped-vms
+
+# Generate reports
+./dfo azure report --format json --output reports/summary-$DATE.json
+./dfo azure report --severity high --format csv --output reports/high-priority-$DATE.csv
+./dfo azure report --all-resources --format csv --output reports/vms-$DATE.csv
 ```
 
 ### Example: Monthly Report Workflow
