@@ -1823,43 +1823,158 @@ def analyze(
 
 @app.command()
 def report(
-    report_type: str = typer.Argument(
-        ...,
-        help="Report type (e.g., 'idle-vms')"
+    # View selection
+    by_rule: str = typer.Option(
+        None,
+        "--by-rule",
+        help="Show findings for specific rule (e.g., idle-vms, low-cpu, stopped-vms)"
     ),
+    by_resource: str = typer.Option(
+        None,
+        "--by-resource",
+        help="Show findings for specific resource (VM name)"
+    ),
+    all_resources: bool = typer.Option(
+        False,
+        "--all-resources",
+        help="Show all resources with findings"
+    ),
+
+    # Output format
     format: str = typer.Option(
         "console",
         "--format", "-f",
-        help="Output format: console, json"
+        help="Output format: console, json, csv"
     ),
     output: str = typer.Option(
         None,
         "--output", "-o",
         help="Output file path (stdout if not specified)"
-    )
+    ),
+
+    # Filters
+    severity: str = typer.Option(
+        None,
+        "--severity",
+        help="Filter by minimum severity: low, medium, high, critical"
+    ),
+    limit: int = typer.Option(
+        None,
+        "--limit",
+        help="Limit number of results shown"
+    ),
 ):
     """Generate reports from analysis results.
 
-    Reads analysis results from the database and generates
-    formatted reports.
+    Default (no flags): Show overall summary of all findings
+    --by-rule: Show findings for specific analysis type
+    --by-resource <name>: Show all findings for specific VM
+    --all-resources: Show all VMs with findings
 
-    Output formats:
-    - console: Rich formatted table (default)
-    - json: JSON output for integration
-
-    This command will be implemented in Milestone 5.
-
-    Example:
-        dfo azure report idle-vms
-        dfo azure report idle-vms --format json
-        dfo azure report idle-vms --format json --output results.json
+    Examples:
+        ./dfo azure report                           # Overall summary
+        ./dfo azure report --by-rule idle-vms        # Idle VMs report
+        ./dfo azure report --by-rule low-cpu --severity high
+        ./dfo azure report --by-resource vm-prod-001 # Single VM report
+        ./dfo azure report --all-resources           # All VMs with findings
+        ./dfo azure report --format json --output report.json
+        ./dfo azure report --by-rule idle-vms --format csv --output report.csv
     """
-    console.print(
-        f"[yellow]TODO:[/yellow] Generate {report_type} report in {format} format"
+    from dfo.report.collectors import (
+        get_summary_view_data, get_rule_view_data,
+        get_resource_view_data, get_all_resources_view_data
     )
-    if output:
-        console.print(f"[yellow]Output:[/yellow] {output}")
-    console.print("This command will be implemented in Milestone 5")
+    from dfo.report.formatters.console import (
+        format_summary_view, format_rule_view,
+        format_resource_view, format_resource_list_view
+    )
+    from dfo.report.formatters.json_formatter import format_to_json
+    from dfo.report.formatters.csv_formatter import format_to_csv
+    from dfo.rules import get_rule_engine
+
+    try:
+        # Validate view selection: only one view type allowed
+        view_count = sum([
+            by_rule is not None,
+            by_resource is not None,
+            all_resources
+        ])
+
+        if view_count > 1:
+            console.print("[red]Error:[/red] Cannot combine multiple view types")
+            console.print("Choose one: default summary, --by-rule, --by-resource, or --all-resources")
+            raise typer.Exit(1)
+
+        # Validate by-rule if specified
+        if by_rule:
+            engine = get_rule_engine()
+            rule = engine.get_rule_by_key(by_rule)
+            if not rule:
+                console.print(f"[red]Error:[/red] Unknown rule: {by_rule}")
+                console.print("Available rules: idle-vms, low-cpu, stopped-vms")
+                console.print("Use [cyan]./dfo azure analyze --list[/cyan] to see all available analyses")
+                raise typer.Exit(1)
+
+        # Collect data based on view type
+        if by_rule:
+            view_data = get_rule_view_data(by_rule, severity_filter=severity, limit=limit)
+        elif all_resources:
+            view_data = get_all_resources_view_data(severity_filter=severity, limit=limit)
+        elif by_resource:
+            view_data = get_resource_view_data(by_resource, severity_filter=severity)
+        else:
+            view_data = get_summary_view_data(severity_filter=severity)
+
+        # Format output
+        if format == "console":
+            if by_rule:
+                format_rule_view(view_data, console)
+            elif all_resources:
+                format_resource_list_view(view_data, console)
+            elif by_resource:
+                format_resource_view(view_data, console)
+            else:
+                format_summary_view(view_data, console)
+
+        elif format == "json":
+            json_output = format_to_json(view_data)
+
+            if output:
+                with open(output, 'w') as f:
+                    f.write(json_output)
+                console.print(f"[green]✓[/green] Report exported to: {output}")
+            else:
+                console.print(json_output)
+
+        elif format == "csv":
+            csv_output = format_to_csv(view_data)
+
+            if output:
+                with open(output, 'w') as f:
+                    f.write(csv_output)
+                console.print(f"[green]✓[/green] Report exported to: {output}")
+            else:
+                console.print(csv_output)
+
+        else:
+            console.print(f"[red]Error:[/red] Unsupported format: {format}")
+            console.print("Supported formats: console, json, csv")
+            raise typer.Exit(1)
+
+    except FileNotFoundError as e:
+        console.print(f"[red]Error:[/red] {e}")
+        console.print("Run [cyan]./dfo azure analyze[/cyan] first to generate analysis data")
+        raise typer.Exit(1)
+    except ValueError as e:
+        console.print(f"[red]Error:[/red] {e}")
+        raise typer.Exit(1)
+    except Exception as e:
+        console.print(f"[red]Error:[/red] {e}")
+        import os
+        if os.getenv("DFO_DEBUG"):
+            import traceback
+            traceback.print_exc()
+        raise typer.Exit(1)
 
 
 @app.command()
