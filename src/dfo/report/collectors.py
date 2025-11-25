@@ -101,52 +101,93 @@ def collect_rule_findings(
         ]
         placeholders = ",".join(["?" for _ in severity_conditions])
         query += f" WHERE LOWER(a.severity) IN ({placeholders})"
-        rows = db.execute(query, severity_conditions).fetchall()
+        rows = db.get_connection().execute(query, severity_conditions).fetchall()
     else:
-        rows = db.execute(query).fetchall()
+        rows = db.get_connection().execute(query).fetchall()
 
     # Convert rows to AnalysisFinding objects
     findings = []
     for row in rows:
-        # Build rule-specific details dict
+        # Build rule-specific details dict based on rule type
+        # Note: row is a tuple, accessed by index
         if rule_key == "idle-vms":
+            # Query columns: vm_id, vm_name, resource_group, location,
+            #                cpu_avg, days_under_threshold, estimated_monthly_savings,
+            #                severity, recommended_action, equivalent_sku, analyzed_at
             details = {
-                "cpu_avg": row["cpu_avg"],
-                "days_under_threshold": row["days_under_threshold"],
-                "recommended_action": row["recommended_action"],
-                "equivalent_sku": row["equivalent_sku"]
+                "cpu_avg": row[4],
+                "days_under_threshold": row[5],
+                "recommended_action": row[8],
+                "equivalent_sku": row[9]
             }
+            vm_id = row[0]
+            vm_name = row[1]
+            resource_group = row[2]
+            location = row[3]
+            severity = row[7]
+            monthly_savings = row[6]
+            analyzed_at = row[10]
+
         elif rule_key == "low-cpu":
+            # Query columns: vm_id, vm_name, resource_group, location,
+            #                cpu_avg, days_under_threshold, current_sku, recommended_sku,
+            #                current_monthly_cost, recommended_monthly_cost,
+            #                estimated_monthly_savings, savings_percentage, severity, analyzed_at
             details = {
-                "cpu_avg": row["cpu_avg"],
-                "days_under_threshold": row["days_under_threshold"],
-                "current_sku": row["current_sku"],
-                "recommended_sku": row["recommended_sku"],
-                "current_monthly_cost": row["current_monthly_cost"],
-                "recommended_monthly_cost": row["recommended_monthly_cost"],
-                "savings_percentage": row["savings_percentage"]
+                "cpu_avg": row[4],
+                "days_under_threshold": row[5],
+                "current_sku": row[6],
+                "recommended_sku": row[7],
+                "current_monthly_cost": row[8],
+                "recommended_monthly_cost": row[9],
+                "savings_percentage": row[11]
             }
+            vm_id = row[0]
+            vm_name = row[1]
+            resource_group = row[2]
+            location = row[3]
+            severity = row[12]
+            monthly_savings = row[10]
+            analyzed_at = row[13]
+
         elif rule_key == "stopped-vms":
+            # Query columns: vm_id, vm_name, resource_group, location,
+            #                power_state, days_stopped, disk_cost_monthly,
+            #                estimated_monthly_savings, severity, recommended_action, analyzed_at
             details = {
-                "power_state": row["power_state"],
-                "days_stopped": row["days_stopped"],
-                "disk_cost_monthly": row["disk_cost_monthly"],
-                "recommended_action": row["recommended_action"]
+                "power_state": row[4],
+                "days_stopped": row[5],
+                "disk_cost_monthly": row[6],
+                "recommended_action": row[9]
             }
+            vm_id = row[0]
+            vm_name = row[1]
+            resource_group = row[2]
+            location = row[3]
+            severity = row[8]
+            monthly_savings = row[7]
+            analyzed_at = row[10]
         else:
             details = {}
+            vm_id = row[0]
+            vm_name = row[1]
+            resource_group = row[2]
+            location = row[3]
+            severity = "Unknown"
+            monthly_savings = 0.0
+            analyzed_at = None
 
         finding = AnalysisFinding(
-            vm_id=row["vm_id"],
-            vm_name=row["vm_name"],
-            resource_group=row["resource_group"],
-            location=row["location"],
+            vm_id=vm_id,
+            vm_name=vm_name,
+            resource_group=resource_group,
+            location=location,
             rule_key=rule_key,
             rule_type=rule.type,
-            severity=row["severity"],
-            monthly_savings=row["estimated_monthly_savings"],
+            severity=severity,
+            monthly_savings=monthly_savings,
             details=details,
-            analyzed_at=row["analyzed_at"]
+            analyzed_at=analyzed_at
         )
         findings.append(finding)
 
@@ -252,7 +293,7 @@ def get_summary_view_data(
 
     # Get total VMs analyzed from vm_inventory
     db = get_db()
-    total_vms = db.execute("SELECT COUNT(*) as count FROM vm_inventory").fetchone()["count"]
+    total_vms = db.get_connection().execute("SELECT COUNT(*) as count FROM vm_inventory").fetchone()[0]
 
     total_savings = sum(f.monthly_savings for f in all_findings)
 
