@@ -206,7 +206,7 @@ class PlanManager:
         """
         # Build update query
         updates = ["status = ?"]
-        params = [new_status.value]
+        params = [new_status if isinstance(new_status, str) else new_status.value]  # Handle both string and enum
 
         # Add timestamp fields based on status
         if new_status == PlanStatus.VALIDATED:
@@ -232,6 +232,11 @@ class PlanManager:
         if "validation_warnings" in kwargs:
             updates.append("validation_warnings = ?")
             params.append(json.dumps(kwargs["validation_warnings"]))
+
+        # Add metadata if provided
+        if "metadata" in kwargs and kwargs["metadata"] is not None:
+            updates.append("metadata = ?")
+            params.append(json.dumps(kwargs["metadata"]))
 
         params.append(plan_id)
         query = f"UPDATE execution_plans SET {', '.join(updates)} WHERE plan_id = ?"
@@ -261,6 +266,17 @@ class PlanManager:
         self.conn.execute("DELETE FROM action_history WHERE plan_id = ?", [plan_id])
         self.conn.execute("DELETE FROM plan_actions WHERE plan_id = ?", [plan_id])
         self.conn.execute("DELETE FROM execution_plans WHERE plan_id = ?", [plan_id])
+
+    def update_plan_metrics(self, plan_id: str) -> None:
+        """Update plan metrics from actions.
+
+        Recalculates total, completed, failed, skipped action counts
+        and estimated/realized savings.
+
+        Args:
+            plan_id: Plan ID
+        """
+        self._update_plan_metrics(plan_id)
 
     # ========================================================================
     # ACTION OPERATIONS
@@ -321,7 +337,7 @@ class PlanManager:
 
         # Build update query
         updates = ["status = ?"]
-        params = [new_status.value]
+        params = [new_status if isinstance(new_status, str) else new_status.value]
 
         # Add timestamp fields based on status
         if new_status == ActionStatus.VALIDATED:
@@ -349,14 +365,20 @@ class PlanManager:
             "error_message",
             "error_code",
             "realized_monthly_savings",
+            "rollback_possible",
+            "rollback_data",
         ]:
             if field in kwargs:
                 updates.append(f"{field} = ?")
                 value = kwargs[field]
-                if field in ["validation_details", "execution_details"] and isinstance(
+                # Handle JSON fields
+                if field in ["validation_details", "execution_details", "rollback_data"] and isinstance(
                     value, dict
                 ):
                     value = json.dumps(value)
+                # Handle enum fields
+                elif hasattr(value, 'value'):
+                    value = value.value
                 params.append(value)
 
         params.append(action_id)
@@ -371,8 +393,8 @@ class PlanManager:
             EventType.COMPLETED if new_status == ActionStatus.COMPLETED else EventType.FAILED
             if new_status == ActionStatus.FAILED
             else EventType.EXECUTING,
-            current.status.value,
-            new_status.value,
+            current.status,  # Already a string due to use_enum_values = True
+            new_status,      # Already a string due to use_enum_values = True
             kwargs.get("details"),
         )
 
@@ -712,7 +734,7 @@ class PlanManager:
                 action_id,
                 plan_id,
                 datetime.now(),
-                event_type.value,
+                event_type if isinstance(event_type, str) else event_type.value,  # Handle both string and enum
                 previous_status,
                 new_status,
                 json.dumps(details) if details else None,

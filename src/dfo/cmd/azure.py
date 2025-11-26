@@ -1,5 +1,7 @@
 """Azure cloud provider commands."""
 
+from typing import Optional
+
 # Third-party
 import typer
 from rich.console import Console
@@ -2504,6 +2506,967 @@ def plan_delete(
         raise typer.Exit(1)
     except Exception as e:
         console.print(f"\n[red]✗[/red] Error deleting plan: {e}")
+        raise typer.Exit(1)
+
+
+@plan_app.command(name="validate")
+def plan_validate(
+    plan_id: str = typer.Argument(..., help="Plan ID"),
+    skip_azure: bool = typer.Option(
+        False,
+        "--skip-azure",
+        help="Skip Azure resource validation (basic validation only)",
+    ),
+):
+    """Validate execution plan.
+
+    Performs comprehensive validation of all actions in a plan:
+    - Resource existence (Azure SDK)
+    - Current power state
+    - Permissions check
+    - Dependencies (disks, NICs)
+    - Protection tags
+    - Destructive action warnings
+
+    Plans should be validated before approval and execution.
+    Plans are automatically re-validated if >1 hour old.
+
+    Examples:
+        # Validate plan with Azure checks
+        dfo azure plan validate plan-20251125-001
+
+        # Basic validation only (no Azure SDK calls)
+        dfo azure plan validate plan-20251125-001 --skip-azure
+    """
+    from dfo.execute.validators import validate_plan, should_revalidate
+    from dfo.execute.plan_manager import PlanManager
+    from rich.table import Table
+    from rich.panel import Panel
+
+    try:
+        manager = PlanManager()
+        plan = manager.get_plan(plan_id)
+
+        # Check if re-validation needed
+        needs_revalidation = should_revalidate(plan_id)
+        if plan.validated_at and not needs_revalidation:
+            console.print(f"\n[yellow]ℹ[/yellow] Plan was validated recently at {plan.validated_at.strftime('%Y-%m-%d %H:%M:%S')}")
+            console.print("[yellow]Re-validating anyway...[/yellow]\n")
+
+        # Show validation header
+        console.print(f"[cyan]Validating plan:[/cyan] {plan.plan_name}")
+        console.print(f"[dim]Plan ID: {plan_id}[/dim]")
+        console.print(f"[dim]Actions: {plan.total_actions}[/dim]\n")
+
+        # Validate plan
+        if skip_azure:
+            console.print("[yellow]⚠ Skipping Azure resource validation[/yellow]\n")
+
+        console.print("Validating actions...")
+
+        # Perform validation
+        result = validate_plan(plan_id)
+
+        # Display results summary panel
+        status_icon = {
+            "success": "✓",
+            "warning": "⚠",
+            "error": "✗"
+        }
+        status_color = {
+            "success": "green",
+            "warning": "yellow",
+            "error": "red"
+        }
+
+        icon = status_icon.get(result.status, "?")
+        color = status_color.get(result.status, "white")
+
+        summary_text = f"""[{color}]{icon} {result.summary}[/{color}]
+
+[cyan]Actions:[/cyan]
+  Total: {result.total_actions}
+  Ready: {result.ready_actions}
+  Warnings: {result.warning_actions}
+  Errors: {result.error_actions}"""
+
+        console.print()
+        console.print(Panel(summary_text, title="Validation Results", border_style=color))
+
+        # Show detailed results if there are warnings or errors
+        if result.warning_actions > 0 or result.error_actions > 0:
+            table = Table(title="\nValidation Details")
+            table.add_column("Action ID", style="dim")
+            table.add_column("Resource", style="cyan")
+            table.add_column("Status", style="yellow")
+            table.add_column("Issues", style="white")
+
+            for action_result in result.action_results:
+                if action_result.warnings or action_result.errors:
+                    status_display = {
+                        "success": "[green]✓ Ready[/green]",
+                        "warning": "[yellow]⚠ Warning[/yellow]",
+                        "error": "[red]✗ Error[/red]",
+                    }
+
+                    issues = []
+                    if action_result.warnings:
+                        issues.extend([f"⚠ {w}" for w in action_result.warnings])
+                    if action_result.errors:
+                        issues.extend([f"✗ {e}" for e in action_result.errors])
+
+                    # Get resource name from details
+                    resource_name = action_result.details.get("resource_name", "Unknown") if action_result.details else "Unknown"
+
+                    table.add_row(
+                        action_result.action_id,
+                        resource_name,
+                        status_display.get(action_result.status, action_result.status),
+                        "\n".join(issues[:3]),  # Show up to 3 issues
+                    )
+
+            console.print(table)
+
+        # Show next steps
+        console.print()
+        if result.status == "success":
+            console.print("[green]✓ Plan is ready for approval[/green]")
+            console.print(f"\nNext step: dfo azure plan approve {plan_id}\n")
+        elif result.status == "warning":
+            console.print("[yellow]⚠ Plan has warnings but can proceed[/yellow]")
+            console.print(f"\nNext step: dfo azure plan approve {plan_id}\n")
+        else:
+            console.print("[red]✗ Plan has validation errors[/red]")
+            console.print("\nFix errors before proceeding:")
+            console.print(f"  1. Review errors above")
+            console.print(f"  2. Fix issues (remove protected resources, etc.)")
+            console.print(f"  3. Re-validate: dfo azure plan validate {plan_id}\n")
+
+    except ValueError as e:
+        console.print(f"\n[red]✗[/red] {e}\n")
+        raise typer.Exit(1)
+    except Exception as e:
+        console.print(f"\n[red]✗[/red] Error validating plan: {e}")
+        import traceback
+        traceback.print_exc()
+        raise typer.Exit(1)
+
+
+@plan_app.command(name="approve")
+def plan_approve(
+    plan_id: str = typer.Argument(..., help="Plan ID"),
+    approved_by: str = typer.Option(
+        "system",
+        "--approved-by",
+        help="User or system identifier approving the plan",
+    ),
+    notes: Optional[str] = typer.Option(
+        None,
+        "--notes",
+        help="Optional approval notes for audit trail",
+    ),
+    yes: bool = typer.Option(
+        False,
+        "--yes", "-y",
+        help="Skip confirmation prompt",
+    ),
+):
+    """Approve execution plan.
+
+    Approves a validated plan for execution. Plans must be validated
+    before approval, and validation must be recent (<1 hour).
+
+    Prerequisites:
+      • Plan status must be VALIDATED
+      • Validation must be fresh (<1 hour)
+      • No actions with validation errors
+
+    The approval process:
+      1. Verifies all prerequisites
+      2. Shows summary of actions to be approved
+      3. Requests confirmation (unless --yes flag used)
+      4. Updates plan status to APPROVED
+      5. Records approval timestamp and user
+
+    Examples:
+        dfo azure plan approve plan-20251125-001
+        dfo azure plan approve plan-20251125-001 --approved-by john@company.com
+        dfo azure plan approve plan-20251125-001 --yes --notes "Weekend maintenance"
+    """
+    from datetime import datetime
+    from dfo.execute.approvals import approve_plan, get_approval_summary, ApprovalError
+    from rich.panel import Panel
+    from rich.table import Table
+
+    try:
+        # Get approval summary
+        summary = get_approval_summary(plan_id)
+
+        console.print(f"\nApproving plan: [cyan]{summary['plan_name']}[/cyan]")
+        console.print(f"Plan ID: [dim]{plan_id}[/dim]")
+        console.print()
+
+        # Show summary
+        console.print("[bold]Summary:[/bold]")
+        console.print(f"  Actions: {summary['total_actions']} ", end="")
+        console.print(
+            f"([green]{summary['ready_actions']} ready[/green], "
+            f"[yellow]{summary['warning_actions']} warnings[/yellow], "
+            f"[red]{summary['error_actions']} errors[/red])"
+        )
+        console.print(f"  Estimated Monthly Savings: [green]${summary['estimated_savings']:.2f}[/green]")
+        console.print()
+
+        # Show actions breakdown
+        if summary['action_counts']:
+            console.print("[bold]Actions Breakdown:[/bold]")
+            for action_type, count in summary['action_counts'].items():
+                console.print(f"  ✓ {action_type}: {count} resource(s)")
+            console.print()
+
+        # Show validation status
+        if summary['validated_at']:
+            age = summary['validation_age_hours']
+            age_str = f"{int(age * 60)} minutes ago" if age < 1 else f"{age:.1f} hours ago"
+            console.print(f"Last validated: [dim]{summary['validated_at'].strftime('%Y-%m-%d %H:%M:%S')}[/dim] ({age_str})")
+        else:
+            console.print("[yellow]⚠ Plan has never been validated[/yellow]")
+
+        console.print()
+
+        # Show warnings for destructive actions
+        if summary['destructive_actions'] > 0:
+            warning_panel = Panel(
+                f"This plan contains [bold]{summary['destructive_actions']}[/bold] destructive action(s)\n"
+                f"(DELETE or DOWNSIZE operations)\n\n"
+                f"[yellow]These actions may be IRREVERSIBLE[/yellow]",
+                title="⚠ Warning",
+                border_style="yellow",
+            )
+            console.print(warning_panel)
+            console.print()
+
+        # Check if can approve
+        if not summary['can_approve']:
+            if summary['error_actions'] > 0:
+                console.print("[red]✗ Cannot approve: plan has validation errors[/red]")
+                console.print(f"\nFix errors and re-validate: dfo azure plan validate {plan_id}\n")
+            elif summary['plan_status'] != 'validated':
+                console.print(f"[red]✗ Cannot approve: plan status is '{summary['plan_status']}'[/red]")
+                if summary['plan_status'] == 'draft':
+                    console.print(f"\nValidate plan first: dfo azure plan validate {plan_id}\n")
+            else:
+                console.print("[red]✗ Cannot approve: validation is stale[/red]")
+                console.print(f"\nRe-validate plan: dfo azure plan validate {plan_id}\n")
+            raise typer.Exit(1)
+
+        # Request confirmation unless --yes flag
+        if not yes:
+            console.print("[bold]Approve this plan?[/bold] This will authorize execution of the above actions.")
+            confirm = typer.confirm("Continue?", default=False)
+            if not confirm:
+                console.print("\n[yellow]Approval cancelled[/yellow]\n")
+                raise typer.Exit(0)
+
+        # Approve the plan
+        approve_plan(plan_id, approved_by=approved_by, notes=notes)
+
+        # Success message
+        console.print()
+        console.print(f"[green]✓[/green] Plan approved by [cyan]{approved_by}[/cyan] at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        console.print("[green]✓[/green] Plan is ready for execution")
+        console.print()
+        console.print(f"Next step: dfo azure plan execute {plan_id}\n")
+
+    except typer.Abort:
+        console.print("\n[yellow]Approval cancelled[/yellow]\n")
+        raise typer.Exit(0)
+    except ApprovalError as e:
+        console.print(f"\n[red]✗[/red] {e}\n")
+        raise typer.Exit(1)
+    except ValueError as e:
+        console.print(f"\n[red]✗[/red] {e}\n")
+        raise typer.Exit(1)
+    except Exception as e:
+        console.print(f"\n[red]✗[/red] Error approving plan: {e}")
+        import traceback
+        traceback.print_exc()
+        raise typer.Exit(1)
+
+
+@plan_app.command(name="execute")
+def plan_execute(
+    plan_id: str = typer.Argument(..., help="Plan ID"),
+    force: bool = typer.Option(
+        False,
+        "--force",
+        help="Execute actions for real (default is dry-run simulation)",
+    ),
+    yes: bool = typer.Option(
+        False,
+        "--yes", "-y",
+        help="Skip confirmation prompt",
+    ),
+    action_ids: Optional[str] = typer.Option(
+        None,
+        "--action-ids",
+        help="Comma-separated action IDs to execute (default: all)",
+    ),
+    action_type: Optional[str] = typer.Option(
+        None,
+        "--action-type",
+        help="Execute only specific action type (deallocate, stop, delete, downsize)",
+    ),
+    retry_failed: bool = typer.Option(
+        False,
+        "--retry-failed",
+        help="Retry only failed actions",
+    ),
+):
+    """Execute execution plan.
+
+    By default, runs in DRY RUN mode (simulates execution without changes).
+    Use --force to execute actions for real on Azure resources.
+
+    Safety features:
+      • Default is DRY RUN (safe simulation)
+      • --force required for real execution
+      • Confirmation prompt for live execution (unless --yes)
+      • Extra warnings for destructive actions (DELETE)
+      • All executions logged to database
+
+    Prerequisites:
+      • Plan must be APPROVED
+
+    Examples:
+        # Dry run (safe, see what would happen)
+        dfo azure plan execute plan-20251125-001
+
+        # Execute for real (prompts for confirmation)
+        dfo azure plan execute plan-20251125-001 --force
+
+        # Execute without confirmation (automation)
+        dfo azure plan execute plan-20251125-001 --force --yes
+
+        # Execute specific actions only
+        dfo azure plan execute plan-20251125-001 --action-ids action-1,action-2 --force
+
+        # Execute only deallocate actions
+        dfo azure plan execute plan-20251125-001 --action-type deallocate --force
+
+        # Retry failed actions
+        dfo azure plan execute plan-20251125-001 --retry-failed --force
+    """
+    from dfo.execute.execution import (
+        execute_plan,
+        execute_actions_by_type,
+        retry_failed_actions,
+        ExecutionError,
+    )
+    from dfo.execute.models import ActionType
+    from dfo.execute.plan_manager import PlanManager
+    from rich.panel import Panel
+    from rich.progress import Progress, SpinnerColumn, TextColumn
+
+    try:
+        # Convert --force to dry_run
+        dry_run = not force
+
+        # Get plan details
+        manager = PlanManager()
+        plan = manager.get_plan(plan_id)
+        actions = manager.get_actions(plan_id)
+
+        # Parse action IDs if provided
+        parsed_action_ids = None
+        if action_ids:
+            parsed_action_ids = [aid.strip() for aid in action_ids.split(",")]
+
+        # Show execution mode
+        console.print()
+        if dry_run:
+            mode_panel = Panel(
+                "[yellow]DRY RUN MODE[/yellow]\n\n"
+                "Simulating execution without making changes.\n"
+                "No Azure resources will be modified.\n\n"
+                "To execute for real, add --force flag",
+                title="⚠ Simulation Mode",
+                border_style="yellow",
+            )
+        else:
+            mode_panel = Panel(
+                "[red]LIVE EXECUTION MODE[/red]\n\n"
+                "Will execute REAL actions on Azure resources.\n"
+                "Changes will be applied to your VMs.\n\n"
+                "[yellow]This is NOT a simulation![/yellow]",
+                title="⚠ Live Execution",
+                border_style="red",
+            )
+        console.print(mode_panel)
+        console.print()
+
+        # Show plan summary
+        console.print(f"Executing plan: [cyan]{plan.plan_name}[/cyan]")
+        console.print(f"Plan ID: [dim]{plan_id}[/dim]")
+        console.print(f"Status: [{_get_status_color(plan.status)}]{plan.status}[/]")
+
+        # Filter actions based on options
+        actions_to_execute = actions
+        if action_ids:
+            actions_to_execute = [a for a in actions if a.action_id in parsed_action_ids]
+            console.print(f"Actions: [cyan]{len(actions_to_execute)}[/cyan] (filtered from {len(actions)} total)")
+        elif action_type:
+            actions_to_execute = [a for a in actions if a.action_type == action_type]
+            console.print(f"Actions: [cyan]{len(actions_to_execute)}[/cyan] ({action_type} only, from {len(actions)} total)")
+        elif retry_failed:
+            from dfo.execute.models import ActionStatus
+            actions_to_execute = [a for a in actions if a.status == ActionStatus.FAILED]
+            console.print(f"Actions: [cyan]{len(actions_to_execute)}[/cyan] (retrying failed, from {len(actions)} total)")
+        else:
+            console.print(f"Actions: [cyan]{len(actions_to_execute)}[/cyan]")
+
+        if not actions_to_execute:
+            console.print("\n[yellow]No actions to execute[/yellow]\n")
+            raise typer.Exit(0)
+
+        console.print()
+
+        # Check for destructive actions
+        destructive_actions = [
+            a for a in actions_to_execute if a.action_type == ActionType.DELETE
+        ]
+
+        if destructive_actions and not dry_run:
+            warning_panel = Panel(
+                f"[red]This plan contains {len(destructive_actions)} DELETE action(s)[/red]\n\n"
+                f"DELETE operations are [bold]IRREVERSIBLE[/bold]\n"
+                f"VMs and attached resources will be [bold]permanently deleted[/bold]\n\n"
+                f"[yellow]Cannot be undone or rolled back![/yellow]",
+                title="⚠ DESTRUCTIVE ACTIONS WARNING",
+                border_style="red",
+            )
+            console.print(warning_panel)
+            console.print()
+
+        # Confirmation prompt for live execution
+        if not dry_run and not yes:
+            console.print("[bold]This will execute REAL actions on Azure resources.[/bold]")
+            if destructive_actions:
+                console.print(f"[red]Including {len(destructive_actions)} IRREVERSIBLE DELETE operation(s).[/red]")
+            console.print()
+
+            confirm = typer.confirm("Continue with live execution?", default=False)
+            if not confirm:
+                console.print("\n[yellow]Execution cancelled[/yellow]\n")
+                raise typer.Exit(0)
+            console.print()
+
+        # Execute the plan
+        console.print(f"{'Simulating' if dry_run else 'Executing'} actions...\n")
+
+        # Route to appropriate execution function
+        if retry_failed:
+            result = retry_failed_actions(plan_id, dry_run=dry_run)
+        elif action_type:
+            # Validate action type
+            try:
+                action_type_enum = ActionType(action_type)
+            except ValueError:
+                valid_types = ", ".join([t.value for t in ActionType])
+                console.print(f"\n[red]✗[/red] Invalid action type: {action_type}")
+                console.print(f"Valid types: {valid_types}\n")
+                raise typer.Exit(1)
+            result = execute_actions_by_type(plan_id, action_type_enum, dry_run=dry_run)
+        else:
+            result = execute_plan(plan_id, action_ids=parsed_action_ids, dry_run=dry_run)
+
+        # Display results
+        console.print()
+
+        if result["successful"] == result["total_actions"] and result["failed"] == 0:
+            status_color = "green"
+            status_icon = "✓"
+            status_msg = "complete"
+        elif result["failed"] > 0:
+            status_color = "yellow"
+            status_icon = "⚠"
+            status_msg = "complete with failures"
+        else:
+            status_color = "red"
+            status_icon = "✗"
+            status_msg = "failed"
+
+        summary_text = (
+            f"[{status_color}]{status_icon} {'Dry run' if dry_run else 'Execution'} {status_msg}[/]\n\n"
+            f"Total actions: {result['total_actions']}\n"
+            f"Successful: [green]{result['successful']}[/green]\n"
+            f"Failed: [{'red' if result['failed'] > 0 else 'dim'}]{result['failed']}[/]\n"
+        )
+
+        summary_panel = Panel(
+            summary_text,
+            title=f"{'Simulation' if dry_run else 'Execution'} Summary",
+            border_style=status_color,
+        )
+        console.print(summary_panel)
+        console.print()
+
+        # Show individual action results if there were failures
+        if result["failed"] > 0:
+            console.print("[bold]Failed Actions:[/bold]")
+            for action_result in result["results"]:
+                if not action_result["success"]:
+                    console.print(
+                        f"  [red]✗[/red] {action_result['resource_name']}: {action_result['message']}"
+                    )
+            console.print()
+
+        # Next steps
+        if dry_run:
+            console.print("[bold]Next steps:[/bold]")
+            console.print(f"  • Execute for real: dfo azure plan execute {plan_id} --force")
+            console.print(f"  • View details: dfo azure plan show {plan_id}")
+            console.print()
+        else:
+            console.print("[bold]Next steps:[/bold]")
+            console.print(f"  • View results: dfo azure plan show {plan_id}")
+            if result["failed"] > 0:
+                console.print(f"  • Retry failed: dfo azure plan execute {plan_id} --retry-failed --force")
+            if result["successful"] > 0:
+                console.print(f"  • Rollback if needed: dfo azure plan rollback {plan_id}")
+            console.print()
+
+    except typer.Abort:
+        console.print("\n[yellow]Execution cancelled[/yellow]\n")
+        raise typer.Exit(0)
+    except typer.Exit:
+        # Re-raise typer.Exit without modification
+        raise
+    except ExecutionError as e:
+        console.print(f"\n[red]✗[/red] {e}\n")
+        raise typer.Exit(1)
+    except ValueError as e:
+        console.print(f"\n[red]✗[/red] {e}\n")
+        raise typer.Exit(1)
+    except Exception as e:
+        console.print(f"\n[red]✗[/red] Error executing plan: {e}")
+        import traceback
+        traceback.print_exc()
+        raise typer.Exit(1)
+
+
+def _get_status_color(status: str) -> str:
+    """Get color for plan status."""
+    status_colors = {
+        "draft": "dim",
+        "validated": "cyan",
+        "approved": "green",
+        "executing": "yellow",
+        "completed": "green",
+        "failed": "red",
+        "cancelled": "dim",
+    }
+    return status_colors.get(status, "white")
+
+
+@plan_app.command(name="rollback")
+def plan_rollback(
+    plan_id: str = typer.Argument(..., help="Plan ID"),
+    force: bool = typer.Option(
+        False,
+        "--force",
+        help="Execute rollback for real (default is dry-run simulation)",
+    ),
+    yes: bool = typer.Option(
+        False,
+        "--yes", "-y",
+        help="Skip confirmation prompt",
+    ),
+    action_ids: Optional[str] = typer.Option(
+        None,
+        "--action-ids",
+        help="Comma-separated action IDs to rollback (default: all)",
+    ),
+):
+    """Rollback executed actions in a plan.
+
+    Reverses completed actions by executing the opposite operation.
+    For example, DEALLOCATE is reversed by START.
+
+    By default, runs in DRY RUN mode (simulates rollback).
+    Use --force to execute rollback for real.
+
+    Rollback rules:
+      • STOP/DEALLOCATE → START (restarts VM)
+      • DOWNSIZE → DOWNSIZE (resizes back to original)
+      • DELETE → Cannot be rolled back (irreversible)
+
+    Only completed actions with rollback_possible=True can be rolled back.
+
+    Examples:
+        # Dry run (see what would be rolled back)
+        dfo azure plan rollback plan-20251125-001
+
+        # Rollback for real
+        dfo azure plan rollback plan-20251125-001 --force
+
+        # Rollback without confirmation
+        dfo azure plan rollback plan-20251125-001 --force --yes
+
+        # Rollback specific actions
+        dfo azure plan rollback plan-20251125-001 --action-ids action-1,action-2 --force
+    """
+    from dfo.execute.rollback import (
+        rollback_plan,
+        get_rollback_summary,
+        RollbackError,
+    )
+    from dfo.execute.plan_manager import PlanManager
+    from rich.panel import Panel
+    from rich.table import Table
+
+    try:
+        # Convert --force to dry_run
+        dry_run = not force
+
+        # Get plan and rollback summary
+        manager = PlanManager()
+        plan = manager.get_plan(plan_id)
+        summary = get_rollback_summary(plan_id)
+
+        # Parse action IDs if provided
+        parsed_action_ids = None
+        if action_ids:
+            parsed_action_ids = [aid.strip() for aid in action_ids.split(",")]
+
+        # Show rollback mode
+        console.print()
+        if dry_run:
+            mode_panel = Panel(
+                "[yellow]DRY RUN MODE[/yellow]\n\n"
+                "Simulating rollback without making changes.\n"
+                "No Azure resources will be modified.\n\n"
+                "To execute rollback for real, add --force flag",
+                title="⚠ Simulation Mode",
+                border_style="yellow",
+            )
+        else:
+            mode_panel = Panel(
+                "[red]LIVE ROLLBACK MODE[/red]\n\n"
+                "Will execute REAL rollback actions on Azure resources.\n"
+                "This will reverse the original actions.\n\n"
+                "[yellow]This is NOT a simulation![/yellow]",
+                title="⚠ Live Rollback",
+                border_style="red",
+            )
+        console.print(mode_panel)
+        console.print()
+
+        # Show plan summary
+        console.print(f"Rolling back plan: [cyan]{summary['plan_name']}[/cyan]")
+        console.print(f"Plan ID: [dim]{plan_id}[/dim]")
+        console.print()
+
+        # Show rollback summary
+        console.print("[bold]Rollback Summary:[/bold]")
+        console.print(f"  Total completed actions: {summary['total_completed']}")
+        console.print(f"  Can rollback: [green]{summary['can_rollback']}[/green]")
+        console.print(f"  Cannot rollback: [red]{summary['cannot_rollback']}[/red]")
+        console.print(f"  Already rolled back: [dim]{summary['already_rolled_back']}[/dim]")
+        console.print()
+
+        # Show rollbackable actions
+        if summary['rollbackable_actions']:
+            table = Table(title="Rollbackable Actions")
+            table.add_column("Resource", style="cyan")
+            table.add_column("Original Action", style="yellow")
+            table.add_column("Rollback Action", style="green")
+
+            for action in summary['rollbackable_actions']:
+                # Filter by action_ids if provided
+                if parsed_action_ids and action['action_id'] not in parsed_action_ids:
+                    continue
+
+                table.add_row(
+                    action['resource_name'],
+                    action['action_type'],
+                    action['rollback_action_type'],
+                )
+
+            console.print(table)
+            console.print()
+        else:
+            console.print("[yellow]No actions can be rolled back[/yellow]\n")
+            raise typer.Exit(0)
+
+        # Show non-rollbackable actions if any
+        if summary['not_rollbackable_actions']:
+            console.print("[bold]Cannot Rollback:[/bold]")
+            for action in summary['not_rollbackable_actions']:
+                console.print(f"  [red]✗[/red] {action['resource_name']}: {action['reason']}")
+            console.print()
+
+        # Confirmation prompt for live rollback
+        if not dry_run and not yes:
+            console.print("[bold]This will execute REAL rollback actions on Azure resources.[/bold]")
+            console.print()
+
+            confirm = typer.confirm("Continue with live rollback?", default=False)
+            if not confirm:
+                console.print("\n[yellow]Rollback cancelled[/yellow]\n")
+                raise typer.Exit(0)
+            console.print()
+
+        # Execute rollback
+        console.print(f"{'Simulating' if dry_run else 'Executing'} rollback...\n")
+
+        result = rollback_plan(plan_id, action_ids=parsed_action_ids, dry_run=dry_run)
+
+        # Display results
+        console.print()
+
+        if result["successful"] == result["total_actions"] and result["failed"] == 0:
+            status_color = "green"
+            status_icon = "✓"
+            status_msg = "complete"
+        elif result["failed"] > 0:
+            status_color = "yellow"
+            status_icon = "⚠"
+            status_msg = "complete with failures"
+        else:
+            status_color = "red"
+            status_icon = "✗"
+            status_msg = "failed"
+
+        summary_text = (
+            f"[{status_color}]{status_icon} {'Rollback simulation' if dry_run else 'Rollback'} {status_msg}[/]\n\n"
+            f"Total actions: {result['total_actions']}\n"
+            f"Successful: [green]{result['successful']}[/green]\n"
+            f"Failed: [{'red' if result['failed'] > 0 else 'dim'}]{result['failed']}[/]\n"
+            f"Skipped: [dim]{result['skipped']}[/dim]\n"
+        )
+
+        summary_panel = Panel(
+            summary_text,
+            title=f"{'Simulation' if dry_run else 'Rollback'} Summary",
+            border_style=status_color,
+        )
+        console.print(summary_panel)
+        console.print()
+
+        # Show individual rollback results
+        if result["results"]:
+            console.print("[bold]Rollback Actions:[/bold]")
+            for action_result in result["results"]:
+                status = "✓" if action_result["success"] else "✗"
+                color = "green" if action_result["success"] else "red"
+                console.print(
+                    f"  [{color}]{status}[/] {action_result['resource_name']}: "
+                    f"{action_result['original_action_type']} → {action_result['rollback_action_type']}"
+                )
+                if not action_result["success"]:
+                    console.print(f"     {action_result['message']}")
+            console.print()
+
+        # Show skipped actions if any
+        if result["skipped"] > 0 and result["skipped_reasons"]:
+            console.print("[bold]Skipped Actions:[/bold]")
+            for skipped in result["skipped_reasons"]:
+                console.print(f"  [yellow]⊘[/yellow] {skipped['action_id']}: {skipped['reason']}")
+            console.print()
+
+        # Next steps
+        if dry_run:
+            console.print("[bold]Next steps:[/bold]")
+            console.print(f"  • Execute rollback: dfo azure plan rollback {plan_id} --force")
+            console.print(f"  • View plan: dfo azure plan show {plan_id}")
+            console.print()
+        else:
+            console.print("[bold]Next steps:[/bold]")
+            console.print(f"  • View results: dfo azure plan show {plan_id}")
+            console.print()
+
+    except typer.Abort:
+        console.print("\n[yellow]Rollback cancelled[/yellow]\n")
+        raise typer.Exit(0)
+    except typer.Exit:
+        raise
+    except RollbackError as e:
+        console.print(f"\n[red]✗[/red] {e}\n")
+        raise typer.Exit(1)
+    except ValueError as e:
+        console.print(f"\n[red]✗[/red] {e}\n")
+        raise typer.Exit(1)
+    except Exception as e:
+        console.print(f"\n[red]✗[/red] Error rolling back plan: {e}")
+        import traceback
+        traceback.print_exc()
+        raise typer.Exit(1)
+
+
+@plan_app.command(name="status")
+def plan_status(
+    plan_id: str = typer.Argument(..., help="Plan ID"),
+    verbose: bool = typer.Option(
+        False,
+        "--verbose", "-v",
+        help="Show detailed action status",
+    ),
+):
+    """Show execution status of a plan.
+
+    Displays current execution progress, action statuses, and metrics.
+
+    Examples:
+        # Basic status
+        dfo azure plan status plan-20251125-001
+
+        # Detailed status with all actions
+        dfo azure plan status plan-20251125-001 --verbose
+    """
+    from dfo.execute.plan_manager import PlanManager
+    from dfo.execute.models import ActionStatus
+    from rich.panel import Panel
+    from rich.table import Table
+    from rich.progress import Progress, BarColumn, TextColumn
+
+    try:
+        manager = PlanManager()
+        plan = manager.get_plan(plan_id)
+        actions = manager.get_actions(plan_id)
+
+        # Header
+        console.print()
+        console.print(f"Plan: [cyan]{plan.plan_name}[/cyan]")
+        console.print(f"ID: [dim]{plan_id}[/dim]")
+        console.print()
+
+        # Status panel
+        status_text = (
+            f"Status: [{_get_status_color(plan.status)}]{plan.status}[/]\n"
+            f"Created: {plan.created_at.strftime('%Y-%m-%d %H:%M:%S')}\n"
+        )
+
+        if plan.validated_at:
+            status_text += f"Validated: {plan.validated_at.strftime('%Y-%m-%d %H:%M:%S')}\n"
+        if plan.approved_at:
+            status_text += f"Approved: {plan.approved_at.strftime('%Y-%m-%d %H:%M:%S')}"
+            if plan.approved_by:
+                status_text += f" by {plan.approved_by}"
+            status_text += "\n"
+        if plan.executed_at:
+            status_text += f"Executed: {plan.executed_at.strftime('%Y-%m-%d %H:%M:%S')}\n"
+        if plan.completed_at:
+            status_text += f"Completed: {plan.completed_at.strftime('%Y-%m-%d %H:%M:%S')}\n"
+        if plan.execution_duration_seconds:
+            status_text += f"Duration: {plan.execution_duration_seconds}s\n"
+
+        status_panel = Panel(
+            status_text.rstrip(),
+            title="Plan Status",
+            border_style=_get_status_color(plan.status),
+        )
+        console.print(status_panel)
+        console.print()
+
+        # Metrics
+        console.print("[bold]Execution Metrics:[/bold]")
+        console.print(f"  Total actions: {plan.total_actions}")
+        console.print(f"  Completed: [green]{plan.completed_actions}[/green]")
+        console.print(f"  Failed: [red]{plan.failed_actions}[/red]")
+        console.print(f"  Skipped: [dim]{plan.skipped_actions}[/dim]")
+        console.print()
+
+        # Savings
+        console.print("[bold]Savings:[/bold]")
+        console.print(f"  Estimated monthly: [green]${plan.total_estimated_savings:.2f}[/green]")
+        console.print(f"  Realized monthly: [green]${plan.total_realized_savings:.2f}[/green]")
+        console.print()
+
+        # Progress bar
+        if plan.total_actions > 0:
+            progress_pct = (plan.completed_actions + plan.failed_actions) / plan.total_actions * 100
+
+            console.print("[bold]Progress:[/bold]")
+            progress = Progress(
+                TextColumn("[progress.description]{task.description}"),
+                BarColumn(),
+                TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
+            )
+
+            with progress:
+                task = progress.add_task(
+                    f"Actions: {plan.completed_actions + plan.failed_actions}/{plan.total_actions}",
+                    total=100,
+                    completed=progress_pct
+                )
+            console.print()
+
+        # Action status breakdown (verbose mode)
+        if verbose and actions:
+            # Count by status
+            status_counts = {}
+            for action in actions:
+                status_counts[action.status] = status_counts.get(action.status, 0) + 1
+
+            table = Table(title="Action Status Breakdown")
+            table.add_column("Resource", style="cyan")
+            table.add_column("Action", style="yellow")
+            table.add_column("Status", style="white")
+            table.add_column("Result", style="dim")
+
+            for action in actions:
+                status_color = {
+                    ActionStatus.PENDING: "dim",
+                    ActionStatus.VALIDATED: "cyan",
+                    ActionStatus.RUNNING: "yellow",
+                    ActionStatus.COMPLETED: "green",
+                    ActionStatus.FAILED: "red",
+                    ActionStatus.SKIPPED: "dim",
+                }.get(action.status, "white")
+
+                result_text = ""
+                if action.execution_result:
+                    result_text = action.execution_result[:50] + "..." if len(action.execution_result) > 50 else action.execution_result
+                if action.error_message:
+                    result_text = f"[red]{action.error_message[:50]}...[/red]" if len(action.error_message) > 50 else f"[red]{action.error_message}[/red]"
+
+                table.add_row(
+                    action.resource_name,
+                    action.action_type,
+                    f"[{status_color}]{action.status}[/]",
+                    result_text,
+                )
+
+            console.print(table)
+            console.print()
+
+        # Next steps based on status
+        console.print("[bold]Next steps:[/bold]")
+        if plan.status == "draft":
+            console.print(f"  • Validate: dfo azure plan validate {plan_id}")
+        elif plan.status == "validated":
+            console.print(f"  • Approve: dfo azure plan approve {plan_id}")
+        elif plan.status == "approved":
+            console.print(f"  • Execute (dry-run): dfo azure plan execute {plan_id}")
+            console.print(f"  • Execute (live): dfo azure plan execute {plan_id} --force")
+        elif plan.status == "completed":
+            if plan.completed_actions > 0:
+                console.print(f"  • Rollback if needed: dfo azure plan rollback {plan_id}")
+        elif plan.status == "failed":
+            if plan.failed_actions > 0:
+                console.print(f"  • Retry failed: dfo azure plan execute {plan_id} --retry-failed --force")
+            if plan.completed_actions > 0:
+                console.print(f"  • Rollback completed: dfo azure plan rollback {plan_id}")
+        console.print()
+
+    except ValueError as e:
+        console.print(f"\n[red]✗[/red] {e}\n")
+        raise typer.Exit(1)
+    except Exception as e:
+        console.print(f"\n[red]✗[/red] Error getting plan status: {e}")
+        import traceback
+        traceback.print_exc()
         raise typer.Exit(1)
 
 

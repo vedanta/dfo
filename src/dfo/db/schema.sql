@@ -116,6 +116,8 @@ CREATE TABLE IF NOT EXISTS execution_plans (
 );
 
 -- Plan Actions (individual actions within a plan)
+-- Note: No foreign key constraints due to DuckDB limitations with UPDATE operations
+-- Referential integrity is maintained at the application level
 CREATE TABLE IF NOT EXISTS plan_actions (
     -- Identity
     action_id TEXT PRIMARY KEY,
@@ -164,12 +166,12 @@ CREATE TABLE IF NOT EXISTS plan_actions (
     rollback_result TEXT,
 
     -- Execution ordering
-    execution_order INTEGER,
-
-    FOREIGN KEY (plan_id) REFERENCES execution_plans(plan_id)
+    execution_order INTEGER
 );
 
 -- Action History (audit trail)
+-- Note: No foreign key constraints to allow updates to referenced records
+-- History should be preserved even if parent records are modified/deleted
 CREATE TABLE IF NOT EXISTS action_history (
     -- Identity
     history_id TEXT PRIMARY KEY,
@@ -187,10 +189,7 @@ CREATE TABLE IF NOT EXISTS action_history (
     performed_by TEXT,
 
     -- Context
-    metadata JSON,
-
-    FOREIGN KEY (action_id) REFERENCES plan_actions(action_id),
-    FOREIGN KEY (plan_id) REFERENCES execution_plans(plan_id)
+    metadata JSON
 );
 
 -- Indexes for execution tables

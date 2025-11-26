@@ -74,6 +74,9 @@ class DuckDBManager:
 
         if drop_existing:
             tables = [
+                "action_history",      # Drop in reverse order due to dependencies
+                "plan_actions",
+                "execution_plans",
                 "vm_actions",
                 "vm_idle_analysis",
                 "vm_inventory",
