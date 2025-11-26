@@ -14,7 +14,7 @@ def test_version_command():
     result = runner.invoke(app, ["version"])
     assert result.exit_code == 0
     assert "dfo" in result.stdout
-    assert "0.0.3" in result.stdout
+    assert "0.1.0" in result.stdout
     assert "DevFinOps" in result.stdout
 
 
