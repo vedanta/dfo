@@ -267,6 +267,17 @@ class PlanManager:
         self.conn.execute("DELETE FROM plan_actions WHERE plan_id = ?", [plan_id])
         self.conn.execute("DELETE FROM execution_plans WHERE plan_id = ?", [plan_id])
 
+    def update_plan_metrics(self, plan_id: str) -> None:
+        """Update plan metrics from actions.
+
+        Recalculates total, completed, failed, skipped action counts
+        and estimated/realized savings.
+
+        Args:
+            plan_id: Plan ID
+        """
+        self._update_plan_metrics(plan_id)
+
     # ========================================================================
     # ACTION OPERATIONS
     # ========================================================================
@@ -354,12 +365,14 @@ class PlanManager:
             "error_message",
             "error_code",
             "realized_monthly_savings",
+            "rollback_possible",
+            "rollback_data",
         ]:
             if field in kwargs:
                 updates.append(f"{field} = ?")
                 value = kwargs[field]
                 # Handle JSON fields
-                if field in ["validation_details", "execution_details"] and isinstance(
+                if field in ["validation_details", "execution_details", "rollback_data"] and isinstance(
                     value, dict
                 ):
                     value = json.dumps(value)
