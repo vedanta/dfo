@@ -3069,6 +3069,407 @@ def _get_status_color(status: str) -> str:
     return status_colors.get(status, "white")
 
 
+@plan_app.command(name="rollback")
+def plan_rollback(
+    plan_id: str = typer.Argument(..., help="Plan ID"),
+    force: bool = typer.Option(
+        False,
+        "--force",
+        help="Execute rollback for real (default is dry-run simulation)",
+    ),
+    yes: bool = typer.Option(
+        False,
+        "--yes", "-y",
+        help="Skip confirmation prompt",
+    ),
+    action_ids: Optional[str] = typer.Option(
+        None,
+        "--action-ids",
+        help="Comma-separated action IDs to rollback (default: all)",
+    ),
+):
+    """Rollback executed actions in a plan.
+
+    Reverses completed actions by executing the opposite operation.
+    For example, DEALLOCATE is reversed by START.
+
+    By default, runs in DRY RUN mode (simulates rollback).
+    Use --force to execute rollback for real.
+
+    Rollback rules:
+      • STOP/DEALLOCATE → START (restarts VM)
+      • DOWNSIZE → DOWNSIZE (resizes back to original)
+      • DELETE → Cannot be rolled back (irreversible)
+
+    Only completed actions with rollback_possible=True can be rolled back.
+
+    Examples:
+        # Dry run (see what would be rolled back)
+        dfo azure plan rollback plan-20251125-001
+
+        # Rollback for real
+        dfo azure plan rollback plan-20251125-001 --force
+
+        # Rollback without confirmation
+        dfo azure plan rollback plan-20251125-001 --force --yes
+
+        # Rollback specific actions
+        dfo azure plan rollback plan-20251125-001 --action-ids action-1,action-2 --force
+    """
+    from dfo.execute.rollback import (
+        rollback_plan,
+        get_rollback_summary,
+        RollbackError,
+    )
+    from dfo.execute.plan_manager import PlanManager
+    from rich.panel import Panel
+    from rich.table import Table
+
+    try:
+        # Convert --force to dry_run
+        dry_run = not force
+
+        # Get plan and rollback summary
+        manager = PlanManager()
+        plan = manager.get_plan(plan_id)
+        summary = get_rollback_summary(plan_id)
+
+        # Parse action IDs if provided
+        parsed_action_ids = None
+        if action_ids:
+            parsed_action_ids = [aid.strip() for aid in action_ids.split(",")]
+
+        # Show rollback mode
+        console.print()
+        if dry_run:
+            mode_panel = Panel(
+                "[yellow]DRY RUN MODE[/yellow]\n\n"
+                "Simulating rollback without making changes.\n"
+                "No Azure resources will be modified.\n\n"
+                "To execute rollback for real, add --force flag",
+                title="⚠ Simulation Mode",
+                border_style="yellow",
+            )
+        else:
+            mode_panel = Panel(
+                "[red]LIVE ROLLBACK MODE[/red]\n\n"
+                "Will execute REAL rollback actions on Azure resources.\n"
+                "This will reverse the original actions.\n\n"
+                "[yellow]This is NOT a simulation![/yellow]",
+                title="⚠ Live Rollback",
+                border_style="red",
+            )
+        console.print(mode_panel)
+        console.print()
+
+        # Show plan summary
+        console.print(f"Rolling back plan: [cyan]{summary['plan_name']}[/cyan]")
+        console.print(f"Plan ID: [dim]{plan_id}[/dim]")
+        console.print()
+
+        # Show rollback summary
+        console.print("[bold]Rollback Summary:[/bold]")
+        console.print(f"  Total completed actions: {summary['total_completed']}")
+        console.print(f"  Can rollback: [green]{summary['can_rollback']}[/green]")
+        console.print(f"  Cannot rollback: [red]{summary['cannot_rollback']}[/red]")
+        console.print(f"  Already rolled back: [dim]{summary['already_rolled_back']}[/dim]")
+        console.print()
+
+        # Show rollbackable actions
+        if summary['rollbackable_actions']:
+            table = Table(title="Rollbackable Actions")
+            table.add_column("Resource", style="cyan")
+            table.add_column("Original Action", style="yellow")
+            table.add_column("Rollback Action", style="green")
+
+            for action in summary['rollbackable_actions']:
+                # Filter by action_ids if provided
+                if parsed_action_ids and action['action_id'] not in parsed_action_ids:
+                    continue
+
+                table.add_row(
+                    action['resource_name'],
+                    action['action_type'],
+                    action['rollback_action_type'],
+                )
+
+            console.print(table)
+            console.print()
+        else:
+            console.print("[yellow]No actions can be rolled back[/yellow]\n")
+            raise typer.Exit(0)
+
+        # Show non-rollbackable actions if any
+        if summary['not_rollbackable_actions']:
+            console.print("[bold]Cannot Rollback:[/bold]")
+            for action in summary['not_rollbackable_actions']:
+                console.print(f"  [red]✗[/red] {action['resource_name']}: {action['reason']}")
+            console.print()
+
+        # Confirmation prompt for live rollback
+        if not dry_run and not yes:
+            console.print("[bold]This will execute REAL rollback actions on Azure resources.[/bold]")
+            console.print()
+
+            confirm = typer.confirm("Continue with live rollback?", default=False)
+            if not confirm:
+                console.print("\n[yellow]Rollback cancelled[/yellow]\n")
+                raise typer.Exit(0)
+            console.print()
+
+        # Execute rollback
+        console.print(f"{'Simulating' if dry_run else 'Executing'} rollback...\n")
+
+        result = rollback_plan(plan_id, action_ids=parsed_action_ids, dry_run=dry_run)
+
+        # Display results
+        console.print()
+
+        if result["successful"] == result["total_actions"] and result["failed"] == 0:
+            status_color = "green"
+            status_icon = "✓"
+            status_msg = "complete"
+        elif result["failed"] > 0:
+            status_color = "yellow"
+            status_icon = "⚠"
+            status_msg = "complete with failures"
+        else:
+            status_color = "red"
+            status_icon = "✗"
+            status_msg = "failed"
+
+        summary_text = (
+            f"[{status_color}]{status_icon} {'Rollback simulation' if dry_run else 'Rollback'} {status_msg}[/]\n\n"
+            f"Total actions: {result['total_actions']}\n"
+            f"Successful: [green]{result['successful']}[/green]\n"
+            f"Failed: [{'red' if result['failed'] > 0 else 'dim'}]{result['failed']}[/]\n"
+            f"Skipped: [dim]{result['skipped']}[/dim]\n"
+        )
+
+        summary_panel = Panel(
+            summary_text,
+            title=f"{'Simulation' if dry_run else 'Rollback'} Summary",
+            border_style=status_color,
+        )
+        console.print(summary_panel)
+        console.print()
+
+        # Show individual rollback results
+        if result["results"]:
+            console.print("[bold]Rollback Actions:[/bold]")
+            for action_result in result["results"]:
+                status = "✓" if action_result["success"] else "✗"
+                color = "green" if action_result["success"] else "red"
+                console.print(
+                    f"  [{color}]{status}[/] {action_result['resource_name']}: "
+                    f"{action_result['original_action_type']} → {action_result['rollback_action_type']}"
+                )
+                if not action_result["success"]:
+                    console.print(f"     {action_result['message']}")
+            console.print()
+
+        # Show skipped actions if any
+        if result["skipped"] > 0 and result["skipped_reasons"]:
+            console.print("[bold]Skipped Actions:[/bold]")
+            for skipped in result["skipped_reasons"]:
+                console.print(f"  [yellow]⊘[/yellow] {skipped['action_id']}: {skipped['reason']}")
+            console.print()
+
+        # Next steps
+        if dry_run:
+            console.print("[bold]Next steps:[/bold]")
+            console.print(f"  • Execute rollback: dfo azure plan rollback {plan_id} --force")
+            console.print(f"  • View plan: dfo azure plan show {plan_id}")
+            console.print()
+        else:
+            console.print("[bold]Next steps:[/bold]")
+            console.print(f"  • View results: dfo azure plan show {plan_id}")
+            console.print()
+
+    except typer.Abort:
+        console.print("\n[yellow]Rollback cancelled[/yellow]\n")
+        raise typer.Exit(0)
+    except typer.Exit:
+        raise
+    except RollbackError as e:
+        console.print(f"\n[red]✗[/red] {e}\n")
+        raise typer.Exit(1)
+    except ValueError as e:
+        console.print(f"\n[red]✗[/red] {e}\n")
+        raise typer.Exit(1)
+    except Exception as e:
+        console.print(f"\n[red]✗[/red] Error rolling back plan: {e}")
+        import traceback
+        traceback.print_exc()
+        raise typer.Exit(1)
+
+
+@plan_app.command(name="status")
+def plan_status(
+    plan_id: str = typer.Argument(..., help="Plan ID"),
+    verbose: bool = typer.Option(
+        False,
+        "--verbose", "-v",
+        help="Show detailed action status",
+    ),
+):
+    """Show execution status of a plan.
+
+    Displays current execution progress, action statuses, and metrics.
+
+    Examples:
+        # Basic status
+        dfo azure plan status plan-20251125-001
+
+        # Detailed status with all actions
+        dfo azure plan status plan-20251125-001 --verbose
+    """
+    from dfo.execute.plan_manager import PlanManager
+    from dfo.execute.models import ActionStatus
+    from rich.panel import Panel
+    from rich.table import Table
+    from rich.progress import Progress, BarColumn, TextColumn
+
+    try:
+        manager = PlanManager()
+        plan = manager.get_plan(plan_id)
+        actions = manager.get_actions(plan_id)
+
+        # Header
+        console.print()
+        console.print(f"Plan: [cyan]{plan.plan_name}[/cyan]")
+        console.print(f"ID: [dim]{plan_id}[/dim]")
+        console.print()
+
+        # Status panel
+        status_text = (
+            f"Status: [{_get_status_color(plan.status)}]{plan.status}[/]\n"
+            f"Created: {plan.created_at.strftime('%Y-%m-%d %H:%M:%S')}\n"
+        )
+
+        if plan.validated_at:
+            status_text += f"Validated: {plan.validated_at.strftime('%Y-%m-%d %H:%M:%S')}\n"
+        if plan.approved_at:
+            status_text += f"Approved: {plan.approved_at.strftime('%Y-%m-%d %H:%M:%S')}"
+            if plan.approved_by:
+                status_text += f" by {plan.approved_by}"
+            status_text += "\n"
+        if plan.executed_at:
+            status_text += f"Executed: {plan.executed_at.strftime('%Y-%m-%d %H:%M:%S')}\n"
+        if plan.completed_at:
+            status_text += f"Completed: {plan.completed_at.strftime('%Y-%m-%d %H:%M:%S')}\n"
+        if plan.execution_duration_seconds:
+            status_text += f"Duration: {plan.execution_duration_seconds}s\n"
+
+        status_panel = Panel(
+            status_text.rstrip(),
+            title="Plan Status",
+            border_style=_get_status_color(plan.status),
+        )
+        console.print(status_panel)
+        console.print()
+
+        # Metrics
+        console.print("[bold]Execution Metrics:[/bold]")
+        console.print(f"  Total actions: {plan.total_actions}")
+        console.print(f"  Completed: [green]{plan.completed_actions}[/green]")
+        console.print(f"  Failed: [red]{plan.failed_actions}[/red]")
+        console.print(f"  Skipped: [dim]{plan.skipped_actions}[/dim]")
+        console.print()
+
+        # Savings
+        console.print("[bold]Savings:[/bold]")
+        console.print(f"  Estimated monthly: [green]${plan.total_estimated_savings:.2f}[/green]")
+        console.print(f"  Realized monthly: [green]${plan.total_realized_savings:.2f}[/green]")
+        console.print()
+
+        # Progress bar
+        if plan.total_actions > 0:
+            progress_pct = (plan.completed_actions + plan.failed_actions) / plan.total_actions * 100
+
+            console.print("[bold]Progress:[/bold]")
+            progress = Progress(
+                TextColumn("[progress.description]{task.description}"),
+                BarColumn(),
+                TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
+            )
+
+            with progress:
+                task = progress.add_task(
+                    f"Actions: {plan.completed_actions + plan.failed_actions}/{plan.total_actions}",
+                    total=100,
+                    completed=progress_pct
+                )
+            console.print()
+
+        # Action status breakdown (verbose mode)
+        if verbose and actions:
+            # Count by status
+            status_counts = {}
+            for action in actions:
+                status_counts[action.status] = status_counts.get(action.status, 0) + 1
+
+            table = Table(title="Action Status Breakdown")
+            table.add_column("Resource", style="cyan")
+            table.add_column("Action", style="yellow")
+            table.add_column("Status", style="white")
+            table.add_column("Result", style="dim")
+
+            for action in actions:
+                status_color = {
+                    ActionStatus.PENDING: "dim",
+                    ActionStatus.VALIDATED: "cyan",
+                    ActionStatus.RUNNING: "yellow",
+                    ActionStatus.COMPLETED: "green",
+                    ActionStatus.FAILED: "red",
+                    ActionStatus.SKIPPED: "dim",
+                }.get(action.status, "white")
+
+                result_text = ""
+                if action.execution_result:
+                    result_text = action.execution_result[:50] + "..." if len(action.execution_result) > 50 else action.execution_result
+                if action.error_message:
+                    result_text = f"[red]{action.error_message[:50]}...[/red]" if len(action.error_message) > 50 else f"[red]{action.error_message}[/red]"
+
+                table.add_row(
+                    action.resource_name,
+                    action.action_type,
+                    f"[{status_color}]{action.status}[/]",
+                    result_text,
+                )
+
+            console.print(table)
+            console.print()
+
+        # Next steps based on status
+        console.print("[bold]Next steps:[/bold]")
+        if plan.status == "draft":
+            console.print(f"  • Validate: dfo azure plan validate {plan_id}")
+        elif plan.status == "validated":
+            console.print(f"  • Approve: dfo azure plan approve {plan_id}")
+        elif plan.status == "approved":
+            console.print(f"  • Execute (dry-run): dfo azure plan execute {plan_id}")
+            console.print(f"  • Execute (live): dfo azure plan execute {plan_id} --force")
+        elif plan.status == "completed":
+            if plan.completed_actions > 0:
+                console.print(f"  • Rollback if needed: dfo azure plan rollback {plan_id}")
+        elif plan.status == "failed":
+            if plan.failed_actions > 0:
+                console.print(f"  • Retry failed: dfo azure plan execute {plan_id} --retry-failed --force")
+            if plan.completed_actions > 0:
+                console.print(f"  • Rollback completed: dfo azure plan rollback {plan_id}")
+        console.print()
+
+    except ValueError as e:
+        console.print(f"\n[red]✗[/red] {e}\n")
+        raise typer.Exit(1)
+    except Exception as e:
+        console.print(f"\n[red]✗[/red] Error getting plan status: {e}")
+        import traceback
+        traceback.print_exc()
+        raise typer.Exit(1)
+
+
 @app.command(name="test-auth")
 def test_auth():
     """Test Azure authentication and client creation.
