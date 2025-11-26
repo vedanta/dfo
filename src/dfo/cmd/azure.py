@@ -2642,6 +2642,9 @@ def plan_validate(
             console.print(f"  2. Fix issues (remove protected resources, etc.)")
             console.print(f"  3. Re-validate: dfo azure plan validate {plan_id}\n")
 
+    except typer.Exit:
+        # Re-raise typer.Exit without modification (prevents traceback)
+        raise
     except ValueError as e:
         console.print(f"\n[red]✗[/red] {e}\n")
         raise typer.Exit(1)
@@ -2781,6 +2784,9 @@ def plan_approve(
     except typer.Abort:
         console.print("\n[yellow]Approval cancelled[/yellow]\n")
         raise typer.Exit(0)
+    except typer.Exit:
+        # Re-raise typer.Exit without modification (prevents traceback)
+        raise
     except ApprovalError as e:
         console.print(f"\n[red]✗[/red] {e}\n")
         raise typer.Exit(1)
@@ -3460,6 +3466,9 @@ def plan_status(
                 console.print(f"  • Rollback completed: dfo azure plan rollback {plan_id}")
         console.print()
 
+    except typer.Exit:
+        # Re-raise typer.Exit without modification (prevents traceback)
+        raise
     except ValueError as e:
         console.print(f"\n[red]✗[/red] {e}\n")
         raise typer.Exit(1)
