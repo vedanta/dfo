@@ -233,6 +233,11 @@ class PlanManager:
             updates.append("validation_warnings = ?")
             params.append(json.dumps(kwargs["validation_warnings"]))
 
+        # Add metadata if provided
+        if "metadata" in kwargs and kwargs["metadata"] is not None:
+            updates.append("metadata = ?")
+            params.append(json.dumps(kwargs["metadata"]))
+
         params.append(plan_id)
         query = f"UPDATE execution_plans SET {', '.join(updates)} WHERE plan_id = ?"
 

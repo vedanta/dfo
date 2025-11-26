@@ -1,5 +1,7 @@
 """Azure cloud provider commands."""
 
+from typing import Optional
+
 # Third-party
 import typer
 from rich.console import Console
@@ -2645,6 +2647,148 @@ def plan_validate(
         raise typer.Exit(1)
     except Exception as e:
         console.print(f"\n[red]✗[/red] Error validating plan: {e}")
+        import traceback
+        traceback.print_exc()
+        raise typer.Exit(1)
+
+
+@plan_app.command(name="approve")
+def plan_approve(
+    plan_id: str = typer.Argument(..., help="Plan ID"),
+    approved_by: str = typer.Option(
+        "system",
+        "--approved-by",
+        help="User or system identifier approving the plan",
+    ),
+    notes: Optional[str] = typer.Option(
+        None,
+        "--notes",
+        help="Optional approval notes for audit trail",
+    ),
+    yes: bool = typer.Option(
+        False,
+        "--yes", "-y",
+        help="Skip confirmation prompt",
+    ),
+):
+    """Approve execution plan.
+
+    Approves a validated plan for execution. Plans must be validated
+    before approval, and validation must be recent (<1 hour).
+
+    Prerequisites:
+      • Plan status must be VALIDATED
+      • Validation must be fresh (<1 hour)
+      • No actions with validation errors
+
+    The approval process:
+      1. Verifies all prerequisites
+      2. Shows summary of actions to be approved
+      3. Requests confirmation (unless --yes flag used)
+      4. Updates plan status to APPROVED
+      5. Records approval timestamp and user
+
+    Examples:
+        dfo azure plan approve plan-20251125-001
+        dfo azure plan approve plan-20251125-001 --approved-by john@company.com
+        dfo azure plan approve plan-20251125-001 --yes --notes "Weekend maintenance"
+    """
+    from datetime import datetime
+    from dfo.execute.approvals import approve_plan, get_approval_summary, ApprovalError
+    from rich.panel import Panel
+    from rich.table import Table
+
+    try:
+        # Get approval summary
+        summary = get_approval_summary(plan_id)
+
+        console.print(f"\nApproving plan: [cyan]{summary['plan_name']}[/cyan]")
+        console.print(f"Plan ID: [dim]{plan_id}[/dim]")
+        console.print()
+
+        # Show summary
+        console.print("[bold]Summary:[/bold]")
+        console.print(f"  Actions: {summary['total_actions']} ", end="")
+        console.print(
+            f"([green]{summary['ready_actions']} ready[/green], "
+            f"[yellow]{summary['warning_actions']} warnings[/yellow], "
+            f"[red]{summary['error_actions']} errors[/red])"
+        )
+        console.print(f"  Estimated Monthly Savings: [green]${summary['estimated_savings']:.2f}[/green]")
+        console.print()
+
+        # Show actions breakdown
+        if summary['action_counts']:
+            console.print("[bold]Actions Breakdown:[/bold]")
+            for action_type, count in summary['action_counts'].items():
+                console.print(f"  ✓ {action_type}: {count} resource(s)")
+            console.print()
+
+        # Show validation status
+        if summary['validated_at']:
+            age = summary['validation_age_hours']
+            age_str = f"{int(age * 60)} minutes ago" if age < 1 else f"{age:.1f} hours ago"
+            console.print(f"Last validated: [dim]{summary['validated_at'].strftime('%Y-%m-%d %H:%M:%S')}[/dim] ({age_str})")
+        else:
+            console.print("[yellow]⚠ Plan has never been validated[/yellow]")
+
+        console.print()
+
+        # Show warnings for destructive actions
+        if summary['destructive_actions'] > 0:
+            warning_panel = Panel(
+                f"This plan contains [bold]{summary['destructive_actions']}[/bold] destructive action(s)\n"
+                f"(DELETE or DOWNSIZE operations)\n\n"
+                f"[yellow]These actions may be IRREVERSIBLE[/yellow]",
+                title="⚠ Warning",
+                border_style="yellow",
+            )
+            console.print(warning_panel)
+            console.print()
+
+        # Check if can approve
+        if not summary['can_approve']:
+            if summary['error_actions'] > 0:
+                console.print("[red]✗ Cannot approve: plan has validation errors[/red]")
+                console.print(f"\nFix errors and re-validate: dfo azure plan validate {plan_id}\n")
+            elif summary['plan_status'] != 'validated':
+                console.print(f"[red]✗ Cannot approve: plan status is '{summary['plan_status']}'[/red]")
+                if summary['plan_status'] == 'draft':
+                    console.print(f"\nValidate plan first: dfo azure plan validate {plan_id}\n")
+            else:
+                console.print("[red]✗ Cannot approve: validation is stale[/red]")
+                console.print(f"\nRe-validate plan: dfo azure plan validate {plan_id}\n")
+            raise typer.Exit(1)
+
+        # Request confirmation unless --yes flag
+        if not yes:
+            console.print("[bold]Approve this plan?[/bold] This will authorize execution of the above actions.")
+            confirm = typer.confirm("Continue?", default=False)
+            if not confirm:
+                console.print("\n[yellow]Approval cancelled[/yellow]\n")
+                raise typer.Exit(0)
+
+        # Approve the plan
+        approve_plan(plan_id, approved_by=approved_by, notes=notes)
+
+        # Success message
+        console.print()
+        console.print(f"[green]✓[/green] Plan approved by [cyan]{approved_by}[/cyan] at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        console.print("[green]✓[/green] Plan is ready for execution")
+        console.print()
+        console.print(f"Next step: dfo azure plan execute {plan_id}\n")
+
+    except typer.Abort:
+        console.print("\n[yellow]Approval cancelled[/yellow]\n")
+        raise typer.Exit(0)
+    except ApprovalError as e:
+        console.print(f"\n[red]✗[/red] {e}\n")
+        raise typer.Exit(1)
+    except ValueError as e:
+        console.print(f"\n[red]✗[/red] {e}\n")
+        raise typer.Exit(1)
+    except Exception as e:
+        console.print(f"\n[red]✗[/red] Error approving plan: {e}")
         import traceback
         traceback.print_exc()
         raise typer.Exit(1)
