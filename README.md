@@ -26,22 +26,23 @@ dfo is a command-line tool that discovers Azure VMs, analyzes their CPU usage, i
 | ✅ **Milestone 3** | Complete | Discovery Layer (VM listing + metrics) |
 | ✅ **Milestone 4** | Complete | Analysis Layer (3 VM analyses: idle, low-CPU, stopped) |
 | ✅ **Milestone 5** | Complete | Reporting Layer (4 views, 3 formats, filters) |
-| ⏳ **Milestone 6** | Planned | Execution Layer (stop/deallocate VMs) |
+| ✅ **Milestone 6** | Complete | Execution Layer (plans, validation, approval, execution, rollback) |
 
 **Currently Available:**
 - ✓ Configuration management with Pydantic Settings
-- ✓ DuckDB local database with 7 tables (inventory, 3 analysis tables, pricing, equivalence, actions)
+- ✓ DuckDB local database with 10 tables (inventory, 3 analysis tables, pricing, equivalence, actions, plans)
 - ✓ Azure authentication (DefaultAzureCredential + service principal)
 - ✓ Azure SDK client management (Compute, Monitor, Pricing)
 - ✓ VM discovery with CPU metrics collection (rules-driven)
 - ✓ **3 VM analysis types** (Milestone 4): idle detection, low-CPU rightsizing, stopped VM cleanup
 - ✓ **Unified reporting system** (Milestone 5): 4 view types, 3 output formats (console/JSON/CSV)
+- ✓ **Complete execution system** (Milestone 6): plan management, validation, approval workflow, execution, rollback
 - ✓ **Azure VM SKU equivalence mapping** (29 legacy→modern mappings)
 - ✓ **Rules-driven CLI architecture** (service-based rules: vm_rules.json, storage_rules.json, etc.)
 - ✓ **Enhanced rules management** (key-based lookup, categories, smart search)
 - ✓ Multi-service optimization rules engine (VMs, databases, storage, networking, AKS)
 - ✓ Common visualization module (sparklines, charts, dashboards)
-- ✓ CLI commands: discover, analyze, report, rules (list/show/keys/categories)
+- ✓ CLI commands: discover, analyze, report, rules, **plan** (9 execution commands)
 
 ## Quick Start
 
@@ -172,20 +173,36 @@ The `dfo` wrapper script allows you to run commands from the root directory:
 ./dfo rules enable idle-vms      # Enable a rule by key
 ./dfo rules disable stopped-vms # Disable a rule by key
 
-# Coming soon in Milestone 6:
-./dfo azure execute stop-idle-vms  # Take action (dry-run default)
-./dfo azure execute stop-idle-vms --no-dry-run --yes  # Execute with confirmation
+# Execution system: Create and execute plans (✓ Available now - M6)
+./dfo azure plan create --from-analysis idle-vms --name "Q4 Cleanup"  # Create plan
+./dfo azure plan list                              # List all plans
+./dfo azure plan list --status approved            # Filter by status
+./dfo azure plan show <plan-id>                    # Show plan details
+./dfo azure plan show <plan-id> --detail           # Show with action list
+./dfo azure plan validate <plan-id>                # Validate with Azure SDK
+./dfo azure plan approve <plan-id>                 # Approve for execution
+./dfo azure plan approve <plan-id> --approved-by "admin@company.com"
+./dfo azure plan execute <plan-id>                 # Dry-run execution (default)
+./dfo azure plan execute <plan-id> --force         # Live execution (requires approval)
+./dfo azure plan execute <plan-id> --action-ids act-001,act-002 --force  # Execute specific actions
+./dfo azure plan status <plan-id>                  # Check execution status
+./dfo azure plan status <plan-id> --verbose        # Detailed action status
+./dfo azure plan rollback <plan-id>                # Rollback simulation
+./dfo azure plan rollback <plan-id> --force        # Live rollback
+./dfo azure plan delete <plan-id> --force          # Delete draft/validated plans
 
 # Get help
 ./dfo --help
 ./dfo db --help
 ./dfo azure --help
+./dfo azure plan --help
 ```
 
 ## Documentation
 
 - **[USER_GUIDE.md](USER_GUIDE.md)** - Complete user guide with workflow, examples, and troubleshooting
 - **[CLAUDE.md](CLAUDE.md)** - Architecture and development guidelines for Claude Code
+- **[docs/PLAN_STATUS.md](docs/PLAN_STATUS.md)** - Execution plan status lifecycle and behavior guide
 - **[docs/rules_driven_cli.md](docs/rules_driven_cli.md)** - Rules-driven CLI architecture guide
 - **[docs/sku_equivalence_implementation.md](docs/sku_equivalence_implementation.md)** - Azure VM SKU equivalence strategy
 - **[docs/azure_vm_selection_strategy.md](docs/azure_vm_selection_strategy.md)** - VM SKU mapping rules and examples
@@ -246,7 +263,44 @@ The `dfo` wrapper script allows you to run commands from the root directory:
 ./dfo azure analyze idle-vms --export-format json --full
 ```
 
-### Automated Cost Optimization (✓ Reporting Available, Execution Coming in M6)
+### Complete Cost Optimization Workflow (✓ Available Now - M6)
+```bash
+# 1. Discover and analyze
+./dfo azure discover vms
+./dfo azure analyze idle-vms
+
+# 2. Review findings
+./dfo azure report --by-rule idle-vms
+
+# 3. Create execution plan
+./dfo azure plan create --from-analysis idle-vms --name "Q4 2025 Cleanup"
+
+# 4. Validate plan (Azure SDK checks)
+./dfo azure plan validate plan-20251126-001
+
+# 5. Review plan details
+./dfo azure plan show plan-20251126-001 --detail
+
+# 6. Approve plan
+./dfo azure plan approve plan-20251126-001 --approved-by "admin@company.com"
+
+# 7. Test with dry-run
+./dfo azure plan execute plan-20251126-001
+
+# 8. Check results
+./dfo azure plan status plan-20251126-001 --verbose
+
+# 9. Execute for real
+./dfo azure plan execute plan-20251126-001 --force --yes
+
+# 10. Monitor status
+./dfo azure plan status plan-20251126-001
+
+# 11. Rollback if needed
+./dfo azure plan rollback plan-20251126-001 --force
+```
+
+### Automated Cost Optimization (Legacy Example)
 ```bash
 # Discover and analyze
 ./dfo azure discover vms
