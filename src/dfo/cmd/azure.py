@@ -2507,6 +2507,149 @@ def plan_delete(
         raise typer.Exit(1)
 
 
+@plan_app.command(name="validate")
+def plan_validate(
+    plan_id: str = typer.Argument(..., help="Plan ID"),
+    skip_azure: bool = typer.Option(
+        False,
+        "--skip-azure",
+        help="Skip Azure resource validation (basic validation only)",
+    ),
+):
+    """Validate execution plan.
+
+    Performs comprehensive validation of all actions in a plan:
+    - Resource existence (Azure SDK)
+    - Current power state
+    - Permissions check
+    - Dependencies (disks, NICs)
+    - Protection tags
+    - Destructive action warnings
+
+    Plans should be validated before approval and execution.
+    Plans are automatically re-validated if >1 hour old.
+
+    Examples:
+        # Validate plan with Azure checks
+        dfo azure plan validate plan-20251125-001
+
+        # Basic validation only (no Azure SDK calls)
+        dfo azure plan validate plan-20251125-001 --skip-azure
+    """
+    from dfo.execute.validators import validate_plan, should_revalidate
+    from dfo.execute.plan_manager import PlanManager
+    from rich.table import Table
+    from rich.panel import Panel
+
+    try:
+        manager = PlanManager()
+        plan = manager.get_plan(plan_id)
+
+        # Check if re-validation needed
+        needs_revalidation = should_revalidate(plan_id)
+        if plan.validated_at and not needs_revalidation:
+            console.print(f"\n[yellow]ℹ[/yellow] Plan was validated recently at {plan.validated_at.strftime('%Y-%m-%d %H:%M:%S')}")
+            console.print("[yellow]Re-validating anyway...[/yellow]\n")
+
+        # Show validation header
+        console.print(f"[cyan]Validating plan:[/cyan] {plan.plan_name}")
+        console.print(f"[dim]Plan ID: {plan_id}[/dim]")
+        console.print(f"[dim]Actions: {plan.total_actions}[/dim]\n")
+
+        # Validate plan
+        if skip_azure:
+            console.print("[yellow]⚠ Skipping Azure resource validation[/yellow]\n")
+
+        console.print("Validating actions...")
+
+        # Perform validation
+        result = validate_plan(plan_id)
+
+        # Display results summary panel
+        status_icon = {
+            "success": "✓",
+            "warning": "⚠",
+            "error": "✗"
+        }
+        status_color = {
+            "success": "green",
+            "warning": "yellow",
+            "error": "red"
+        }
+
+        icon = status_icon.get(result.status, "?")
+        color = status_color.get(result.status, "white")
+
+        summary_text = f"""[{color}]{icon} {result.summary}[/{color}]
+
+[cyan]Actions:[/cyan]
+  Total: {result.total_actions}
+  Ready: {result.ready_actions}
+  Warnings: {result.warning_actions}
+  Errors: {result.error_actions}"""
+
+        console.print()
+        console.print(Panel(summary_text, title="Validation Results", border_style=color))
+
+        # Show detailed results if there are warnings or errors
+        if result.warning_actions > 0 or result.error_actions > 0:
+            table = Table(title="\nValidation Details")
+            table.add_column("Action ID", style="dim")
+            table.add_column("Resource", style="cyan")
+            table.add_column("Status", style="yellow")
+            table.add_column("Issues", style="white")
+
+            for action_result in result.action_results:
+                if action_result.warnings or action_result.errors:
+                    status_display = {
+                        "success": "[green]✓ Ready[/green]",
+                        "warning": "[yellow]⚠ Warning[/yellow]",
+                        "error": "[red]✗ Error[/red]",
+                    }
+
+                    issues = []
+                    if action_result.warnings:
+                        issues.extend([f"⚠ {w}" for w in action_result.warnings])
+                    if action_result.errors:
+                        issues.extend([f"✗ {e}" for e in action_result.errors])
+
+                    # Get resource name from details
+                    resource_name = action_result.details.get("resource_name", "Unknown") if action_result.details else "Unknown"
+
+                    table.add_row(
+                        action_result.action_id,
+                        resource_name,
+                        status_display.get(action_result.status, action_result.status),
+                        "\n".join(issues[:3]),  # Show up to 3 issues
+                    )
+
+            console.print(table)
+
+        # Show next steps
+        console.print()
+        if result.status == "success":
+            console.print("[green]✓ Plan is ready for approval[/green]")
+            console.print(f"\nNext step: dfo azure plan approve {plan_id}\n")
+        elif result.status == "warning":
+            console.print("[yellow]⚠ Plan has warnings but can proceed[/yellow]")
+            console.print(f"\nNext step: dfo azure plan approve {plan_id}\n")
+        else:
+            console.print("[red]✗ Plan has validation errors[/red]")
+            console.print("\nFix errors before proceeding:")
+            console.print(f"  1. Review errors above")
+            console.print(f"  2. Fix issues (remove protected resources, etc.)")
+            console.print(f"  3. Re-validate: dfo azure plan validate {plan_id}\n")
+
+    except ValueError as e:
+        console.print(f"\n[red]✗[/red] {e}\n")
+        raise typer.Exit(1)
+    except Exception as e:
+        console.print(f"\n[red]✗[/red] Error validating plan: {e}")
+        import traceback
+        traceback.print_exc()
+        raise typer.Exit(1)
+
+
 @app.command(name="test-auth")
 def test_auth():
     """Test Azure authentication and client creation.
