@@ -7,6 +7,7 @@
 - [What is dfo?](#what-is-dfo)
 - [Getting Started](#getting-started)
 - [Core Workflows](#core-workflows)
+- [Execution System](#execution-system)
 - [Command Reference](#command-reference)
 - [Rules-Driven CLI](#rules-driven-cli)
 - [Export and Reporting](#export-and-reporting)
@@ -275,6 +276,514 @@ You're ready! 🎉
 # Enable/disable a rule
 ./dfo rules disable stopped-vms
 ./dfo rules enable stopped-vms
+```
+
+---
+
+## Execution System
+
+The execution system (Milestone 6) provides a safe, auditable way to take action on cost optimization opportunities. It follows a multi-stage workflow with comprehensive safety checks.
+
+### Overview
+
+The execution system uses **execution plans** - structured documents that define what actions will be taken and on which resources. Plans go through a lifecycle:
+
+```
+draft → validated → approved → executing → completed
+```
+
+**Key Safety Features:**
+- ✅ **Validation**: Azure SDK checks before approval (VM exists, state verification, protection tags)
+- ✅ **Approval Required**: Plans must be explicitly approved before execution
+- ✅ **Dry-Run Default**: All execution simulated unless `--force` flag used
+- ✅ **Confirmation Prompts**: User must confirm live execution
+- ✅ **Audit Trail**: Complete history of all actions and decisions
+- ✅ **Rollback Support**: Reversible actions can be rolled back
+
+### Complete Workflow Example
+
+```bash
+# 1. Discover and analyze (as usual)
+./dfo azure discover vms
+./dfo azure analyze idle-vms
+
+# 2. Review findings
+./dfo azure report --by-rule idle-vms
+
+# 3. Create execution plan
+./dfo azure plan create --from-analysis idle-vms --name "Q4 2025 Cleanup"
+# Output: Created plan-20251126-001
+
+# 4. Review plan details
+./dfo azure plan show plan-20251126-001 --detail
+
+# 5. Validate plan (Azure SDK checks)
+./dfo azure plan validate plan-20251126-001
+# Checks: VM exists, power state, protection tags, dependencies
+
+# 6. Approve plan
+./dfo azure plan approve plan-20251126-001 \\
+  --approved-by "admin@company.com" \\
+  --notes "Approved for weekend maintenance"
+
+# 7. Test with dry-run (simulated execution)
+./dfo azure plan execute plan-20251126-001
+# No Azure resources modified
+
+# 8. Review dry-run results
+./dfo azure plan status plan-20251126-001 --verbose
+
+# 9. Execute for real
+./dfo azure plan execute plan-20251126-001 --force --yes
+# Actual Azure API calls made
+
+# 10. Monitor execution
+./dfo azure plan status plan-20251126-001
+
+# 11. Rollback if needed
+./dfo azure plan rollback plan-20251126-001 --force
+```
+
+### Plan Management
+
+#### Creating Plans
+
+```bash
+# Create from analysis results
+./dfo azure plan create --from-analysis idle-vms
+
+# With custom name
+./dfo azure plan create --from-analysis idle-vms \\
+  --name "Production Cleanup - Nov 2025"
+
+# Filter by severity
+./dfo azure plan create --from-analysis idle-vms --severity high,critical
+
+# Limit number of actions
+./dfo azure plan create --from-analysis idle-vms --limit 10
+
+# Multiple analyses in one plan
+./dfo azure plan create --from-analysis idle-vms,low-cpu --name "Combined Optimization"
+```
+
+#### Listing Plans
+
+```bash
+# List all plans
+./dfo azure plan list
+
+# Filter by status
+./dfo azure plan list --status approved
+./dfo azure plan list --status completed
+./dfo azure plan list --status validated
+```
+
+#### Viewing Plan Details
+
+```bash
+# Summary view
+./dfo azure plan show plan-20251126-001
+
+# With action details
+./dfo azure plan show plan-20251126-001 --detail
+
+# Export to JSON
+./dfo azure plan show plan-20251126-001 --format json --output plan.json
+
+# Export to CSV
+./dfo azure plan show plan-20251126-001 --format csv --output plan.csv
+```
+
+### Validation
+
+Validation performs live checks against Azure to ensure actions are still appropriate:
+
+```bash
+# Validate a plan
+./dfo azure plan validate plan-20251126-001
+```
+
+**What Gets Validated:**
+- ✅ VM exists in Azure
+- ✅ Current power state (running, stopped, deallocated)
+- ✅ Protection tags (`dfo-protected`, `dfo-exclude`)
+- ✅ Dependencies (attached disks, NICs)
+- ✅ Action appropriateness (e.g., don't stop a stopped VM)
+- ✅ Required parameters (e.g., DOWNSIZE needs `new_size`)
+
+**Validation Results:**
+- **SUCCESS** ✅ - Action ready to execute
+- **WARNING** ⚠️ - Can execute but needs review (e.g., DELETE is irreversible)
+- **ERROR** ❌ - Cannot execute (blocks approval)
+
+**Important:** Validation expires after 1 hour. You must re-validate before approval if more than an hour has passed.
+
+### Approval Workflow
+
+Plans must be approved before execution:
+
+```bash
+# Approve a plan
+./dfo azure plan approve plan-20251126-001
+
+# With user attribution
+./dfo azure plan approve plan-20251126-001 \\
+  --approved-by "jane.doe@company.com" \\
+  --notes "Approved per change request CR-2025-1234"
+
+# Skip confirmation prompt
+./dfo azure plan approve plan-20251126-001 --yes
+```
+
+**Approval Requirements:**
+1. Plan status must be `VALIDATED`
+2. Validation must be fresh (<1 hour)
+3. No actions with `ERROR` status
+4. User confirmation (unless `--yes` flag)
+
+**Cannot Approve If:**
+- Plan has never been validated
+- Validation is stale (>1 hour old)
+- Any actions have validation errors
+- Plan is already approved or executed
+
+### Execution
+
+#### Dry-Run Mode (Default)
+
+```bash
+# Dry-run simulation (no --force flag)
+./dfo azure plan execute plan-20251126-001
+```
+
+**Behavior:**
+- Simulates execution without Azure API calls
+- All actions marked as completed
+- No VMs actually modified
+- Rollback data simulated
+- Safe to test workflows
+
+**Use Dry-Run To:**
+- Test execution workflow
+- Verify action sequencing
+- Check rollback eligibility
+- Preview execution output
+
+#### Live Execution
+
+```bash
+# Live execution requires --force flag
+./dfo azure plan execute plan-20251126-001 --force
+
+# Skip confirmation prompt
+./dfo azure plan execute plan-20251126-001 --force --yes
+```
+
+**Safety Checks:**
+1. Plan must be `APPROVED`
+2. Requires `--force` flag
+3. Requires confirmation prompt (unless `--yes`)
+4. Destructive actions show extra warnings
+
+**Behavior:**
+- Real Azure API calls made
+- VMs actually modified (stopped, deallocated, deleted, etc.)
+- All changes logged to audit trail
+- Rollback data captured from Azure responses
+- **Irreversible changes may occur** (DELETE actions)
+
+#### Selective Execution
+
+```bash
+# Execute specific actions only
+./dfo azure plan execute plan-20251126-001 \\
+  --action-ids action-001,action-002,action-003 \\
+  --force
+
+# Execute by action type
+./dfo azure plan execute plan-20251126-001 \\
+  --action-type deallocate \\
+  --force
+
+# Retry failed actions
+./dfo azure plan execute plan-20251126-001 --retry-failed --force
+```
+
+### Rollback
+
+Reversible actions can be rolled back to their previous state:
+
+```bash
+# Rollback simulation (dry-run)
+./dfo azure plan rollback plan-20251126-001
+
+# Live rollback
+./dfo azure plan rollback plan-20251126-001 --force --yes
+
+# Rollback specific actions
+./dfo azure plan rollback plan-20251126-001 \\
+  --action-ids action-001,action-002 \\
+  --force
+```
+
+**Reversible Actions:**
+- **STOP** → START (restore running state)
+- **DEALLOCATE** → START (restart VM)
+- **DOWNSIZE** → DOWNSIZE back (restore original size)
+
+**Irreversible Actions:**
+- **DELETE** - Cannot be rolled back (VM permanently deleted)
+
+**Rollback Requirements:**
+- Action must be completed
+- Action must have rollback data
+- Action must not be DELETE type
+- Action must not have been rolled back already
+
+### Status Tracking
+
+Monitor plan execution and view detailed status:
+
+```bash
+# Basic status
+./dfo azure plan status plan-20251126-001
+
+# Detailed status with action breakdown
+./dfo azure plan status plan-20251126-001 --verbose
+```
+
+**Status Output Includes:**
+- Plan status and timeline (created, validated, approved, executed, completed)
+- Execution metrics (total, completed, failed, skipped actions)
+- Progress bar
+- Savings (estimated vs realized)
+- Detailed action status table (verbose mode)
+- Context-aware next steps
+
+### Plan Status Lifecycle
+
+Plans transition through these statuses:
+
+| Status | Description | Can Delete? | Can Execute? |
+|--------|-------------|-------------|--------------|
+| `draft` | Created but not validated | ✅ Yes | ❌ No |
+| `validated` | Passed validation checks | ✅ Yes | ❌ No |
+| `approved` | Approved for execution | ❌ No | ✅ Yes |
+| `executing` | Currently being executed | ❌ No | N/A |
+| `completed` | All actions executed | ❌ No | ❌ No |
+| `failed` | Execution stopped due to errors | ❌ No | ✅ Yes (retry) |
+
+**Important:** Once a plan is executed (even partially), its status changes to `completed`. You cannot re-execute a completed plan. Create a new plan if needed.
+
+See [docs/PLAN_STATUS.md](docs/PLAN_STATUS.md) for complete status behavior documentation.
+
+### Deleting Plans
+
+```bash
+# Delete draft or validated plan
+./dfo azure plan delete plan-20251126-001 --force
+```
+
+**Can Delete:**
+- Draft plans (not validated yet)
+- Validated plans (not approved yet)
+
+**Cannot Delete:**
+- Approved plans (audit trail protection)
+- Executing plans (currently running)
+- Completed plans (audit trail protection)
+- Failed plans (audit trail protection)
+
+**Rationale:** Plans that have been approved or executed must be preserved for audit and compliance purposes.
+
+### Best Practices
+
+#### 1. Always Validate Before Approval
+
+```bash
+# Good workflow
+./dfo azure plan create --from-analysis idle-vms
+./dfo azure plan validate plan-xxx   # Validate first
+./dfo azure plan approve plan-xxx
+
+# Bad workflow - will fail
+./dfo azure plan create --from-analysis idle-vms
+./dfo azure plan approve plan-xxx    # ✗ Cannot approve without validation
+```
+
+#### 2. Test with Dry-Run First
+
+```bash
+# Safe testing workflow
+./dfo azure plan create --from-analysis idle-vms --name "Test Run"
+./dfo azure plan validate plan-test-001
+./dfo azure plan approve plan-test-001
+./dfo azure plan execute plan-test-001  # Dry-run first
+./dfo azure plan status plan-test-001 --verbose  # Review results
+
+# If satisfied, create new plan for live execution
+./dfo azure plan create --from-analysis idle-vms --name "Production Run"
+./dfo azure plan validate plan-prod-001
+./dfo azure plan approve plan-prod-001
+./dfo azure plan execute plan-prod-001 --force --yes
+```
+
+#### 3. Use Descriptive Names and Notes
+
+```bash
+# Good: Clear context
+./dfo azure plan create --from-analysis idle-vms \\
+  --name "Q4 2025 Cost Reduction - Test Environment"
+
+./dfo azure plan approve plan-xxx \\
+  --approved-by "jane.doe@company.com" \\
+  --notes "Approved per change request CR-2025-1234, maintenance window Nov 30-Dec 1"
+
+# Bad: Generic names
+./dfo azure plan create --from-analysis idle-vms
+```
+
+#### 4. Monitor Execution Progress
+
+```bash
+# Execute in one terminal
+./dfo azure plan execute plan-xxx --force --yes
+
+# Monitor in another terminal
+watch -n 5 './dfo azure plan status plan-xxx --verbose'
+```
+
+#### 5. Keep Validation Fresh
+
+Re-validate if more than 30 minutes have passed:
+
+```bash
+./dfo azure plan validate plan-xxx
+# ... work on something else for 45 minutes ...
+./dfo azure plan validate plan-xxx  # Re-validate before approval
+./dfo azure plan approve plan-xxx
+```
+
+### Common Scenarios
+
+#### Scenario 1: Partial Execution
+
+**Problem:** You executed only 2 of 5 actions, but now want to execute the remaining 3.
+
+**Solution:** Once a plan is executed (even partially), you cannot re-execute it. Create a new plan:
+
+```bash
+# Option 1: Create new plan with same analysis
+./dfo azure plan create --from-analysis idle-vms --limit 3
+
+# Option 2: Create plan with specific severity
+./dfo azure plan create --from-analysis idle-vms --severity high
+```
+
+**Why?** Plan status transitions to `completed` after any execution for audit trail purposes.
+
+#### Scenario 2: Execution Failures
+
+**Problem:** Some actions failed during execution due to Azure API errors.
+
+**Solution:** You have three options:
+
+```bash
+# Option 1: Retry only failed actions
+./dfo azure plan execute plan-xxx --retry-failed --force
+
+# Option 2: Rollback successful actions
+./dfo azure plan rollback plan-xxx --force
+
+# Option 3: Create new plan
+./dfo azure plan create --from-analysis idle-vms
+```
+
+#### Scenario 3: Validation Expiration
+
+**Problem:** Validation is >1 hour old, cannot approve.
+
+**Solution:** Re-validate the plan:
+
+```bash
+./dfo azure plan validate plan-xxx
+./dfo azure plan approve plan-xxx
+```
+
+**Why?** VM states can change between validation and execution. Fresh validation ensures actions are still appropriate.
+
+#### Scenario 4: Protected Resources
+
+**Problem:** Validation fails with "Protection tag" error.
+
+**Solution:** Resources with `dfo-protected=true` or `dfo-exclude=true` tags are blocked from execution:
+
+```bash
+# Option 1: Remove protection tag in Azure Portal
+# Then re-validate
+./dfo azure plan validate plan-xxx
+
+# Option 2: Create new plan excluding protected resources
+# (Validation will automatically exclude them)
+```
+
+### Troubleshooting Execution
+
+#### "Cannot approve: plan status is 'draft'"
+
+**Cause:** Plan not validated
+
+**Solution:**
+```bash
+./dfo azure plan validate plan-xxx
+./dfo azure plan approve plan-xxx
+```
+
+#### "Cannot approve: validation is stale"
+
+**Cause:** Validation >1 hour old
+
+**Solution:**
+```bash
+./dfo azure plan validate plan-xxx  # Re-validate
+./dfo azure plan approve plan-xxx
+```
+
+#### "Cannot execute plan: status is 'draft'"
+
+**Cause:** Plan not approved
+
+**Solution:**
+```bash
+./dfo azure plan validate plan-xxx
+./dfo azure plan approve plan-xxx
+./dfo azure plan execute plan-xxx --force
+```
+
+#### "Cannot delete plan in completed status"
+
+**Cause:** Trying to delete executed plan
+
+**Solution:** You cannot delete executed plans (audit trail). Filter your plan list instead:
+
+```bash
+# List only active plans
+./dfo azure plan list --status validated
+./dfo azure plan list --status approved
+```
+
+#### "Action has validation errors"
+
+**Cause:** VM no longer exists, has protection tags, or state changed
+
+**Solution:**
+```bash
+# View detailed validation errors
+./dfo azure plan show plan-xxx --detail
+
+# Fix issues (remove protection tags, verify VMs exist)
+# Then re-validate
+./dfo azure plan validate plan-xxx
 ```
 
 ---
