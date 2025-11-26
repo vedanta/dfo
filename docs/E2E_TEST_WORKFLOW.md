@@ -70,7 +70,7 @@ This document provides a comprehensive end-to-end testing workflow for the dfo (
 
 ```bash
 # 9. Analyze for idle VMs
-./dfo azure analyze
+./dfo azure analyze idle-vms
 
 # 10. Generate report (console output)
 ./dfo azure report

@@ -1537,8 +1537,20 @@ def analyze(
 
     # Validate that analysis_type is provided
     if not analysis_type:
-        console.print("[red]Error:[/red] Analysis type is required")
-        console.print("Use [cyan]dfo azure analyze --list[/cyan] to see available analyses")
+        console.print("[red]Error:[/red] Analysis type is required\n")
+
+        # Show available enabled analyses inline
+        analyses = rule_engine.get_available_analyses(provider="azure")
+        enabled_analyses = [a for a in analyses if a.get("enabled", False)]
+
+        if enabled_analyses:
+            console.print("[yellow]Available analysis types:[/yellow]")
+            for analysis in enabled_analyses:
+                console.print(f"  • [cyan]{analysis['key']}[/cyan] - {analysis['description']}")
+
+        console.print("\n[dim]Usage:[/dim] dfo azure analyze <analysis-type>")
+        console.print("[dim]Example:[/dim] dfo azure analyze idle-vms")
+        console.print("[dim]List all:[/dim] dfo azure analyze --list\n")
         raise typer.Exit(1)
 
     # Look up the rule by key
