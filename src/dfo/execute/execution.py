@@ -30,6 +30,32 @@ def execute_action(action: PlanAction, dry_run: bool = False) -> ExecutionResult
     if dry_run:
         # Simulate execution
         logger.info(f"[DRY RUN] Would execute {action.action_type} on {action.resource_name}")
+
+        # Simulate rollback data for reversible actions
+        rollback_data = {}
+        rollback_possible = False
+
+        if action.action_type in [ActionType.STOP, ActionType.DEALLOCATE]:
+            rollback_data = {
+                "action_type": "start",
+                "previous_state": "running",  # Simulated
+            }
+            rollback_possible = True
+        elif action.action_type == ActionType.DOWNSIZE:
+            rollback_data = {
+                "action_type": "downsize",
+                "original_size": "Standard_D2s_v3",  # Simulated
+                "new_size": action.action_params.get("new_size") if action.action_params else "Standard_B1s",
+            }
+            rollback_possible = True
+        elif action.action_type == ActionType.DELETE:
+            # DELETE is not reversible
+            rollback_data = {
+                "action_type": None,
+                "warning": "DELETE is IRREVERSIBLE",
+            }
+            rollback_possible = False
+
         return ExecutionResult(
             success=True,
             message=f"[DRY RUN] Would execute {action.action_type} on {action.resource_name}",
@@ -38,6 +64,7 @@ def execute_action(action: PlanAction, dry_run: bool = False) -> ExecutionResult
                 "action_type": action.action_type,
                 "resource_name": action.resource_name,
             },
+            rollback_data=rollback_data if rollback_data else {},
         )
 
     # Execute on Azure
