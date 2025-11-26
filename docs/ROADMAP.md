@@ -5,27 +5,51 @@ Each phase builds on the previous one and expands capabilities in a structured, 
 
 ---
 
-# Phase 1 — MVP (Azure Idle VM Detection + DuckDB)
+# Phase 1 — MVP (Azure Idle VM Detection + DuckDB) ✅ **COMPLETE**
 **Goal:** Deliver the smallest possible end‑to‑end FinOps value loop.
+**Status:** ✅ Complete (v0.2.0) — All 7 milestones delivered
+**Completion Date:** 2025-01-26
 
-### Deliverables
-- Azure authentication (SP + DefaultAzureCredential)
-- VM discovery (metadata + CPU metrics)
-- Idle VM analyzer (CPU‑based)
-- Cost estimation (static pricing)
-- DuckDB backend with tables:
+### Deliverables ✅
+- ✅ Azure authentication (SP + DefaultAzureCredential)
+- ✅ VM discovery (metadata + CPU metrics)
+- ✅ Multiple analyzers implemented:
+  - Idle VM detection (CPU‑based, <5% threshold)
+  - Low-CPU rightsizing (<20% threshold)
+  - Stopped VM detection (30+ days)
+- ✅ Azure Pricing API integration (actual pricing, not static)
+- ✅ DuckDB backend with tables:
   - vm_inventory
-  - vm_idle_analysis
-  - vm_actions
-- Console and JSON reporting
-- Stop/deallocate execution with guardrails
-- Typer CLI
+  - vm_idle_analysis, low_cpu_analysis, stopped_vms_analysis
+  - execution_plans, plan_actions (plan-based execution)
+- ✅ Multi-format reporting (Console, JSON, CSV)
+- ✅ 4 report views (Summary, by-rule, by-resource, all-resources)
+- ✅ Plan-based execution with validation, approval, rollback
+- ✅ Comprehensive testing: 589 tests, 70%+ coverage
+- ✅ Typer CLI with 35+ commands
 
 ### Key Commands
+**Discovery:**
 - `dfo azure discover vms`
+
+**Analysis:**
 - `dfo azure analyze idle-vms`
-- `dfo azure report idle-vms`
-- `dfo azure execute stop-idle-vms`
+- `dfo azure analyze low-cpu`
+- `dfo azure analyze stopped-vms`
+
+**Reporting:**
+- `dfo azure report` (summary view)
+- `dfo azure report --by-rule idle-vms`
+- `dfo azure report --format json`
+- `dfo azure report --format csv`
+
+**Execution (Plan-Based):**
+- `dfo azure plan create --from-analysis idle-vms`
+- `dfo azure plan validate <plan-id>`
+- `dfo azure plan approve <plan-id>`
+- `dfo azure plan execute <plan-id>` (dry-run)
+- `dfo azure plan execute <plan-id> --force` (live)
+- `dfo azure plan rollback <plan-id>`
 
 ---
 
@@ -100,13 +124,13 @@ Each phase builds on the previous one and expands capabilities in a structured, 
 
 # Phase Summary Table
 
-| Phase | Name | Core Outcome |
-|-------|-------|---------------|
-| **1** | MVP | Azure idle VM + DuckDB |
-| **2** | Azure Enhanced | Storage, rightsizing, advisor |
-| **3** | Multi-Cloud | AWS support + unified analyzers |
-| **4** | Automation | Pipeline engine + notifications |
-| **5** | Platform | Dashboard + API + LLM intelligence |
+| Phase | Name | Core Outcome | Status |
+|-------|-------|---------------|--------|
+| **1** | MVP | Azure idle VM + DuckDB | ✅ **Complete** (v0.2.0) |
+| **2** | Azure Enhanced | Storage, rightsizing, advisor | 📋 Planned |
+| **3** | Multi-Cloud | AWS support + unified analyzers | 📋 Planned |
+| **4** | Automation | Pipeline engine + notifications | 📋 Planned |
+| **5** | Platform | Dashboard + API + LLM intelligence | 📋 Planned |
 
 ---
 

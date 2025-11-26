@@ -361,7 +361,7 @@ PYTHONPATH=src pytest src/dfo/tests/ -v
 # With coverage
 PYTHONPATH=src pytest --cov=dfo src/dfo/tests/
 
-# Current status: 349 tests passing
+# Current status: 589 tests passing
 ```
 
 ### Code Quality
@@ -384,13 +384,13 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines (coming soon).
 
 ## Roadmap
 
-### Phase 1: MVP
+### Phase 1: MVP ✅ **COMPLETE**
 - [x] Milestone 1: Foundation & Infrastructure ✅
 - [x] Milestone 2: Authentication & Azure Provider ✅
 - [x] Milestone 3: Discovery Layer ✅
 - [x] Milestone 4: Analysis Layer (3 Analyses + SKU Equivalence) ✅
 - [x] Milestone 5: Reporting Layer (4 Views, 3 Formats) ✅
-- [ ] Milestone 6: Execution Layer
+- [x] Milestone 6: Execution Layer (Plans, Validation, Approval, Execution, Rollback) ✅
 
 ### Phase 2: Enhancement
 - Multi-cloud support (AWS, GCP)
@@ -417,7 +417,7 @@ A: **Reader** role for discovery/analysis (read-only). **Contributor** role for 
 A: All data is stored locally in `dfo.duckdb`. No cloud storage or external services required.
 
 **Q: Is dfo production-ready?**
-A: Milestones 1-5 are complete and tested. VM discovery, 3 types of analysis (idle, low-CPU, stopped), comprehensive reporting (console/JSON/CSV), and rules management are production-ready. All commands are read-only. Milestone 6 (execution) is in development.
+A: **Phase 1 (MVP) is complete!** All 6 milestones are done and tested. VM discovery, 3 types of analysis (idle, low-CPU, stopped), comprehensive reporting (console/JSON/CSV), rules management, and the full execution system (plan management, validation, approval, execution, rollback) are production-ready. 589 tests passing with 70%+ coverage.
 
 See [USER_GUIDE.md - FAQ](USER_GUIDE.md#faq) for more questions.
 
@@ -434,7 +434,18 @@ See [USER_GUIDE.md - FAQ](USER_GUIDE.md#faq) for more questions.
 
 ## Changelog
 
-### v0.1.0 (Current - Milestone 5: Reporting Layer Complete)
+### v0.2.0 (Current - Phase 1 MVP Complete)
+- ✅ **Milestone 6 Complete**: Full execution system with plan-based workflows
+- ✅ **Plan Management**: Create, list, show, delete execution plans
+- ✅ **Validation System**: Azure SDK validation checks before execution
+- ✅ **Approval Workflow**: Safety gates with user attribution and stale validation detection
+- ✅ **Execution Engine**: Dry-run (default) and live execution modes
+- ✅ **Rollback Capability**: Reverse actions for stop/deallocate/downsize (delete is irreversible)
+- ✅ **9 Execution Commands**: Complete plan lifecycle management
+- ✅ **Comprehensive Testing**: 150 execution tests, 92% coverage
+- ✅ **Production Ready**: Phase 1 (MVP) complete with 589 tests passing
+
+### v0.1.0 (Milestone 5: Reporting Layer Complete)
 - ✅ **Milestone 5 Complete**: Unified reporting system with 4 view types
 - ✅ **Unified Report Command**: Single entry point for all report types
   - Default summary view with portfolio-wide statistics

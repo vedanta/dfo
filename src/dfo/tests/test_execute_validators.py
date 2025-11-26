@@ -18,6 +18,7 @@ from dfo.execute.models import (
     CreatePlanRequest,
     PlanAction,
     PlanStatus,
+    ValidationResult,
     ValidationStatus,
 )
 from dfo.execute.plan_manager import PlanManager
@@ -35,28 +36,21 @@ def sample_plan_with_actions(test_db):
     """Create a plan with sample actions."""
     # Insert idle VM analysis
     db = DuckDBManager()
-    db.conn.execute("""
+    conn = db.get_connection()
+    conn.execute("""
         INSERT INTO vm_idle_analysis (
-            vm_id, vm_name, resource_group, location, vm_size,
-            power_state, severity, cpu_average, days_under_threshold,
-            recommended_action, equivalent_sku, estimated_monthly_savings,
-            annual_savings, analyzed_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            vm_id, cpu_avg, days_under_threshold, estimated_monthly_savings,
+            severity, recommended_action, equivalent_sku, analyzed_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     """, [
         "/subscriptions/sub1/resourceGroups/rg1/providers/Microsoft.Compute/virtualMachines/test-vm1",
-        "test-vm1",
-        "rg1",
-        "eastus",
-        "Standard_D2s_v3",
-        "running",
-        "high",
         2.5,
         14,
+        100.0,
+        "high",
         "DEALLOCATE",
         "Standard_B2s",
-        100.0,
-        1200.0,
-        datetime.now().isoformat()
+        datetime.now()
     ])
 
     # Create plan
@@ -84,14 +78,14 @@ class TestPlanValidation:
         plan, manager = sample_plan_with_actions
 
         # Mock all actions as valid
-        mock_validate_action.return_value = Mock(
+        mock_validate_action.return_value = ValidationResult(
+            action_id="action-1",
             status=ValidationStatus.SUCCESS,
             resource_exists=True,
             permissions_ok=True,
             dependencies=[],
             warnings=[],
             errors=[],
-            action_id="action-1",
         )
 
         result = validate_plan(plan.plan_id)
@@ -112,14 +106,14 @@ class TestPlanValidation:
         """Test plan validation with warnings."""
         plan, manager = sample_plan_with_actions
 
-        mock_validate_action.return_value = Mock(
+        mock_validate_action.return_value = ValidationResult(
+            action_id="action-1",
             status=ValidationStatus.WARNING,
             resource_exists=True,
             permissions_ok=True,
             dependencies=[],
             warnings=["VM is already stopped"],
             errors=[],
-            action_id="action-1",
         )
 
         result = validate_plan(plan.plan_id)
@@ -138,14 +132,14 @@ class TestPlanValidation:
         """Test plan validation with errors."""
         plan, manager = sample_plan_with_actions
 
-        mock_validate_action.return_value = Mock(
+        mock_validate_action.return_value = ValidationResult(
+            action_id="action-1",
             status=ValidationStatus.ERROR,
             resource_exists=False,
             permissions_ok=False,
             dependencies=[],
             warnings=[],
             errors=["Resource not found"],
-            action_id="action-1",
         )
 
         result = validate_plan(plan.plan_id)
@@ -160,16 +154,15 @@ class TestPlanValidation:
 
     def test_validate_plan_no_actions(self, plan_manager, test_db):
         """Test validating plan with no actions."""
-        # Create plan without analysis data
-        db = DuckDBManager()
-        plan_id = "plan-empty-test"
-        db.conn.execute("""
-            INSERT INTO execution_plans (
-                plan_id, plan_name, created_by, status, analysis_types
-            ) VALUES (?, ?, ?, ?, ?)
-        """, [plan_id, "Empty Plan", "test@example.com", "draft", "[]"])
+        # Create plan without analysis data (no actions will be added)
+        request = CreatePlanRequest(
+            plan_name="Empty Plan",
+            created_by="test@example.com",
+            analysis_types=[],  # No analysis types = no actions
+        )
+        plan = plan_manager.create_plan(request)
 
-        result = validate_plan(plan_id)
+        result = validate_plan(plan.plan_id)
 
         assert result.status == ValidationStatus.ERROR
         assert result.total_actions == 0
@@ -204,19 +197,21 @@ class TestPlanValidation:
         )
 
         # Mock different results for each action
+        actions = manager.get_actions(plan.plan_id)
         results = [
-            Mock(status=ValidationStatus.SUCCESS, resource_exists=True,
-                 permissions_ok=True, dependencies=[], warnings=[], errors=[]),
-            Mock(status=ValidationStatus.WARNING, resource_exists=True,
-                 permissions_ok=True, dependencies=[], warnings=["Already stopped"], errors=[]),
-            Mock(status=ValidationStatus.ERROR, resource_exists=False,
-                 permissions_ok=False, dependencies=[], warnings=[], errors=["Not found"]),
+            ValidationResult(action_id=actions[0].action_id, status=ValidationStatus.SUCCESS,
+                           resource_exists=True, permissions_ok=True, dependencies=[], warnings=[], errors=[]),
+            ValidationResult(action_id=actions[1].action_id, status=ValidationStatus.WARNING,
+                           resource_exists=True, permissions_ok=True, dependencies=[],
+                           warnings=["Already stopped"], errors=[]),
+            ValidationResult(action_id=actions[2].action_id, status=ValidationStatus.ERROR,
+                           resource_exists=False, permissions_ok=False, dependencies=[],
+                           warnings=[], errors=["Not found"]),
         ]
 
         call_count = [0]
         def side_effect(action):
             result = results[call_count[0] % len(results)]
-            result.action_id = action.action_id
             call_count[0] += 1
             return result
 
@@ -315,7 +310,7 @@ class TestActionValidation:
         # Should still be warning because DOWNSIZE is destructive
         assert result.status == ValidationStatus.WARNING
 
-    @patch('dfo.execute.validators.validate_azure_vm_action')
+    @patch('dfo.execute.azure_validator.validate_azure_vm_action')
     def test_validate_action_with_azure_validation(self, mock_azure_validate):
         """Test action validation uses Azure validator when enabled."""
         action = PlanAction(
@@ -329,7 +324,8 @@ class TestActionValidation:
             estimated_monthly_savings=100.0,
         )
 
-        mock_azure_validate.return_value = Mock(
+        mock_azure_validate.return_value = ValidationResult(
+            action_id="action-test-1",
             status=ValidationStatus.SUCCESS,
             resource_exists=True,
             permissions_ok=True,
@@ -340,7 +336,7 @@ class TestActionValidation:
         mock_azure_validate.assert_called_once_with(action)
         assert result.status == ValidationStatus.SUCCESS
 
-    @patch('dfo.execute.validators.validate_azure_vm_action')
+    @patch('dfo.execute.azure_validator.validate_azure_vm_action')
     def test_validate_action_azure_validation_fallback(self, mock_azure_validate):
         """Test fallback to basic validation when Azure validation fails."""
         action = PlanAction(
@@ -392,7 +388,8 @@ class TestRevalidation:
         # Validate the plan with an old timestamp
         old_time = datetime.now() - timedelta(hours=2)
         db = DuckDBManager()
-        db.conn.execute("""
+        conn = db.get_connection()
+        conn.execute("""
             UPDATE execution_plans
             SET status = 'validated', validated_at = ?
             WHERE plan_id = ?
@@ -407,7 +404,8 @@ class TestRevalidation:
         # Validate exactly 1 hour ago
         exact_threshold = datetime.now() - timedelta(hours=1, minutes=0, seconds=1)
         db = DuckDBManager()
-        db.conn.execute("""
+        conn = db.get_connection()
+        conn.execute("""
             UPDATE execution_plans
             SET status = 'validated', validated_at = ?
             WHERE plan_id = ?
@@ -428,14 +426,14 @@ class TestValidationSummary:
         """Test validation summary after validating a plan."""
         plan, manager = sample_plan_with_actions
 
-        mock_validate_action.return_value = Mock(
+        mock_validate_action.return_value = ValidationResult(
+            action_id="action-1",
             status=ValidationStatus.SUCCESS,
             resource_exists=True,
             permissions_ok=True,
             dependencies=[],
             warnings=[],
             errors=[],
-            action_id="action-1",
         )
 
         # Validate the plan first
@@ -478,17 +476,17 @@ class TestValidationSummary:
         )
 
         # Mock different results
+        actions = manager.get_actions(plan.plan_id)
         results = [
-            Mock(status=ValidationStatus.SUCCESS, resource_exists=True,
-                 permissions_ok=True, dependencies=[], warnings=[], errors=[]),
-            Mock(status=ValidationStatus.WARNING, resource_exists=True,
-                 permissions_ok=True, dependencies=[], warnings=["Warning"], errors=[]),
+            ValidationResult(action_id=actions[0].action_id, status=ValidationStatus.SUCCESS,
+                           resource_exists=True, permissions_ok=True, dependencies=[], warnings=[], errors=[]),
+            ValidationResult(action_id=actions[1].action_id, status=ValidationStatus.WARNING,
+                           resource_exists=True, permissions_ok=True, dependencies=[], warnings=["Warning"], errors=[]),
         ]
 
         call_count = [0]
         def side_effect(action):
             result = results[call_count[0] % len(results)]
-            result.action_id = action.action_id
             call_count[0] += 1
             return result
 

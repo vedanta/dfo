@@ -70,3 +70,7 @@ Thumbs.db
 *.log
 *.csv
 report.csv
+
+# and generated files
+*.json
+*.log

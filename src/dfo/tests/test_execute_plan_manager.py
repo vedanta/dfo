@@ -31,53 +31,38 @@ def plan_manager(test_db):
 def sample_idle_vm_analysis(test_db):
     """Insert sample idle VM analysis for plan creation."""
     db = DuckDBManager()
+    conn = db.get_connection()
 
-    db.conn.execute("""
+    conn.execute("""
         INSERT INTO vm_idle_analysis (
-            vm_id, vm_name, resource_group, location, vm_size,
-            power_state, severity, cpu_average, days_under_threshold,
-            recommended_action, equivalent_sku, estimated_monthly_savings,
-            annual_savings, analyzed_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            vm_id, cpu_avg, days_under_threshold, estimated_monthly_savings,
+            severity, recommended_action, equivalent_sku, analyzed_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     """, [
         "/subscriptions/sub1/resourceGroups/rg1/providers/Microsoft.Compute/virtualMachines/test-vm1",
-        "test-vm1",
-        "rg1",
-        "eastus",
-        "Standard_D2s_v3",
-        "running",
-        "high",
         2.5,
         14,
+        100.0,
+        "high",
         "DEALLOCATE",
         "Standard_B2s",
-        100.0,
-        1200.0,
-        datetime.now().isoformat()
+        datetime.now()
     ])
 
-    db.conn.execute("""
+    conn.execute("""
         INSERT INTO vm_idle_analysis (
-            vm_id, vm_name, resource_group, location, vm_size,
-            power_state, severity, cpu_average, days_under_threshold,
-            recommended_action, equivalent_sku, estimated_monthly_savings,
-            annual_savings, analyzed_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            vm_id, cpu_avg, days_under_threshold, estimated_monthly_savings,
+            severity, recommended_action, equivalent_sku, analyzed_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     """, [
         "/subscriptions/sub1/resourceGroups/rg1/providers/Microsoft.Compute/virtualMachines/test-vm2",
-        "test-vm2",
-        "rg1",
-        "westus",
-        "Standard_E4s_v3",
-        "running",
-        "medium",
         3.0,
         10,
+        200.0,
+        "medium",
         "DEALLOCATE",
         "Standard_E2s_v3",
-        200.0,
-        2400.0,
-        datetime.now().isoformat()
+        datetime.now()
     ])
 
     yield db
@@ -422,16 +407,15 @@ class TestActionOperations:
 
     def test_get_actions_empty_plan(self, plan_manager, test_db):
         """Test getting actions for a plan with no actions."""
-        # Create plan without analysis data
-        db = DuckDBManager()
-        plan_id = generate_plan_id()
-        db.conn.execute("""
-            INSERT INTO execution_plans (
-                plan_id, plan_name, created_by, status, analysis_types
-            ) VALUES (?, ?, ?, ?, ?)
-        """, [plan_id, "Empty Plan", "test@example.com", "draft", "[]"])
+        # Create plan without analysis data (no actions will be added)
+        request = CreatePlanRequest(
+            plan_name="Empty Plan",
+            created_by="test@example.com",
+            analysis_types=[],  # No analysis types = no actions
+        )
+        plan = plan_manager.create_plan(request)
 
-        actions = plan_manager.get_actions(plan_id)
+        actions = plan_manager.get_actions(plan.plan_id)
         assert len(actions) == 0
 
     def test_get_action_by_id(self, plan_manager, sample_idle_vm_analysis):

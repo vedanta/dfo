@@ -24,28 +24,21 @@ def sample_plan_validated(test_db):
     """Create a validated plan ready for approval."""
     # Insert idle VM analysis
     db = DuckDBManager()
-    db.conn.execute("""
+    conn = db.get_connection()
+    conn.execute("""
         INSERT INTO vm_idle_analysis (
-            vm_id, vm_name, resource_group, location, vm_size,
-            power_state, severity, cpu_average, days_under_threshold,
-            recommended_action, equivalent_sku, estimated_monthly_savings,
-            annual_savings, analyzed_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            vm_id, cpu_avg, days_under_threshold, estimated_monthly_savings,
+            severity, recommended_action, equivalent_sku, analyzed_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     """, [
         "/subscriptions/sub1/resourceGroups/rg1/providers/Microsoft.Compute/virtualMachines/test-vm1",
-        "test-vm1",
-        "rg1",
-        "eastus",
-        "Standard_D2s_v3",
-        "running",
-        "high",
         2.5,
         14,
+        100.0,
+        "high",
         "DEALLOCATE",
         "Standard_B2s",
-        100.0,
-        1200.0,
-        datetime.now().isoformat()
+        datetime.now()
     ])
 
     # Create and validate plan
@@ -148,16 +141,20 @@ class TestApprovalWorkflow:
 
     def test_approve_plan_no_actions_fails(self, test_db):
         """Test approving plan with no actions fails."""
-        db = DuckDBManager()
-        plan_id = "plan-empty-test"
-        db.conn.execute("""
-            INSERT INTO execution_plans (
-                plan_id, plan_name, created_by, status, analysis_types, validated_at
-            ) VALUES (?, ?, ?, ?, ?, ?)
-        """, [plan_id, "Empty Plan", "test@example.com", "validated", "[]", datetime.now()])
+        # Create plan without analysis data (no actions will be added)
+        manager = PlanManager()
+        request = CreatePlanRequest(
+            plan_name="Empty Plan",
+            created_by="test@example.com",
+            analysis_types=[],  # No analysis types = no actions
+        )
+        plan = manager.create_plan(request)
+
+        # Mark as validated
+        manager.update_plan_status(plan.plan_id, PlanStatus.VALIDATED)
 
         with pytest.raises(ApprovalError, match="no actions"):
-            approve_plan(plan_id, approved_by="approver@example.com")
+            approve_plan(plan.plan_id, approved_by="approver@example.com")
 
 
 class TestApprovalSummary:
@@ -181,19 +178,57 @@ class TestApprovalSummary:
         """Test summary identifies destructive actions."""
         plan, manager = sample_plan_validated
 
-        # Add a DELETE action
-        manager.add_action(
-            plan_id=plan.plan_id,
-            resource_id="/test/vm",
-            resource_name="test-vm",
-            analysis_type="idle-vms",
+        # Insert additional analysis data with DELETE action (requires manual add_action since plan is validated)
+        # So instead, let's create a new plan with a destructive action
+        db = DuckDBManager()
+        conn = db.get_connection()
+
+        # Insert idle VM analysis for DEALLOCATE (not destructive)
+        conn.execute("""
+            INSERT INTO vm_idle_analysis (
+                vm_id, cpu_avg, days_under_threshold, estimated_monthly_savings,
+                severity, recommended_action, equivalent_sku, analyzed_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """, [
+            "/subscriptions/sub1/resourceGroups/rg1/providers/Microsoft.Compute/virtualMachines/vm1",
+            2.5, 14, 100.0, "high", "DEALLOCATE", "Standard_B2s", datetime.now()
+        ])
+
+        # Create new plan
+        manager2 = PlanManager()
+        request = CreatePlanRequest(
+            plan_name="Mixed Actions Plan",
+            created_by="test@example.com",
+            analysis_types=["idle-vms"],
+        )
+        plan2 = manager2.create_plan(request)
+
+        # Manually add a DELETE action (destructive) - must do before validation
+        manager2.add_action(
+            plan_id=plan2.plan_id,
+            resource_id="/subscriptions/sub1/resourceGroups/rg1/providers/Microsoft.Compute/virtualMachines/vm2",
+            resource_name="vm2",
+            analysis_type="stopped-vms",
             action_type=ActionType.DELETE,
-            estimated_monthly_savings=50.0,
+            estimated_monthly_savings=200.0,
         )
 
-        summary = get_approval_summary(plan.plan_id)
+        # Now mark all actions as validated first, then mark plan as validated
+        actions = manager2.get_actions(plan2.plan_id)
+        for action in actions:
+            manager2.update_action_status(
+                action.action_id,
+                action.status,
+                validation_status=ValidationStatus.SUCCESS,
+            )
 
-        assert summary["destructive_actions"] == 1
+        # Mark plan as validated
+        manager2.update_plan_status(plan2.plan_id, PlanStatus.VALIDATED)
+
+        summary = get_approval_summary(plan2.plan_id)
+
+        assert summary["destructive_actions"] == 1  # Only DELETE is destructive
+        assert summary["total_actions"] >= 2  # At least DEALLOCATE + DELETE (may have more from other fixtures)
 
     def test_get_approval_summary_action_counts(self, sample_plan_validated):
         """Test summary includes action counts by type."""
