@@ -2794,6 +2794,281 @@ def plan_approve(
         raise typer.Exit(1)
 
 
+@plan_app.command(name="execute")
+def plan_execute(
+    plan_id: str = typer.Argument(..., help="Plan ID"),
+    force: bool = typer.Option(
+        False,
+        "--force",
+        help="Execute actions for real (default is dry-run simulation)",
+    ),
+    yes: bool = typer.Option(
+        False,
+        "--yes", "-y",
+        help="Skip confirmation prompt",
+    ),
+    action_ids: Optional[str] = typer.Option(
+        None,
+        "--action-ids",
+        help="Comma-separated action IDs to execute (default: all)",
+    ),
+    action_type: Optional[str] = typer.Option(
+        None,
+        "--action-type",
+        help="Execute only specific action type (deallocate, stop, delete, downsize)",
+    ),
+    retry_failed: bool = typer.Option(
+        False,
+        "--retry-failed",
+        help="Retry only failed actions",
+    ),
+):
+    """Execute execution plan.
+
+    By default, runs in DRY RUN mode (simulates execution without changes).
+    Use --force to execute actions for real on Azure resources.
+
+    Safety features:
+      • Default is DRY RUN (safe simulation)
+      • --force required for real execution
+      • Confirmation prompt for live execution (unless --yes)
+      • Extra warnings for destructive actions (DELETE)
+      • All executions logged to database
+
+    Prerequisites:
+      • Plan must be APPROVED
+
+    Examples:
+        # Dry run (safe, see what would happen)
+        dfo azure plan execute plan-20251125-001
+
+        # Execute for real (prompts for confirmation)
+        dfo azure plan execute plan-20251125-001 --force
+
+        # Execute without confirmation (automation)
+        dfo azure plan execute plan-20251125-001 --force --yes
+
+        # Execute specific actions only
+        dfo azure plan execute plan-20251125-001 --action-ids action-1,action-2 --force
+
+        # Execute only deallocate actions
+        dfo azure plan execute plan-20251125-001 --action-type deallocate --force
+
+        # Retry failed actions
+        dfo azure plan execute plan-20251125-001 --retry-failed --force
+    """
+    from dfo.execute.execution import (
+        execute_plan,
+        execute_actions_by_type,
+        retry_failed_actions,
+        ExecutionError,
+    )
+    from dfo.execute.models import ActionType
+    from dfo.execute.plan_manager import PlanManager
+    from rich.panel import Panel
+    from rich.progress import Progress, SpinnerColumn, TextColumn
+
+    try:
+        # Convert --force to dry_run
+        dry_run = not force
+
+        # Get plan details
+        manager = PlanManager()
+        plan = manager.get_plan(plan_id)
+        actions = manager.get_actions(plan_id)
+
+        # Parse action IDs if provided
+        parsed_action_ids = None
+        if action_ids:
+            parsed_action_ids = [aid.strip() for aid in action_ids.split(",")]
+
+        # Show execution mode
+        console.print()
+        if dry_run:
+            mode_panel = Panel(
+                "[yellow]DRY RUN MODE[/yellow]\n\n"
+                "Simulating execution without making changes.\n"
+                "No Azure resources will be modified.\n\n"
+                "To execute for real, add --force flag",
+                title="⚠ Simulation Mode",
+                border_style="yellow",
+            )
+        else:
+            mode_panel = Panel(
+                "[red]LIVE EXECUTION MODE[/red]\n\n"
+                "Will execute REAL actions on Azure resources.\n"
+                "Changes will be applied to your VMs.\n\n"
+                "[yellow]This is NOT a simulation![/yellow]",
+                title="⚠ Live Execution",
+                border_style="red",
+            )
+        console.print(mode_panel)
+        console.print()
+
+        # Show plan summary
+        console.print(f"Executing plan: [cyan]{plan.plan_name}[/cyan]")
+        console.print(f"Plan ID: [dim]{plan_id}[/dim]")
+        console.print(f"Status: [{_get_status_color(plan.status)}]{plan.status}[/]")
+
+        # Filter actions based on options
+        actions_to_execute = actions
+        if action_ids:
+            actions_to_execute = [a for a in actions if a.action_id in parsed_action_ids]
+            console.print(f"Actions: [cyan]{len(actions_to_execute)}[/cyan] (filtered from {len(actions)} total)")
+        elif action_type:
+            actions_to_execute = [a for a in actions if a.action_type == action_type]
+            console.print(f"Actions: [cyan]{len(actions_to_execute)}[/cyan] ({action_type} only, from {len(actions)} total)")
+        elif retry_failed:
+            from dfo.execute.models import ActionStatus
+            actions_to_execute = [a for a in actions if a.status == ActionStatus.FAILED]
+            console.print(f"Actions: [cyan]{len(actions_to_execute)}[/cyan] (retrying failed, from {len(actions)} total)")
+        else:
+            console.print(f"Actions: [cyan]{len(actions_to_execute)}[/cyan]")
+
+        if not actions_to_execute:
+            console.print("\n[yellow]No actions to execute[/yellow]\n")
+            raise typer.Exit(0)
+
+        console.print()
+
+        # Check for destructive actions
+        destructive_actions = [
+            a for a in actions_to_execute if a.action_type == ActionType.DELETE
+        ]
+
+        if destructive_actions and not dry_run:
+            warning_panel = Panel(
+                f"[red]This plan contains {len(destructive_actions)} DELETE action(s)[/red]\n\n"
+                f"DELETE operations are [bold]IRREVERSIBLE[/bold]\n"
+                f"VMs and attached resources will be [bold]permanently deleted[/bold]\n\n"
+                f"[yellow]Cannot be undone or rolled back![/yellow]",
+                title="⚠ DESTRUCTIVE ACTIONS WARNING",
+                border_style="red",
+            )
+            console.print(warning_panel)
+            console.print()
+
+        # Confirmation prompt for live execution
+        if not dry_run and not yes:
+            console.print("[bold]This will execute REAL actions on Azure resources.[/bold]")
+            if destructive_actions:
+                console.print(f"[red]Including {len(destructive_actions)} IRREVERSIBLE DELETE operation(s).[/red]")
+            console.print()
+
+            confirm = typer.confirm("Continue with live execution?", default=False)
+            if not confirm:
+                console.print("\n[yellow]Execution cancelled[/yellow]\n")
+                raise typer.Exit(0)
+            console.print()
+
+        # Execute the plan
+        console.print(f"{'Simulating' if dry_run else 'Executing'} actions...\n")
+
+        # Route to appropriate execution function
+        if retry_failed:
+            result = retry_failed_actions(plan_id, dry_run=dry_run)
+        elif action_type:
+            # Validate action type
+            try:
+                action_type_enum = ActionType(action_type)
+            except ValueError:
+                valid_types = ", ".join([t.value for t in ActionType])
+                console.print(f"\n[red]✗[/red] Invalid action type: {action_type}")
+                console.print(f"Valid types: {valid_types}\n")
+                raise typer.Exit(1)
+            result = execute_actions_by_type(plan_id, action_type_enum, dry_run=dry_run)
+        else:
+            result = execute_plan(plan_id, action_ids=parsed_action_ids, dry_run=dry_run)
+
+        # Display results
+        console.print()
+
+        if result["successful"] == result["total_actions"] and result["failed"] == 0:
+            status_color = "green"
+            status_icon = "✓"
+            status_msg = "complete"
+        elif result["failed"] > 0:
+            status_color = "yellow"
+            status_icon = "⚠"
+            status_msg = "complete with failures"
+        else:
+            status_color = "red"
+            status_icon = "✗"
+            status_msg = "failed"
+
+        summary_text = (
+            f"[{status_color}]{status_icon} {'Dry run' if dry_run else 'Execution'} {status_msg}[/]\n\n"
+            f"Total actions: {result['total_actions']}\n"
+            f"Successful: [green]{result['successful']}[/green]\n"
+            f"Failed: [{'red' if result['failed'] > 0 else 'dim'}]{result['failed']}[/]\n"
+        )
+
+        summary_panel = Panel(
+            summary_text,
+            title=f"{'Simulation' if dry_run else 'Execution'} Summary",
+            border_style=status_color,
+        )
+        console.print(summary_panel)
+        console.print()
+
+        # Show individual action results if there were failures
+        if result["failed"] > 0:
+            console.print("[bold]Failed Actions:[/bold]")
+            for action_result in result["results"]:
+                if not action_result["success"]:
+                    console.print(
+                        f"  [red]✗[/red] {action_result['resource_name']}: {action_result['message']}"
+                    )
+            console.print()
+
+        # Next steps
+        if dry_run:
+            console.print("[bold]Next steps:[/bold]")
+            console.print(f"  • Execute for real: dfo azure plan execute {plan_id} --force")
+            console.print(f"  • View details: dfo azure plan show {plan_id}")
+            console.print()
+        else:
+            console.print("[bold]Next steps:[/bold]")
+            console.print(f"  • View results: dfo azure plan show {plan_id}")
+            if result["failed"] > 0:
+                console.print(f"  • Retry failed: dfo azure plan execute {plan_id} --retry-failed --force")
+            if result["successful"] > 0:
+                console.print(f"  • Rollback if needed: dfo azure plan rollback {plan_id}")
+            console.print()
+
+    except typer.Abort:
+        console.print("\n[yellow]Execution cancelled[/yellow]\n")
+        raise typer.Exit(0)
+    except typer.Exit:
+        # Re-raise typer.Exit without modification
+        raise
+    except ExecutionError as e:
+        console.print(f"\n[red]✗[/red] {e}\n")
+        raise typer.Exit(1)
+    except ValueError as e:
+        console.print(f"\n[red]✗[/red] {e}\n")
+        raise typer.Exit(1)
+    except Exception as e:
+        console.print(f"\n[red]✗[/red] Error executing plan: {e}")
+        import traceback
+        traceback.print_exc()
+        raise typer.Exit(1)
+
+
+def _get_status_color(status: str) -> str:
+    """Get color for plan status."""
+    status_colors = {
+        "draft": "dim",
+        "validated": "cyan",
+        "approved": "green",
+        "executing": "yellow",
+        "completed": "green",
+        "failed": "red",
+        "cancelled": "dim",
+    }
+    return status_colors.get(status, "white")
+
+
 @app.command(name="test-auth")
 def test_auth():
     """Test Azure authentication and client creation.
