@@ -22,33 +22,30 @@ dfo is a command-line tool that discovers Azure VMs, analyzes their CPU usage, i
 ## How It Works
 
 ```mermaid
-stateDiagram-v2
-    [*] --> Discover: dfo azure discover
+sequenceDiagram
+    participant You
+    participant dfo as dfo CLI
+    participant DB as dfo Database
+    participant Azure as Azure Cloud
 
-    state "Azure Cloud" as azure {
-        Discover --> Authenticate: Entra ID
-        Authenticate --> FetchVMs: Compute API
-        FetchVMs --> FetchMetrics: Monitor API
-    }
+    You->>dfo: dfo azure discover
+    dfo->>Azure: Authenticate (Entra ID)
+    dfo->>Azure: List VMs + CPU metrics
+    Azure-->>dfo: VM inventory
+    dfo->>DB: Store inventory
 
-    state "dfo Database" as db {
-        FetchMetrics --> StoreInventory
-        StoreInventory --> Analyze: dfo azure analyze
-        Analyze --> StoreFindings
-        StoreFindings --> Report: dfo azure report
-    }
+    You->>dfo: dfo azure analyze
+    dfo->>DB: Read inventory
+    dfo->>DB: Store findings
 
-    Report --> [*]: View savings
+    You->>dfo: dfo azure report
+    dfo->>DB: Query findings
+    dfo-->>You: Savings & recommendations
 
-    state "Execute (optional)" as exec {
-        Report --> CreatePlan: dfo azure plan create
-        CreatePlan --> Validate
-        Validate --> Approve
-        Approve --> Execute: ARM API
-        Execute --> Rollback: if needed
-    }
-
-    Execute --> [*]: Done
+    You->>dfo: dfo azure plan execute
+    dfo->>Azure: Stop/deallocate VMs (ARM)
+    dfo->>DB: Log actions
+    dfo-->>You: Status
 ```
 
 > **Local-first**: All data stored locally. No cloud storage required.
