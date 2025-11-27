@@ -165,6 +165,10 @@ def execute_vm(
         console.print(f"[yellow]{e}[/yellow]")
         raise typer.Exit(1)
 
+    except typer.Exit:
+        # Let typer.Exit pass through (used for normal exit codes)
+        raise
+
     except Exception as e:
         console.print(f"[red]✗ Unexpected Error[/red]")
         console.print(f"[red]{e}[/red]")

@@ -226,20 +226,29 @@ def _parse_since(since_str: str) -> datetime:
     """
     # Try relative format first (7d, 24h, etc.)
     if since_str.endswith("d"):
-        days = int(since_str[:-1])
-        return datetime.utcnow() - timedelta(days=days)
+        try:
+            days = int(since_str[:-1])
+            return datetime.utcnow() - timedelta(days=days)
+        except ValueError:
+            pass  # Fall through to error at end
     elif since_str.endswith("h"):
-        hours = int(since_str[:-1])
-        return datetime.utcnow() - timedelta(hours=hours)
+        try:
+            hours = int(since_str[:-1])
+            return datetime.utcnow() - timedelta(hours=hours)
+        except ValueError:
+            pass  # Fall through to error at end
     else:
         # Try parsing as date
         try:
             return datetime.strptime(since_str, "%Y-%m-%d")
         except ValueError:
-            raise ValueError(
-                f"Invalid since format: {since_str}. "
-                f"Use YYYY-MM-DD or relative format like 7d, 24h"
-            )
+            pass  # Fall through to error at end
+
+    # If we get here, nothing worked
+    raise ValueError(
+        f"Invalid since format: {since_str}. "
+        f"Use YYYY-MM-DD or relative format like 7d, 24h"
+    )
 
 
 def _display_table(logs):

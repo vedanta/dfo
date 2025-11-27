@@ -20,6 +20,32 @@ Equivalent SKU selection is based on four attributes:
 
 Equivalents must match the *intent* of the workload, not be a literal 1:1 mapping.
 
+```mermaid
+flowchart LR
+    subgraph Legacy
+        B1s[Standard_B1s]
+        A2[Standard_A2_v2]
+        D2[Standard_D2_v2]
+    end
+
+    subgraph Modern Equivalent
+        B2ls[Standard_B2ls_v2]
+        D2as[Standard_D2as_v5]
+        D2s[Standard_D2s_v5]
+    end
+
+    B1s -->|Burstable| B2ls
+    A2 -->|General Purpose| D2as
+    D2 -->|General Purpose| D2s
+
+    style B1s fill:#757575,color:#fff
+    style A2 fill:#757575,color:#fff
+    style D2 fill:#757575,color:#fff
+    style B2ls fill:#43a047,color:#fff
+    style D2as fill:#43a047,color:#fff
+    style D2s fill:#43a047,color:#fff
+```
+
 Example:
 `Standard_B1s` → No longer in Retail API → Closest compute class is **Standard_B2ls_v2**.
 
@@ -136,6 +162,33 @@ Mapping rationale: general-purpose → general-purpose v5.
 ---
 
 ## 5. Algorithm for Automated SKU Resolution
+
+```mermaid
+flowchart TD
+    A[Input: Legacy SKU] --> B{In Retail API?}
+    B -->|Yes| C[Use actual price]
+    B -->|No| D{B-series?}
+    D -->|Yes| E[Map to B*_v2]
+    D -->|No| F{A-series?}
+    F -->|Yes| G[Map to D*_v5]
+    F -->|No| H[Map to same family _v5]
+    E --> I[Lookup price for equivalent]
+    G --> I
+    H --> I
+    I --> J[Return savings estimate]
+    C --> J
+
+    style A fill:#1e88e5,color:#fff
+    style B fill:#8e24aa,color:#fff
+    style C fill:#43a047,color:#fff
+    style D fill:#fb8c00,color:#fff
+    style E fill:#43a047,color:#fff
+    style F fill:#fb8c00,color:#fff
+    style G fill:#43a047,color:#fff
+    style H fill:#43a047,color:#fff
+    style I fill:#1e88e5,color:#fff
+    style J fill:#2e7d32,color:#fff
+```
 
 ### Pseudocode
 ```python
