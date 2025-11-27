@@ -7,6 +7,9 @@ import typer
 from rich.console import Console
 from rich.columns import Columns
 
+# Internal - Import subcommand modules
+from dfo.cmd import azure_execute, azure_logs
+
 app = typer.Typer(help="Azure cloud provider commands")
 console = Console()
 
@@ -2045,6 +2048,12 @@ def execute(
 
 plan_app = typer.Typer(help="Execution plan management")
 app.add_typer(plan_app, name="plan")
+
+# Direct Execution Commands (Milestone 7 - Phase 3)
+app.add_typer(azure_execute.app, name="execute")
+
+# Action Logs Commands (Milestone 7 - Phase 3)
+app.add_typer(azure_logs.app, name="logs")
 
 
 @plan_app.command(name="create")
