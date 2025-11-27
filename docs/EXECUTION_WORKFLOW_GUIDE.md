@@ -33,58 +33,25 @@ This prevents accidents like:
 
 ### Visual Overview
 
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                     EXECUTION WORKFLOW                              │
-└─────────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    A[Analyze: Find idle VMs] --> B[Create Plan]
+    B --> C{Validate with Azure}
+    C -->|VMs exist?| D[Approve Plan]
+    D --> E[Dry-Run - Safe!]
+    E --> F{Review Results}
+    F -->|Looks good| G[Execute --force]
+    G --> H[VMs Stopped - Saving!]
+    H -->|If needed| I[Rollback]
 
-Step 1: ANALYZE                    Step 2: CREATE PLAN
-┌──────────────┐                   ┌──────────────┐
-│  Find idle   │  ──────────────>  │  Plan with   │
-│  VMs that    │   Create plan     │  12 actions  │
-│  waste $$$   │   from findings   │  (draft)     │
-└──────────────┘                   └──────────────┘
-                                          │
-                                          ▼
-Step 3: VALIDATE                   ┌──────────────┐
-┌──────────────┐                   │  Check with  │
-│  Azure says  │  <────────────    │  Azure:      │
-│  "All VMs    │   Validation      │  VMs exist?  │
-│  exist ✓"    │                   │  Correct     │
-└──────────────┘                   │  state?      │
-                                   └──────────────┘
-        │                                 │
-        ▼                                 ▼
-Step 4: APPROVE                    Step 5: DRY-RUN
-┌──────────────┐                   ┌──────────────┐
-│  You review  │                   │  Simulate    │
-│  and approve │  ──────────────>  │  execution   │
-│  the plan    │   Ready to test   │  (safe!)     │
-└──────────────┘                   └──────────────┘
-                                          │
-                                          ▼
-                                   ┌──────────────┐
-                                   │  Review      │
-                                   │  dry-run     │
-                                   │  results     │
-                                   └──────────────┘
-                                          │
-                                          ▼
-Step 6: EXECUTE (LIVE)             ┌──────────────┐
-┌──────────────┐                   │  Make real   │
-│  VMs are     │  <────────────    │  changes to  │
-│  stopped     │   --force flag    │  Azure       │
-│  💰 Saving!  │                   │  (WARNING!)  │
-└──────────────┘                   └──────────────┘
-        │
-        │  (if needed)
-        ▼
-Step 7: ROLLBACK
-┌──────────────┐
-│  Restart     │
-│  stopped VMs │
-│  (undo)      │
-└──────────────┘
+    style A fill:#e1f5fe
+    style B fill:#fff3e0
+    style C fill:#f3e5f5
+    style D fill:#e8f5e9
+    style E fill:#e8f5e9
+    style G fill:#ffebee
+    style H fill:#c8e6c9
+    style I fill:#ffcdd2
 ```
 
 ---
@@ -513,47 +480,16 @@ VMs Started:
 
 Here's how plan status changes through the workflow:
 
-```
-                ┌─────────┐
-                │  START  │
-                └────┬────┘
-                     │
-                     ▼
-           ┌──────────────────┐
-           │      draft       │  ← Created from analysis
-           └────┬─────────────┘
-                │
-                │ ./dfo azure plan validate <plan-id>
-                ▼
-           ┌──────────────────┐
-           │    validated     │  ← Checked against Azure
-           └────┬─────────────┘
-                │
-                │ ./dfo azure plan approve <plan-id>
-                ▼
-           ┌──────────────────┐
-           │    approved      │  ← Ready for execution
-           └────┬─────────────┘
-                │
-                │ ./dfo azure plan execute <plan-id>
-                ▼
-           ┌──────────────────┐
-           │   executing      │  ← Running actions
-           └────┬─────────────┘
-                │
-                ├──────────┬──────────┐
-                │          │          │
-                ▼          ▼          ▼
-         ┌──────────┐ ┌──────────┐ ┌──────────┐
-         │completed │ │  failed  │ │cancelled │
-         └──────────┘ └──────────┘ └──────────┘
-                │
-                │ (if needed)
-                │ ./dfo azure plan rollback <plan-id> --force
-                ▼
-         ┌──────────────┐
-         │  rolled_back │
-         └──────────────┘
+```mermaid
+stateDiagram-v2
+    [*] --> draft: plan create
+    draft --> validated: plan validate
+    validated --> approved: plan approve
+    approved --> executing: plan execute
+    executing --> completed: Success
+    executing --> failed: Error
+    executing --> cancelled: User cancel
+    completed --> rolled_back: plan rollback --force
 ```
 
 ---
