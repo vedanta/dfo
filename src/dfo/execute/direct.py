@@ -238,16 +238,29 @@ class DirectExecutionManager:
         # Step 1: Check feature flag
         self._check_feature_enabled()
 
+        # Display validation progress
+        if not request.no_validation:
+            self.console.print("\n[cyan]Validating request...[/cyan]")
+
         # Step 2: Validate resource exists and get current state
+        self.console.print("  [dim]1/3[/dim] Checking resource exists...", end=" ")
         resource_data = self._validate_resource(request)
+        self.console.print("[green]✓[/green]")
 
         # Step 3: Validate action is appropriate for resource
         if not request.no_validation:
+            self.console.print("  [dim]2/3[/dim] Validating action...", end=" ")
             self._validate_action(request, resource_data)
+            self.console.print("[green]✓[/green]")
 
         # Step 4: Azure-side validation (locks, tags, etc.)
         if not request.no_validation:
+            self.console.print("  [dim]3/3[/dim] Checking Azure policies...", end=" ")
             self._azure_validation(request, resource_data)
+            self.console.print("[green]✓[/green]")
+
+        if not request.no_validation:
+            self.console.print("[green]✓ All validations passed[/green]\n")
 
         # Step 5: Display preview
         self._display_preview(request, resource_data)
@@ -479,34 +492,107 @@ class DirectExecutionManager:
             )
 
     def _display_preview(self, request: DirectExecutionRequest, resource_data: Dict[str, Any]):
-        """Display preview of action to be performed.
+        """Display enhanced preview of action to be performed.
 
         Args:
             request: DirectExecutionRequest
             resource_data: Current resource data
         """
+        # Main details table
         table = Table(title="Execution Preview", show_header=False, box=None)
-        table.add_column("Field", style="cyan")
+        table.add_column("Field", style="cyan", width=20)
         table.add_column("Value", style="white")
 
         table.add_row("Resource Type", request.resource_type.upper())
         table.add_row("Resource Name", request.resource_name)
         table.add_row("Resource Group", request.resource_group)
+        table.add_row("Location", resource_data.get("location", "unknown"))
         table.add_row("Current State", resource_data.get("power_state", "unknown"))
         table.add_row("Current Size", resource_data.get("size", "unknown"))
-        table.add_row("Action", request.action.upper())
+        table.add_row("OS Type", resource_data.get("os_type", "unknown"))
+        table.add_row("Action", f"[bold]{request.action.upper()}[/bold]")
 
         if request.action == ActionType.DOWNSIZE:
             table.add_row("Target Size", request.target_sku or "N/A")
 
-        table.add_row("Mode", "[yellow]DRY RUN[/yellow]" if request.dry_run else "[red]LIVE EXECUTION[/red]")
+        # Mode indicator with clear visual distinction
+        mode_text = "[yellow]DRY RUN (simulation)[/yellow]" if request.dry_run else "[red]LIVE EXECUTION (real changes)[/red]"
+        table.add_row("Mode", mode_text)
 
         if request.reason:
             table.add_row("Reason", request.reason)
 
         self.console.print()
         self.console.print(table)
+
+        # Action impact panel
+        impact_text = self._get_action_impact(request.action, resource_data)
+        reversibility = self._get_reversibility_status(request.action)
+
+        impact_panel = Panel(
+            f"[bold]Impact:[/bold] {impact_text}\n"
+            f"[bold]Reversibility:[/bold] {reversibility}",
+            title="Action Assessment",
+            border_style="yellow" if request.dry_run else "red"
+        )
+        self.console.print(impact_panel)
+
+        # Warning for destructive actions
+        if request.action == ActionType.DELETE and not request.dry_run:
+            warning = Panel(
+                "[bold red]⚠ WARNING: DELETE is IRREVERSIBLE![/bold red]\n\n"
+                "This will permanently delete the VM and all associated resources.\n"
+                "Disks, NICs, and other resources may also be affected.\n\n"
+                "[yellow]Consider taking a snapshot before proceeding.[/yellow]",
+                title="⚠ Destructive Action",
+                border_style="red"
+            )
+            self.console.print(warning)
+
         self.console.print()
+
+    def _get_action_impact(self, action: str, resource_data: Dict[str, Any]) -> str:
+        """Get human-readable impact description for an action.
+
+        Args:
+            action: Action type
+            resource_data: Current resource data
+
+        Returns:
+            str: Impact description
+        """
+        if action == ActionType.STOP:
+            return "VM will stop running but remain allocated (compute charges continue)"
+        elif action == ActionType.DEALLOCATE:
+            return "VM will stop and be deallocated (compute charges stop, disk charges continue)"
+        elif action == ActionType.DELETE:
+            return "VM will be permanently deleted (all charges stop)"
+        elif action == ActionType.RESTART:
+            return "VM will restart (brief downtime expected)"
+        elif action == ActionType.DOWNSIZE:
+            return "VM will be resized to smaller SKU (reduced compute charges)"
+        return "Unknown impact"
+
+    def _get_reversibility_status(self, action: str) -> str:
+        """Get reversibility status for an action.
+
+        Args:
+            action: Action type
+
+        Returns:
+            str: Reversibility description with color coding
+        """
+        if action == ActionType.STOP:
+            return "[green]✓ Reversible[/green] - Use 'start' to resume"
+        elif action == ActionType.DEALLOCATE:
+            return "[green]✓ Reversible[/green] - Use 'start' to resume"
+        elif action == ActionType.DELETE:
+            return "[red]✗ IRREVERSIBLE[/red] - Cannot be undone"
+        elif action == ActionType.RESTART:
+            return "[yellow]⚠ Temporary[/yellow] - Brief service interruption"
+        elif action == ActionType.DOWNSIZE:
+            return "[yellow]⚠ Partially reversible[/yellow] - Can upsize later but may require downtime"
+        return "[yellow]Unknown[/yellow]"
 
     def _confirm_execution(self, request: DirectExecutionRequest) -> bool:
         """Prompt user for confirmation.
@@ -638,8 +724,30 @@ class DirectExecutionManager:
         except Exception as e:
             return {"error": f"Failed to get post-execution state: {e}"}
 
+    def _generate_rollback_command(self, request: DirectExecutionRequest) -> Optional[str]:
+        """Generate rollback command for the action.
+
+        Args:
+            request: DirectExecutionRequest
+
+        Returns:
+            Optional[str]: Rollback command or None if irreversible
+        """
+        if request.action == ActionType.STOP:
+            return f"./dfo azure execute vm {request.resource_name} start -g {request.resource_group} --no-dry-run"
+        elif request.action == ActionType.DEALLOCATE:
+            return f"./dfo azure execute vm {request.resource_name} start -g {request.resource_group} --no-dry-run"
+        elif request.action == ActionType.DELETE:
+            return None  # Irreversible
+        elif request.action == ActionType.RESTART:
+            return None  # No rollback needed for restart
+        elif request.action == ActionType.DOWNSIZE:
+            # Get the current size from resource_data if available
+            return f"./dfo azure execute vm {request.resource_name} upsize -g {request.resource_group} -t <original-sku> --no-dry-run"
+        return None
+
     def _display_result(self, request: DirectExecutionRequest, message: str, action_id: str):
-        """Display execution result.
+        """Display enhanced execution result with rollback guidance.
 
         Args:
             request: DirectExecutionRequest
@@ -649,18 +757,50 @@ class DirectExecutionManager:
         self.console.print()
 
         if request.dry_run:
-            panel = Panel(
+            # Dry-run result
+            content = (
                 f"[yellow]{message}[/yellow]\n\n"
-                f"Action ID: {action_id}\n"
-                f"To execute for real, add --no-dry-run flag",
+                f"[dim]Action ID:[/dim] {action_id}\n"
+                f"[dim]Mode:[/dim] Simulation (no changes made)\n\n"
+                f"[bold]Next Steps:[/bold]\n"
+                f"• Review the action details above\n"
+                f"• To execute for real: add [cyan]--no-dry-run[/cyan] flag\n"
+                f"• To skip confirmation: add [cyan]--yes[/cyan] flag"
+            )
+            panel = Panel(
+                content,
                 title="✓ Dry Run Complete",
                 border_style="yellow"
             )
         else:
+            # Live execution result
+            content_parts = [
+                f"[green]{message}[/green]\n",
+                f"[dim]Action ID:[/dim] {action_id}",
+                f"[dim]Mode:[/dim] Live execution (changes applied)",
+            ]
+
+            # Add rollback guidance
+            rollback_cmd = self._generate_rollback_command(request)
+            if rollback_cmd:
+                content_parts.append(
+                    f"\n[bold]Rollback Command:[/bold]\n[cyan]{rollback_cmd}[/cyan]"
+                )
+            elif request.action == ActionType.DELETE:
+                content_parts.append(
+                    f"\n[bold red]⚠ No Rollback Available[/bold red]\n"
+                    f"[dim]This action is irreversible. The VM cannot be recovered.[/dim]"
+                )
+
+            # Add log viewing command
+            content_parts.append(
+                f"\n[bold]View Details:[/bold]\n"
+                f"[cyan]./dfo azure logs show {action_id}[/cyan]"
+            )
+
+            content = "\n".join(content_parts)
             panel = Panel(
-                f"[green]{message}[/green]\n\n"
-                f"Action ID: {action_id}\n"
-                f"View logs: ./dfo azure logs show {action_id}",
+                content,
                 title="✓ Execution Complete",
                 border_style="green"
             )
