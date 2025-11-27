@@ -262,7 +262,7 @@ class ActionLogger:
 
             if 'source' in filters:
                 source_filter = 'direct_execution' if filters['source'] == 'direct' else 'plan_execution'
-                query += " AND json_extract(metadata, '$.source') = ?"
+                query += " AND json_extract_string(metadata, '$.source') = ?"
                 params.append(source_filter)
 
             if 'action_status' in filters:
@@ -282,7 +282,7 @@ class ActionLogger:
                 params.append(filters['until'])
 
             if 'user' in filters:
-                query += " AND json_extract(metadata, '$.user') = ?"
+                query += " AND json_extract_string(metadata, '$.user') = ?"
                 params.append(filters['user'])
 
         query += " ORDER BY execution_time DESC LIMIT ?"
@@ -336,26 +336,29 @@ class ActionLogger:
                 params.append(filters['vm_name'])
             if 'source' in filters:
                 source_filter = 'direct_execution' if filters['source'] == 'direct' else 'plan_execution'
-                query += " AND json_extract(metadata, '$.source') = ?"
+                query += " AND json_extract_string(metadata, '$.source') = ?"
                 params.append(source_filter)
 
         result = self.db.execute(query, params).fetchone()
 
+        total = result[0] if result and result[0] is not None else 0
+        live = result[1] if result and result[1] is not None else 0
+
         return {
-            "total_actions": result[0] if result else 0,
-            "live_executions": result[1] if result else 0,
-            "dry_run_simulations": (result[0] - result[1]) if result else 0,
+            "total_actions": total,
+            "live_executions": live,
+            "dry_run_simulations": total - live,
         }
 
     def _generate_action_id(self) -> str:
         """Generate unique action ID.
 
-        Format: act-YYYYMMDD-HHMMSS
+        Format: act-YYYYMMDD-HHMMSS-mmmmmm (includes microseconds for uniqueness)
 
         Returns:
             Unique action ID
         """
-        timestamp = datetime.utcnow().strftime('%Y%m%d-%H%M%S')
+        timestamp = datetime.utcnow().strftime('%Y%m%d-%H%M%S-%f')
         return f"act-{timestamp}"
 
     def _get_command_line(self) -> str:
@@ -422,13 +425,21 @@ class ActionLogger:
         """Convert database row to ActionLog object.
 
         Args:
-            row: Database row tuple
+            row: Database row tuple (from SELECT * query)
+            Expected column order (from schema.sql):
+            0: action_id, 1: plan_id, 2: vm_id, 3: vm_name, 4: resource_group,
+            5: action_type, 6: action_status, 7: executed, 8: execution_time,
+            9: duration_seconds, 10: result_message, 11: reason, 12: metadata
 
         Returns:
             ActionLog object
         """
-        # Parse metadata JSON
-        metadata = json.loads(row[10]) if row[10] else {}
+        # Parse metadata JSON (handle empty/null)
+        metadata_str = row[12] if row[12] else "{}"
+        try:
+            metadata = json.loads(metadata_str)
+        except json.JSONDecodeError:
+            metadata = {}
 
         return ActionLog(
             action_id=row[0],
@@ -441,7 +452,7 @@ class ActionLogger:
             executed=bool(row[7]),
             execution_time=datetime.fromisoformat(row[8]) if isinstance(row[8], str) else row[8],
             duration_seconds=row[9],
-            result_message=row[11],
-            reason=row[12],
+            result_message=row[10],
+            reason=row[11],
             metadata=metadata
         )
