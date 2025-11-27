@@ -22,20 +22,35 @@ dfo is a command-line tool that discovers Azure VMs, analyzes their CPU usage, i
 ## How It Works
 
 ```mermaid
-C4Context
-    title dfo - DevFinOps System Context
+flowchart LR
+    subgraph You
+        cmd[dfo commands]
+    end
 
-    Person(user, "You", "Cloud engineer or FinOps practitioner")
+    subgraph dfo CLI
+        discover --> analyze --> report --> execute
+    end
 
-    System(dfo, "dfo CLI", "Discovers idle VMs, analyzes usage, recommends savings, executes actions")
+    subgraph Local
+        db[(dfo Database)]
+    end
 
-    SystemDb(db, "dfo Database", "Local DuckDB storage for inventory, analysis, and action logs")
+    subgraph Azure Cloud
+        auth[Entra ID]
+        compute[Compute API]
+        monitor[Monitor API]
+        arm[ARM]
+    end
 
-    System_Ext(azure, "Azure Cloud", "Entra ID, Compute API, Monitor API, ARM")
-
-    Rel(user, dfo, "discover, analyze, report, execute")
-    Rel(dfo, db, "read/write")
-    Rel(dfo, azure, "authenticate, fetch VMs & metrics, execute actions")
+    cmd --> discover
+    discover --> auth
+    discover --> compute
+    discover --> monitor
+    discover --> db
+    analyze --> db
+    report --> db
+    execute --> arm
+    execute --> db
 ```
 
 > **Local-first**: All data stored locally. No cloud storage required.
