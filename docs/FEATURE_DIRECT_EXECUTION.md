@@ -86,15 +86,17 @@ DFO_ENABLE_DIRECT_EXECUTION=false  # Set to true to enable
 
 ```bash
 # General syntax
-./dfo azure execute-direct <resource-type> <resource-name> <action> [OPTIONS]
+./dfo azure execute <resource-type> <resource-name> <action> [OPTIONS]
 
 # Examples
-./dfo azure execute-direct vm vm-prod-001 stop
-./dfo azure execute-direct vm vm-prod-001 deallocate --force
-./dfo azure execute-direct vm vm-prod-001 delete --yes
-./dfo azure execute-direct vm vm-prod-001 downsize --target-sku Standard_B2s
-./dfo azure execute-direct vm vm-prod-001 restart
+./dfo azure execute vm vm-prod-001 stop
+./dfo azure execute vm vm-prod-001 deallocate --force
+./dfo azure execute vm vm-prod-001 delete --yes
+./dfo azure execute vm vm-prod-001 downsize --target-sku Standard_B2s
+./dfo azure execute vm vm-prod-001 restart
 ```
+
+**No Naming Conflict**: Plan-based execution uses `./dfo azure plan execute <plan-id>` while direct execution uses `./dfo azure execute <resource-type> ...`. The command structure itself provides clear distinction.
 
 ### Command Arguments
 
@@ -185,7 +187,7 @@ class Settings(BaseSettings):
 
 **Check at runtime**:
 ```python
-def execute_direct_command():
+def execute_command():
     settings = get_settings()
     if not settings.enable_direct_execution:
         console.print("[red]✗[/red] Direct execution is disabled")
@@ -242,7 +244,7 @@ Action to Execute
   Action          Stop
   Impact          VM will stop (billable → stopped)
   Monthly Savings $292.00
-  Reversible      Yes (use: ./dfo azure execute-direct vm vm-prod-001 restart)
+  Reversible      Yes (use: ./dfo azure execute vm vm-prod-001 restart)
 
 ⚠ This is a DRY-RUN. No changes will be made.
   Use --force to execute for real.
@@ -254,7 +256,7 @@ Proceed with dry-run? [y/N]: y
   Status:    Simulated (not executed)
 
 To execute for real:
-  ./dfo azure execute-direct vm vm-prod-001 stop --force
+  ./dfo azure execute vm vm-prod-001 stop --force
 ```
 
 #### Live Execution Mode (--force)
@@ -287,7 +289,7 @@ Proceed with LIVE execution? [y/N]: y
   Status:    Completed
 
 Rollback available:
-  ./dfo azure execute-direct vm vm-prod-001 restart --force
+  ./dfo azure execute vm vm-prod-001 restart --force
 ```
 
 #### Error: Feature Disabled
@@ -336,16 +338,16 @@ INSERT INTO vm_actions (
 ```
 src/dfo/execute/
 ├── direct.py              # NEW: Direct execution orchestrator
-│   ├── execute_direct_action()
-│   ├── validate_direct_execution()
-│   ├── preview_direct_action()
-│   └── log_direct_action()
+│   ├── execute_action()
+│   ├── validate_execution()
+│   ├── preview_action()
+│   └── log_action()
 ├── validators.py          # REUSE: Existing validation logic
 ├── azure_executor.py      # REUSE: Existing execution logic
 └── rollback.py           # REUSE: Existing rollback logic
 
 src/dfo/cmd/
-└── azure.py              # ADD: execute-direct command
+└── azure.py              # ADD: execute command
 ```
 
 ### Implementation Components
@@ -422,8 +424,8 @@ class DirectExecutionManager:
 #### 2. CLI Command (`cmd/azure.py`)
 
 ```python
-@azure_app.command(name="execute-direct")
-def execute_direct_command(
+@azure_app.command(name="execute")
+def execute_command(
     resource_type: str = typer.Argument(..., help="Resource type (vm)"),
     resource_name: str = typer.Argument(..., help="Resource name"),
     action: str = typer.Argument(..., help="Action (stop, deallocate, delete, downsize, restart)"),
@@ -442,19 +444,19 @@ def execute_direct_command(
 
     Examples:
         # Dry-run stop
-        ./dfo azure execute-direct vm vm-prod-001 stop
+        ./dfo azure execute vm vm-prod-001 stop
 
         # Live stop with confirmation
-        ./dfo azure execute-direct vm vm-prod-001 stop --force
+        ./dfo azure execute vm vm-prod-001 stop --force
 
         # Live stop without confirmation
-        ./dfo azure execute-direct vm vm-prod-001 stop --force --yes
+        ./dfo azure execute vm vm-prod-001 stop --force --yes
 
         # Downsize VM
-        ./dfo azure execute-direct vm vm-prod-001 downsize --target-sku Standard_B2s --force
+        ./dfo azure execute vm vm-prod-001 downsize --target-sku Standard_B2s --force
 
         # With reason for audit
-        ./dfo azure execute-direct vm vm-prod-001 stop --force --reason "Cost optimization Q4"
+        ./dfo azure execute vm vm-prod-001 stop --force --reason "Cost optimization Q4"
     """
     try:
         request = DirectExecutionRequest(
@@ -620,7 +622,7 @@ ORDER BY execution_time DESC;
 ### Example 1: Quick Stop (Dry-Run)
 ```bash
 # User identifies an idle VM manually
-./dfo azure execute-direct vm vm-test-001 stop
+./dfo azure execute vm vm-test-001 stop
 
 # Output shows preview and confirmation
 # User reviews, confirms dry-run
@@ -630,7 +632,7 @@ ORDER BY execution_time DESC;
 ### Example 2: Emergency Stop (Live)
 ```bash
 # Critical cost spike detected on specific VM
-./dfo azure execute-direct vm vm-runaway-batch stop --force --yes --reason "Cost spike emergency"
+./dfo azure execute vm vm-runaway-batch stop --force --yes --reason "Cost spike emergency"
 
 # Executes immediately without plan workflow
 # Logged to audit trail with reason
@@ -639,7 +641,7 @@ ORDER BY execution_time DESC;
 ### Example 3: Downsize with Review
 ```bash
 # Analyst found VM that should be downsized
-./dfo azure execute-direct vm vm-web-001 downsize --target-sku Standard_B2s
+./dfo azure execute vm vm-web-001 downsize --target-sku Standard_B2s
 
 # Shows current SKU → target SKU
 # Shows cost savings
@@ -650,7 +652,7 @@ ORDER BY execution_time DESC;
 ### Example 4: Testing Permissions
 ```bash
 # Developer testing execution permissions
-./dfo azure execute-direct vm vm-dev-001 stop --force --yes
+./dfo azure execute vm vm-dev-001 stop --force --yes
 
 # Quick way to validate:
 # - Azure credentials work
@@ -664,8 +666,8 @@ ORDER BY execution_time DESC;
 ./dfo azure report --by-rule stopped-vms
 
 # For each VM, decide individually:
-./dfo azure execute-direct vm vm-stopped-001 delete --force --yes --reason "Stopped 60+ days"
-./dfo azure execute-direct vm vm-stopped-002 delete --force --yes --reason "Stopped 60+ days"
+./dfo azure execute vm vm-stopped-001 delete --force --yes --reason "Stopped 60+ days"
+./dfo azure execute vm vm-stopped-002 delete --force --yes --reason "Stopped 60+ days"
 # ... etc
 ```
 
@@ -725,7 +727,7 @@ ORDER BY execution_time DESC;
 ### Phase 1: Core Implementation
 - [ ] Add feature flag to Settings
 - [ ] Create DirectExecutionManager
-- [ ] Implement execute-direct CLI command
+- [ ] Implement execute CLI command
 - [ ] Add validation logic (reuse existing)
 - [ ] Implement audit logging
 
