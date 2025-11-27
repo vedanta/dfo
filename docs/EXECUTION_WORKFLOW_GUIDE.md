@@ -44,14 +44,15 @@ flowchart TD
     G --> H[VMs Stopped - Saving!]
     H -->|If needed| I[Rollback]
 
-    style A fill:#e1f5fe
-    style B fill:#fff3e0
-    style C fill:#f3e5f5
-    style D fill:#e8f5e9
-    style E fill:#e8f5e9
-    style G fill:#ffebee
-    style H fill:#c8e6c9
-    style I fill:#ffcdd2
+    style A fill:#1e88e5,color:#fff
+    style B fill:#fb8c00,color:#fff
+    style C fill:#8e24aa,color:#fff
+    style D fill:#43a047,color:#fff
+    style E fill:#43a047,color:#fff
+    style F fill:#5e35b1,color:#fff
+    style G fill:#e53935,color:#fff
+    style H fill:#2e7d32,color:#fff
+    style I fill:#c62828,color:#fff
 ```
 
 ---
@@ -490,6 +491,24 @@ stateDiagram-v2
     executing --> failed: Error
     executing --> cancelled: User cancel
     completed --> rolled_back: plan rollback --force
+
+    classDef draftStyle fill:#fb8c00,color:#fff
+    classDef validStyle fill:#8e24aa,color:#fff
+    classDef approveStyle fill:#43a047,color:#fff
+    classDef execStyle fill:#1e88e5,color:#fff
+    classDef doneStyle fill:#2e7d32,color:#fff
+    classDef failStyle fill:#e53935,color:#fff
+    classDef cancelStyle fill:#757575,color:#fff
+    classDef rollStyle fill:#c62828,color:#fff
+
+    class draft draftStyle
+    class validated validStyle
+    class approved approveStyle
+    class executing execStyle
+    class completed doneStyle
+    class failed failStyle
+    class cancelled cancelStyle
+    class rolled_back rollStyle
 ```
 
 ---
