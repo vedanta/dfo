@@ -21,64 +21,38 @@ dfo is a command-line tool that discovers Azure VMs, analyzes their CPU usage, i
 
 ## How It Works
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                        dfo Workflow                              │
-└─────────────────────────────────────────────────────────────────┘
+```mermaid
+sequenceDiagram
+    participant You
+    participant dfo as dfo CLI
+    participant DB as DuckDB (local)
+    participant Azure as Azure Cloud
 
-    You                    dfo CLI                    Azure
-     │                        │                         │
-     │  ./dfo azure discover  │                         │
-     ├───────────────────────>│                         │
-     │                        │  1. Authenticate        │
-     │                        ├────────────────────────>│
-     │                        │                         │
-     │                        │  2. List VMs + Metrics  │
-     │                        │<────────────────────────┤
-     │                        │                         │
-     │                        │  Store in DuckDB        │
-     │                        ├──────────┐              │
-     │                        │          │              │
-     │                        │<─────────┘              │
-     │                        │                         │
-     │  ./dfo azure analyze   │                         │
-     ├───────────────────────>│                         │
-     │                        │  Read from DuckDB       │
-     │                        ├──────────┐              │
-     │                        │          │              │
-     │                        │<─────────┘              │
-     │                        │  Detect idle VMs        │
-     │                        │  Calculate savings      │
-     │                        │                         │
-     │                        │  Store findings         │
-     │                        ├──────────┐              │
-     │                        │          │              │
-     │                        │<─────────┘              │
-     │                        │                         │
-     │  ./dfo azure report    │                         │
-     ├───────────────────────>│                         │
-     │                        │  Show findings          │
-     │<───────────────────────┤                         │
-     │  View savings & VMs    │                         │
-     │                        │                         │
-     │  ./dfo azure plan      │                         │
-     │    create/execute      │                         │
-     ├───────────────────────>│                         │
-     │                        │  Validate & Execute     │
-     │                        ├────────────────────────>│
-     │                        │  Stop/Deallocate VMs    │
-     │                        │<────────────────────────┤
-     │                        │                         │
-     │                        │  Log actions            │
-     │                        ├──────────┐              │
-     │                        │          │              │
-     │  Status & rollback     │<─────────┘              │
-     │<───────────────────────┤                         │
-     │                        │                         │
+    You->>dfo: ./dfo azure discover
+    dfo->>Azure: Authenticate (Entra ID)
+    dfo->>Azure: List VMs (Compute API)
+    dfo->>Azure: Get CPU metrics (Monitor API)
+    Azure-->>dfo: VM inventory + metrics
+    dfo->>DB: Store inventory
 
-         All data stored locally in DuckDB (dfo.duckdb)
-         No external services • No cloud storage required
+    You->>dfo: ./dfo azure analyze
+    dfo->>DB: Read inventory
+    Note over dfo: Detect idle VMs<br/>Calculate savings
+    dfo->>DB: Store findings
+
+    You->>dfo: ./dfo azure report
+    dfo->>DB: Query findings
+    dfo-->>You: Savings & recommendations
+
+    You->>dfo: ./dfo azure plan execute
+    dfo->>Azure: Validate permissions (ARM)
+    dfo->>Azure: Stop/deallocate VMs (ARM)
+    Azure-->>dfo: Action results
+    dfo->>DB: Log actions
+    dfo-->>You: Status & rollback options
 ```
+
+> **Local-first**: All data stored in DuckDB. No cloud storage required.
 
 ## Current Status
 
