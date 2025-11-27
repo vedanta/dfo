@@ -333,6 +333,388 @@ INSERT INTO vm_actions (
 - `metadata.command`: Full command executed
 - `reason`: User-provided reason or auto-generated
 
+### Action Logging System
+
+#### What Gets Logged
+
+Every execution (dry-run or live) is logged to the `vm_actions` table with comprehensive details:
+
+**Core Fields**:
+- `action_id` - Unique identifier (e.g., `act-20251126-001`)
+- `plan_id` - NULL or `direct-<timestamp>` for direct executions
+- `vm_id` - Azure resource ID
+- `vm_name` - VM name
+- `resource_group` - Resource group name
+- `action_type` - Action performed (stop, deallocate, delete, downsize, restart)
+- `action_status` - Status (pending, executing, completed, failed, rolled_back)
+- `executed` - Boolean (true = live, false = dry-run)
+- `execution_time` - Timestamp of execution
+- `duration_seconds` - How long the action took
+- `result_message` - Success/error message
+- `reason` - User-provided reason (from `--reason` flag)
+
+**Metadata JSON**:
+```json
+{
+  "source": "direct_execution",
+  "command": "./dfo azure execute vm vm-prod-001 stop --force",
+  "user": "admin@company.com",
+  "service_principal": "dfo-admin-sp",
+  "azure_subscription": "sub-12345...",
+  "client_ip": "192.168.1.100",
+  "environment": "production",
+  "triggered_by": "manual",
+  "pre_state": {
+    "power_state": "VM running",
+    "size": "Standard_D4s_v3",
+    "monthly_cost": 292.00
+  },
+  "post_state": {
+    "power_state": "VM stopped",
+    "monthly_cost": 0.00
+  },
+  "validation_results": {
+    "resource_exists": true,
+    "permissions_ok": true,
+    "state_valid": true
+  }
+}
+```
+
+#### Log Entry Lifecycle
+
+```
+1. Pre-Execution Log
+   ├─ Created when user confirms action
+   ├─ Status: pending
+   ├─ Executed: false (or true if --force)
+   └─ Captures pre-state
+
+2. During Execution
+   ├─ Status updated to: executing
+   └─ Real-time updates
+
+3. Post-Execution Log
+   ├─ Status updated to: completed or failed
+   ├─ Duration recorded
+   ├─ Result message added
+   └─ Post-state captured
+
+4. Rollback Log (if applicable)
+   ├─ New action entry created
+   ├─ References original action_id
+   └─ Reverses the state change
+```
+
+#### CLI Commands for Action Logs
+
+##### View Recent Actions
+```bash
+# Show recent actions (last 20)
+./dfo azure logs
+
+# Show recent actions with more detail
+./dfo azure logs --verbose
+
+# Show last 50 actions
+./dfo azure logs --limit 50
+
+# Filter by specific VM
+./dfo azure logs --vm vm-prod-001
+
+# Filter by action type
+./dfo azure logs --action stop
+
+# Filter by time range
+./dfo azure logs --since "2025-11-01"
+./dfo azure logs --since "7 days ago"
+
+# Show only direct executions
+./dfo azure logs --source direct
+
+# Show only plan-based executions
+./dfo azure logs --source plan
+
+# Show only live executions (not dry-runs)
+./dfo azure logs --executed-only
+
+# Export to JSON/CSV
+./dfo azure logs --format json --output actions.json
+./dfo azure logs --format csv --output actions.csv
+```
+
+##### View Specific Action
+```bash
+# Show detailed action log
+./dfo azure logs show act-20251126-001
+
+# Example output:
+╭──────────────────────────────────────────────────────────╮
+│ Action Details: act-20251126-001                         │
+╰──────────────────────────────────────────────────────────╯
+
+Action Summary
+  ID              act-20251126-001
+  Type            Stop
+  Status          Completed
+  Executed        Yes (LIVE execution)
+  Source          Direct execution
+  Timestamp       2025-11-26 14:30:22 UTC
+  Duration        12.4 seconds
+
+Resource
+  VM Name         vm-prod-001
+  Resource Group  production-rg
+  Subscription    sub-12345...
+
+State Change
+  Before          VM running (Standard_D4s_v3, $292/month)
+  After           VM stopped ($0/month)
+  Savings         $292/month
+
+Execution Details
+  Command         ./dfo azure execute vm vm-prod-001 stop --force
+  User            admin@company.com
+  Service Principal  dfo-admin-sp
+  Reason          Cost optimization Q4
+
+Result
+  ✓ VM stopped successfully
+
+Rollback Available
+  ./dfo azure execute vm vm-prod-001 restart --force
+```
+
+##### Query Action History
+```bash
+# Show all actions for a specific VM
+./dfo azure logs --vm vm-prod-001
+
+# Show actions in date range
+./dfo azure logs --since "2025-11-01" --until "2025-11-26"
+
+# Show failed actions
+./dfo azure logs --status failed
+
+# Show actions by specific user
+./dfo azure logs --user "admin@company.com"
+
+# Show actions with savings impact
+./dfo azure logs --min-savings 100
+
+# Show rollback actions
+./dfo azure logs --action rollback
+```
+
+#### SQL Queries for Action Logs
+
+**Recent Direct Executions**:
+```sql
+SELECT
+    action_id,
+    vm_name,
+    action_type,
+    action_status,
+    executed,
+    execution_time,
+    reason,
+    metadata->>'command' as command,
+    metadata->>'user' as user
+FROM vm_actions
+WHERE metadata->>'source' = 'direct_execution'
+ORDER BY execution_time DESC
+LIMIT 20;
+```
+
+**Actions by VM**:
+```sql
+SELECT
+    action_id,
+    action_type,
+    action_status,
+    executed,
+    execution_time,
+    metadata->>'pre_state.power_state' as before_state,
+    metadata->>'post_state.power_state' as after_state,
+    reason
+FROM vm_actions
+WHERE vm_name = 'vm-prod-001'
+ORDER BY execution_time DESC;
+```
+
+**Monthly Savings from Actions**:
+```sql
+SELECT
+    DATE_TRUNC('month', execution_time) as month,
+    COUNT(*) as total_actions,
+    SUM(CASE WHEN executed = true THEN 1 ELSE 0 END) as live_executions,
+    SUM(
+        CAST(metadata->>'pre_state.monthly_cost' AS DECIMAL) -
+        CAST(metadata->>'post_state.monthly_cost' AS DECIMAL)
+    ) as monthly_savings
+FROM vm_actions
+WHERE action_status = 'completed'
+  AND executed = true
+GROUP BY DATE_TRUNC('month', execution_time)
+ORDER BY month DESC;
+```
+
+**Failed Actions by Type**:
+```sql
+SELECT
+    action_type,
+    COUNT(*) as failure_count,
+    array_agg(DISTINCT result_message) as error_messages
+FROM vm_actions
+WHERE action_status = 'failed'
+GROUP BY action_type
+ORDER BY failure_count DESC;
+```
+
+**Audit Trail for Compliance**:
+```sql
+SELECT
+    execution_time,
+    action_id,
+    vm_name,
+    action_type,
+    executed,
+    metadata->>'user' as user,
+    metadata->>'service_principal' as sp,
+    metadata->>'command' as command,
+    reason,
+    action_status
+FROM vm_actions
+WHERE execution_time >= '2025-11-01'
+  AND executed = true
+ORDER BY execution_time DESC;
+```
+
+#### Action Log Retention
+
+**Default Retention**: 90 days for dry-run actions, 1 year for live executions
+
+**Configuration**:
+```bash
+# .env
+DFO_ACTION_LOG_RETENTION_DAYS=365        # Live executions
+DFO_DRYRUN_LOG_RETENTION_DAYS=90         # Dry-run simulations
+```
+
+**Cleanup Command**:
+```bash
+# Clean up old action logs based on retention policy
+./dfo db cleanup-logs
+
+# Preview what would be deleted
+./dfo db cleanup-logs --dry-run
+
+# Custom retention
+./dfo db cleanup-logs --older-than 180
+```
+
+#### Log Output Formats
+
+**Console Table (Default)**:
+```
+╭─────────────────────────────────────────────────────────────────────────────────╮
+│ Recent Actions (Last 20)                                                        │
+╰─────────────────────────────────────────────────────────────────────────────────╯
+
+ID                Timestamp           VM              Action      Status    Executed
+──────────────────────────────────────────────────────────────────────────────────
+act-20251126-001  2025-11-26 14:30   vm-prod-001     Stop        ✓ Done    Yes
+act-20251126-002  2025-11-26 14:25   vm-test-001     Stop        ✓ Done    No (dry-run)
+act-20251126-003  2025-11-26 14:20   vm-web-001      Downsize    ✓ Done    Yes
+act-20251126-004  2025-11-26 14:15   vm-db-001       Deallocate  ✗ Failed  No (dry-run)
+act-20251126-005  2025-11-26 14:10   vm-app-001      Restart     ✓ Done    Yes
+
+Total: 5 actions  |  Live: 3  |  Dry-run: 2  |  Failed: 1
+```
+
+**JSON Export**:
+```json
+{
+  "total_actions": 5,
+  "live_executions": 3,
+  "dry_run_simulations": 2,
+  "failed_actions": 1,
+  "time_range": {
+    "start": "2025-11-26T14:10:00Z",
+    "end": "2025-11-26T14:30:00Z"
+  },
+  "actions": [
+    {
+      "action_id": "act-20251126-001",
+      "timestamp": "2025-11-26T14:30:22Z",
+      "vm_name": "vm-prod-001",
+      "action_type": "stop",
+      "status": "completed",
+      "executed": true,
+      "duration_seconds": 12.4,
+      "reason": "Cost optimization Q4",
+      "user": "admin@company.com",
+      "command": "./dfo azure execute vm vm-prod-001 stop --force",
+      "savings": {
+        "monthly": 292.00,
+        "currency": "USD"
+      }
+    }
+  ]
+}
+```
+
+**CSV Export**:
+```csv
+action_id,timestamp,vm_name,resource_group,action_type,status,executed,duration_seconds,reason,user,monthly_savings
+act-20251126-001,2025-11-26T14:30:22Z,vm-prod-001,production-rg,stop,completed,true,12.4,"Cost optimization Q4",admin@company.com,292.00
+act-20251126-002,2025-11-26T14:25:15Z,vm-test-001,test-rg,stop,completed,false,0.0,"Testing",developer@company.com,0.00
+```
+
+#### Integration with Execution Flow
+
+The logging happens at key points in the execution flow:
+
+```python
+class DirectExecutionManager:
+    def execute(self, request: DirectExecutionRequest) -> dict:
+        # 1. Create pending log entry
+        action_id = self._create_log_entry(request, status='pending')
+
+        try:
+            # 2. Validate and execute
+            self._validate_and_execute(request)
+
+            # 3. Update log to completed
+            self._update_log_entry(action_id, status='completed', result=result)
+
+        except Exception as e:
+            # 4. Update log to failed
+            self._update_log_entry(action_id, status='failed', error=str(e))
+            raise
+
+        return {'action_id': action_id, 'status': 'completed'}
+
+    def _create_log_entry(self, request, status):
+        """Create initial log entry."""
+        return {
+            'action_id': generate_action_id(),
+            'plan_id': f'direct-{timestamp()}',
+            'vm_name': request.resource_name,
+            'action_type': request.action,
+            'action_status': status,
+            'executed': request.force,
+            'execution_time': datetime.utcnow(),
+            'reason': request.reason or 'Direct execution',
+            'metadata': {
+                'source': 'direct_execution',
+                'command': self._get_command_line(),
+                'user': self._get_current_user(),
+                'service_principal': self._get_service_principal(),
+            }
+        }
+```
+
 ### Module Structure
 
 ```
@@ -342,12 +724,18 @@ src/dfo/execute/
 │   ├── validate_execution()
 │   ├── preview_action()
 │   └── log_action()
+├── action_logger.py       # NEW: Action logging utilities
+│   ├── create_log_entry()
+│   ├── update_log_entry()
+│   ├── query_logs()
+│   └── format_log_output()
 ├── validators.py          # REUSE: Existing validation logic
 ├── azure_executor.py      # REUSE: Existing execution logic
 └── rollback.py           # REUSE: Existing rollback logic
 
 src/dfo/cmd/
-└── azure.py              # ADD: execute command
+├── azure.py              # ADD: execute command
+└── logs.py               # NEW: logs command (view/query/export action logs)
 ```
 
 ### Implementation Components
@@ -484,7 +872,321 @@ def execute_command(
         raise typer.Exit(1)
 ```
 
-#### 3. Configuration (`core/config.py`)
+#### 3. Logs Command (`cmd/logs.py`)
+
+```python
+import typer
+from typing import Optional
+from rich.console import Console
+from rich.table import Table
+from datetime import datetime, timedelta
+
+logs_app = typer.Typer()
+console = Console()
+
+@logs_app.command(name="logs")
+def logs_command(
+    limit: int = typer.Option(20, "--limit", help="Number of actions to show"),
+    vm: Optional[str] = typer.Option(None, "--vm", help="Filter by VM name"),
+    action: Optional[str] = typer.Option(None, "--action", help="Filter by action type"),
+    since: Optional[str] = typer.Option(None, "--since", help="Show actions since date/time"),
+    until: Optional[str] = typer.Option(None, "--until", help="Show actions until date/time"),
+    source: Optional[str] = typer.Option(None, "--source", help="Filter by source (direct/plan)"),
+    status: Optional[str] = typer.Option(None, "--status", help="Filter by status"),
+    user: Optional[str] = typer.Option(None, "--user", help="Filter by user"),
+    executed_only: bool = typer.Option(False, "--executed-only", help="Show only live executions"),
+    verbose: bool = typer.Option(False, "--verbose", help="Show detailed information"),
+    format: Optional[str] = typer.Option(None, "--format", help="Output format (json/csv)"),
+    output: Optional[str] = typer.Option(None, "--output", help="Output file path"),
+):
+    """
+    View action logs for executions.
+
+    Shows both direct executions and plan-based executions.
+    Supports filtering, formatting, and export.
+
+    Examples:
+        # Show recent actions
+        ./dfo azure logs
+
+        # Show actions for specific VM
+        ./dfo azure logs --vm vm-prod-001
+
+        # Show only direct executions
+        ./dfo azure logs --source direct
+
+        # Show failed actions
+        ./dfo azure logs --status failed
+
+        # Export to JSON
+        ./dfo azure logs --format json --output actions.json
+    """
+    try:
+        # Build query filters
+        filters = {}
+        if vm:
+            filters['vm_name'] = vm
+        if action:
+            filters['action_type'] = action
+        if source:
+            filters['source'] = source
+        if status:
+            filters['action_status'] = status
+        if user:
+            filters['user'] = user
+        if executed_only:
+            filters['executed'] = True
+        if since:
+            filters['since'] = parse_time(since)
+        if until:
+            filters['until'] = parse_time(until)
+
+        # Query action logs
+        logger = ActionLogger()
+        actions = logger.query_logs(limit=limit, filters=filters)
+
+        # Format output
+        if format == 'json':
+            output_json(actions, output)
+        elif format == 'csv':
+            output_csv(actions, output)
+        else:
+            output_table(actions, verbose)
+
+    except Exception as e:
+        console.print(f"[red]✗[/red] Error: {str(e)}")
+        raise typer.Exit(1)
+
+@logs_app.command(name="show")
+def show_action_command(
+    action_id: str = typer.Argument(..., help="Action ID to show"),
+):
+    """
+    Show detailed information for a specific action.
+
+    Examples:
+        ./dfo azure logs show act-20251126-001
+    """
+    try:
+        logger = ActionLogger()
+        action = logger.get_action(action_id)
+
+        if not action:
+            console.print(f"[red]✗[/red] Action not found: {action_id}")
+            raise typer.Exit(1)
+
+        display_action_details(action)
+
+    except Exception as e:
+        console.print(f"[red]✗[/red] Error: {str(e)}")
+        raise typer.Exit(1)
+
+def output_table(actions: list, verbose: bool):
+    """Display actions as a Rich table."""
+    table = Table(title="Recent Actions")
+
+    table.add_column("ID", style="cyan")
+    table.add_column("Timestamp")
+    table.add_column("VM", style="yellow")
+    table.add_column("Action", style="magenta")
+    table.add_column("Status")
+    table.add_column("Executed")
+
+    if verbose:
+        table.add_column("User")
+        table.add_column("Reason")
+
+    for action in actions:
+        status_icon = "✓" if action.status == "completed" else "✗"
+        status_color = "green" if action.status == "completed" else "red"
+        executed = "Yes" if action.executed else "No (dry-run)"
+
+        row = [
+            action.action_id,
+            action.execution_time.strftime("%Y-%m-%d %H:%M"),
+            action.vm_name,
+            action.action_type,
+            f"[{status_color}]{status_icon}[/{status_color}] {action.status.title()}",
+            executed,
+        ]
+
+        if verbose:
+            row.extend([
+                action.metadata.get('user', 'N/A'),
+                action.reason or 'N/A'
+            ])
+
+        table.add_row(*row)
+
+    console.print(table)
+    console.print(f"\nTotal: {len(actions)} actions")
+
+def display_action_details(action: dict):
+    """Display detailed action information."""
+    # (Implementation from the CLI Commands section above)
+    pass
+```
+
+#### 4. Action Logger Utility (`execute/action_logger.py`)
+
+```python
+from datetime import datetime
+from typing import Optional, Dict, List
+from dataclasses import dataclass
+import json
+
+@dataclass
+class ActionLog:
+    """Action log entry."""
+    action_id: str
+    plan_id: Optional[str]
+    vm_id: str
+    vm_name: str
+    resource_group: str
+    action_type: str
+    action_status: str
+    executed: bool
+    execution_time: datetime
+    duration_seconds: Optional[float]
+    result_message: Optional[str]
+    reason: Optional[str]
+    metadata: Dict
+
+class ActionLogger:
+    """Manages action logging for executions."""
+
+    def __init__(self):
+        self.db = get_db()
+
+    def create_log_entry(
+        self,
+        action_type: str,
+        vm_name: str,
+        resource_group: str,
+        executed: bool,
+        source: str = "direct_execution",
+        reason: Optional[str] = None,
+        command: Optional[str] = None,
+        pre_state: Optional[Dict] = None,
+    ) -> str:
+        """Create initial log entry."""
+        action_id = self._generate_action_id()
+        plan_id = f"direct-{datetime.utcnow().strftime('%Y%m%d-%H%M%S')}"
+
+        metadata = {
+            "source": source,
+            "command": command or self._get_command_line(),
+            "user": self._get_current_user(),
+            "service_principal": self._get_service_principal(),
+            "azure_subscription": self._get_subscription_id(),
+            "environment": self._get_environment(),
+            "triggered_by": "manual",
+        }
+
+        if pre_state:
+            metadata["pre_state"] = pre_state
+
+        entry = {
+            "action_id": action_id,
+            "plan_id": plan_id,
+            "vm_name": vm_name,
+            "resource_group": resource_group,
+            "action_type": action_type,
+            "action_status": "pending",
+            "executed": executed,
+            "execution_time": datetime.utcnow(),
+            "reason": reason,
+            "metadata": json.dumps(metadata),
+        }
+
+        self._insert_log_entry(entry)
+        return action_id
+
+    def update_log_entry(
+        self,
+        action_id: str,
+        status: str,
+        result_message: Optional[str] = None,
+        duration_seconds: Optional[float] = None,
+        post_state: Optional[Dict] = None,
+    ):
+        """Update log entry with execution results."""
+        updates = {
+            "action_status": status,
+            "result_message": result_message,
+            "duration_seconds": duration_seconds,
+        }
+
+        if post_state:
+            # Update metadata with post_state
+            self._update_metadata(action_id, {"post_state": post_state})
+
+        self._update_log_entry(action_id, updates)
+
+    def query_logs(
+        self,
+        limit: int = 20,
+        filters: Optional[Dict] = None,
+    ) -> List[ActionLog]:
+        """Query action logs with filters."""
+        query = "SELECT * FROM vm_actions WHERE 1=1"
+        params = []
+
+        if filters:
+            if 'vm_name' in filters:
+                query += " AND vm_name = ?"
+                params.append(filters['vm_name'])
+
+            if 'action_type' in filters:
+                query += " AND action_type = ?"
+                params.append(filters['action_type'])
+
+            if 'source' in filters:
+                source_filter = 'direct_execution' if filters['source'] == 'direct' else 'plan_execution'
+                query += " AND metadata->>'source' = ?"
+                params.append(source_filter)
+
+            if 'action_status' in filters:
+                query += " AND action_status = ?"
+                params.append(filters['action_status'])
+
+            if 'executed' in filters:
+                query += " AND executed = ?"
+                params.append(filters['executed'])
+
+            if 'since' in filters:
+                query += " AND execution_time >= ?"
+                params.append(filters['since'])
+
+            if 'until' in filters:
+                query += " AND execution_time <= ?"
+                params.append(filters['until'])
+
+        query += " ORDER BY execution_time DESC LIMIT ?"
+        params.append(limit)
+
+        # Execute query and return ActionLog objects
+        results = self.db.execute(query, params).fetchall()
+        return [self._to_action_log(row) for row in results]
+
+    def get_action(self, action_id: str) -> Optional[ActionLog]:
+        """Get specific action by ID."""
+        query = "SELECT * FROM vm_actions WHERE action_id = ?"
+        result = self.db.execute(query, [action_id]).fetchone()
+        return self._to_action_log(result) if result else None
+
+    def _generate_action_id(self) -> str:
+        """Generate unique action ID."""
+        timestamp = datetime.utcnow().strftime('%Y%m%d-%H%M%S')
+        return f"act-{timestamp}"
+
+    def _to_action_log(self, row: tuple) -> ActionLog:
+        """Convert database row to ActionLog."""
+        # Convert row to ActionLog dataclass
+        pass
+```
+
+#### 5. Configuration (`core/config.py`)
 
 ```python
 class Settings(BaseSettings):
@@ -729,26 +1431,30 @@ ORDER BY execution_time DESC;
 - [ ] Create DirectExecutionManager
 - [ ] Implement execute CLI command
 - [ ] Add validation logic (reuse existing)
-- [ ] Implement audit logging
+- [ ] Implement comprehensive action logging
+- [ ] Implement logs CLI command (view/query/export)
 
 ### Phase 2: Safety & UX
 - [ ] Add confirmation prompts
 - [ ] Add preview displays
 - [ ] Add rollback command display
 - [ ] Update .env.example with warnings
+- [ ] Implement log retention and cleanup
 
 ### Phase 3: Documentation
 - [ ] Create this design document ✓
-- [ ] Update USER_GUIDE.md
+- [ ] Update USER_GUIDE.md with logs commands
 - [ ] Update QUICKSTART.md
 - [ ] Add RBAC guide
 - [ ] Update EXECUTION_WORKFLOW_GUIDE.md
+- [ ] Document action log queries for compliance
 
 ### Phase 4: Testing
-- [ ] Unit tests
+- [ ] Unit tests (execution + logging)
 - [ ] Integration tests
 - [ ] Manual testing scenarios
 - [ ] Security testing
+- [ ] Log query performance testing
 
 ## Open Questions
 
