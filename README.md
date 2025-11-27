@@ -22,37 +22,23 @@ dfo is a command-line tool that discovers Azure VMs, analyzes their CPU usage, i
 ## How It Works
 
 ```mermaid
-sequenceDiagram
-    participant You
-    participant dfo as dfo CLI
-    participant DB as dfo Database
-    participant Azure as Azure Cloud
+C4Context
+    title dfo - DevFinOps System Context
 
-    You->>dfo: ./dfo azure discover
-    dfo->>Azure: Authenticate (Entra ID)
-    dfo->>Azure: List VMs (Compute API)
-    dfo->>Azure: Get CPU metrics (Monitor API)
-    Azure-->>dfo: VM inventory + metrics
-    dfo->>DB: Store inventory
+    Person(user, "You", "Cloud engineer or FinOps practitioner")
 
-    You->>dfo: ./dfo azure analyze
-    dfo->>DB: Read inventory
-    Note over dfo: Detect idle VMs<br/>Calculate savings
-    dfo->>DB: Store findings
+    System(dfo, "dfo CLI", "Discovers idle VMs, analyzes usage, recommends savings, executes actions")
 
-    You->>dfo: ./dfo azure report
-    dfo->>DB: Query findings
-    dfo-->>You: Savings & recommendations
+    SystemDb(db, "dfo Database", "Local DuckDB storage for inventory, analysis, and action logs")
 
-    You->>dfo: ./dfo azure plan execute
-    dfo->>Azure: Validate permissions (ARM)
-    dfo->>Azure: Stop/deallocate VMs (ARM)
-    Azure-->>dfo: Action results
-    dfo->>DB: Log actions
-    dfo-->>You: Status & rollback options
+    System_Ext(azure, "Azure Cloud", "Entra ID, Compute API, Monitor API, ARM")
+
+    Rel(user, dfo, "discover, analyze, report, execute")
+    Rel(dfo, db, "read/write")
+    Rel(dfo, azure, "authenticate, fetch VMs & metrics, execute actions")
 ```
 
-> **Local-first**: All data stored in DuckDB. No cloud storage required.
+> **Local-first**: All data stored locally. No cloud storage required.
 
 ## Current Status
 
