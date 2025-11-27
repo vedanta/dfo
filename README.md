@@ -8,6 +8,8 @@
 
 dfo is a command-line tool that discovers Azure VMs, analyzes their CPU usage, identifies idle resources, and helps you take action to reduce costs—all with built-in safety features like dry-run mode and confirmation prompts.
 
+> **🚀 New to dfo? Start here:** [**QUICKSTART.md**](QUICKSTART.md) - Get up and running in 5 minutes!
+
 ## What Can dfo Do?
 
 - 🔍 **Discover** Azure VMs across your subscription with 14 days of CPU metrics

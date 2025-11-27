@@ -13,6 +13,7 @@
 
 | I want to... | Read this |
 |--------------|-----------|
+| **Get started quickly** | [QUICKSTART.md](/QUICKSTART.md) 🚀 (5-minute guide) |
 | **Get started with dfo** | [README.md](/README.md) (project root) |
 | **Understand the architecture** | [ARCHITECTURE.md](ARCHITECTURE.md) |
 | **Write tests** | [TESTING_GUIDE.md](TESTING_GUIDE.md) ⭐ |
@@ -32,6 +33,7 @@
 
 **For new users and developers:**
 
+- **[QUICKSTART.md](/QUICKSTART.md)** 🚀 - 5-minute quick start guide (NEW!)
 - **[README.md](/README.md)** - Project overview, quick start, installation
 - **[DEVELOPER_ONBOARDING.md](DEVELOPER_ONBOARDING.md)** - Step-by-step developer setup guide
 - **[CONTRIBUTING.md](CONTRIBUTING.md)** ⭐ - How to contribute (code, docs, bugs, features)
@@ -178,9 +180,10 @@ Many docs include version information:
 ### 👤 I'm a User
 
 **Read these first:**
-1. [README.md](/README.md) - Get started
-2. [TROUBLESHOOTING.md](TROUBLESHOOTING.md) - Fix common issues
-3. [STATUS.md](STATUS.md) - See what's available
+1. [QUICKSTART.md](/QUICKSTART.md) 🚀 - 5-minute quick start
+2. [README.md](/README.md) - Full documentation
+3. [TROUBLESHOOTING.md](TROUBLESHOOTING.md) - Fix common issues
+4. [STATUS.md](STATUS.md) - See what's available
 
 ### 👨‍💻 I'm a Developer
 
@@ -213,11 +216,11 @@ Many docs include version information:
 
 | Metric | Value |
 |--------|-------|
-| **Total Documentation Files** | 47 files |
-| **Active Documents** | 28 files (1 merged) |
+| **Total Documentation Files** | 48 files |
+| **Active Documents** | 29 files (1 merged) |
 | **Archived Documents** | 19 files |
-| **Total Documentation Size** | ~550KB |
-| **Recent Additions (Jan 2025)** | 3 guides (TESTING, CONTRIBUTING, TROUBLESHOOTING) |
+| **Total Documentation Size** | ~570KB |
+| **Recent Additions (Jan 2025)** | 4 guides (QUICKSTART, TESTING, CONTRIBUTING, TROUBLESHOOTING) |
 | **Recent Merges (Jan 2025)** | 1 merge (ARCHITECTURE + ARCHITECTURE_FLOW) |
 | **Last Audit** | 2025-01-26 |
 
@@ -231,10 +234,11 @@ Many docs include version information:
 - ✅ **Critical Updates:** README, STATUS, TEST_COVERAGE_ANALYSIS, ROADMAP updated
   - All reflect v0.2.0, Phase 1 MVP complete, 589 tests
 - ✅ **Archive:** 19 historical docs moved to `archive/` directory
-- ✅ **New Guides:** Created 3 comprehensive guides (15,000+ words)
-  - TESTING_GUIDE.md (6,500 words)
-  - CONTRIBUTING.md (4,500 words)
-  - TROUBLESHOOTING.md (4,000 words)
+- ✅ **New Guides:** Created 4 comprehensive guides (17,000+ words)
+  - QUICKSTART.md (2,000 words) - 5-minute quick start guide 🚀
+  - TESTING_GUIDE.md (6,500 words) - Complete testing documentation
+  - CONTRIBUTING.md (4,500 words) - Contribution guidelines
+  - TROUBLESHOOTING.md (4,000 words) - Common issues and solutions
 - ✅ **Navigation Hub:** Created docs/README.md (this file)
 - ✅ **Architecture Merge:** Merged ARCHITECTURE.md + ARCHITECTURE_FLOW.md
   - Complete system architecture with updated diagrams
