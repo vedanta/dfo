@@ -55,6 +55,13 @@ class Settings(BaseSettings):
     dfo_disable_rules: str = ""  # Comma-separated list of rule types to disable
     dfo_service_types: str = ""  # Comma-separated list of service types to enable (empty = all)
 
+    # Direct Execution Configuration (DFO_ prefix)
+    dfo_enable_direct_execution: bool = False  # Disabled by default for safety
+
+    # Action Log Retention (DFO_ prefix)
+    dfo_action_log_retention_days: int = 365  # Live executions
+    dfo_dryrun_log_retention_days: int = 90   # Dry-run simulations
+
     # DuckDB Configuration (DFO_ prefix)
     dfo_duckdb_file: str = "./dfo.duckdb"
 
