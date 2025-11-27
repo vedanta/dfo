@@ -12,7 +12,7 @@ Per CODE_STYLE.md:
 import typer
 
 # Internal
-from dfo.cmd import version, config, db, azure, rules
+from dfo.cmd import version, config, status, db, azure, rules
 
 # Create main app
 app = typer.Typer(
@@ -25,6 +25,7 @@ app = typer.Typer(
 # Register top-level commands
 app.command(name="version", help="Show version information")(version.version_command)
 app.command(name="config", help="Display configuration")(config.config_command)
+app.command(name="status", help="Display system status and overview")(status.status_command)
 
 # Register subcommand groups
 app.add_typer(db.app, name="db")
