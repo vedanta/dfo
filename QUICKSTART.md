@@ -4,6 +4,8 @@
 
 This guide gets you started with dfo (DevFinOps) - a CLI tool for Azure cost optimization.
 
+![DFO Quick Start](art/dfo_quickstart.png)
+
 ---
 
 ## Prerequisites
