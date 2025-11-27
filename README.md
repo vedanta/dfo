@@ -25,7 +25,7 @@ dfo is a command-line tool that discovers Azure VMs, analyzes their CPU usage, i
 sequenceDiagram
     participant You
     participant dfo as dfo CLI
-    participant DB as DuckDB (local)
+    participant DB as dfo Database
     participant Azure as Azure Cloud
 
     You->>dfo: ./dfo azure discover
