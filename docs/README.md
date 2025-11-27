@@ -77,6 +77,7 @@
 
 **Detailed feature documentation:**
 
+- **[FEATURE_STATUS_COMMAND.md](FEATURE_STATUS_COMMAND.md)** ⭐ - Status command design (multi-cloud aware)
 - **[PLAN_STATUS.md](PLAN_STATUS.md)** - Execution plan state machine, status transitions
 - **[VISUALIZATIONS.md](VISUALIZATIONS.md)** - Terminal visualizations (charts, tables)
 - **[MIGRATIONS.md](MIGRATIONS.md)** - Database migration patterns
@@ -216,11 +217,11 @@ Many docs include version information:
 
 | Metric | Value |
 |--------|-------|
-| **Total Documentation Files** | 48 files |
-| **Active Documents** | 29 files (1 merged) |
+| **Total Documentation Files** | 49 files |
+| **Active Documents** | 30 files (1 merged) |
 | **Archived Documents** | 19 files |
-| **Total Documentation Size** | ~570KB |
-| **Recent Additions (Jan 2025)** | 4 guides (QUICKSTART, TESTING, CONTRIBUTING, TROUBLESHOOTING) |
+| **Total Documentation Size** | ~600KB |
+| **Recent Additions (Jan 2025)** | 5 guides (QUICKSTART, TESTING, CONTRIBUTING, TROUBLESHOOTING, STATUS_COMMAND) |
 | **Recent Merges (Jan 2025)** | 1 merge (ARCHITECTURE + ARCHITECTURE_FLOW) |
 | **Last Audit** | 2025-01-26 |
 
@@ -234,11 +235,12 @@ Many docs include version information:
 - ✅ **Critical Updates:** README, STATUS, TEST_COVERAGE_ANALYSIS, ROADMAP updated
   - All reflect v0.2.0, Phase 1 MVP complete, 589 tests
 - ✅ **Archive:** 19 historical docs moved to `archive/` directory
-- ✅ **New Guides:** Created 4 comprehensive guides (17,000+ words)
+- ✅ **New Guides:** Created 5 comprehensive guides (20,000+ words)
   - QUICKSTART.md (2,000 words) - 5-minute quick start guide 🚀
   - TESTING_GUIDE.md (6,500 words) - Complete testing documentation
   - CONTRIBUTING.md (4,500 words) - Contribution guidelines
   - TROUBLESHOOTING.md (4,000 words) - Common issues and solutions
+  - FEATURE_STATUS_COMMAND.md (3,000 words) - Status command design (multi-cloud aware)
 - ✅ **Navigation Hub:** Created docs/README.md (this file)
 - ✅ **Architecture Merge:** Merged ARCHITECTURE.md + ARCHITECTURE_FLOW.md
   - Complete system architecture with updated diagrams
