@@ -99,6 +99,20 @@
 
 ## 🔮 Future Enhancements
 
+### Feature Design & Planning
+
+**Status Command** ✅ Design Complete
+- **Design Doc**: `docs/FEATURE_STATUS_COMMAND.md` (790 lines)
+- **Status**: Design complete, ready for implementation
+- **Effort**: 4-6 hours implementation
+- **Features**:
+  - Basic mode: System status, findings summary, quick actions
+  - Extended mode: Detailed stats, cloud providers, recent activity
+  - Multi-cloud ready: Azure (MVP), AWS/GCP (future Phase 3)
+  - Cloud provider detection and status gathering
+  - 3 implementation phases, 15 test scenarios
+- **Decision Needed**: Implement now vs. add to backlog
+
 ### Integration Tests
 - [ ] End-to-end workflow: discover → analyze → plan → execute → rollback
 - [ ] Multi-rule analysis integration
@@ -198,3 +212,15 @@ _None currently_
       - Complete layer architecture with test coverage
       - 1,059 lines, comprehensive architecture documentation
     - DEFERRED: Review DEVELOPER_ONBOARDING.md (can do later)
+- ✅ **Created QUICKSTART.md** (2,000+ words)
+  - 5-minute quick start guide for new users
+  - Install → configure → discover → analyze → report → execute → rollback
+  - Common commands cheat sheet, typical workflow, troubleshooting
+  - Updated README.md and docs/README.md with prominent links
+- ✅ **Designed Status Command** (`docs/FEATURE_STATUS_COMMAND.md`, 790 lines)
+  - Comprehensive design for `./dfo status` and `./dfo status --extended`
+  - Multi-cloud aware: Azure (MVP), AWS/GCP (future Phase 3)
+  - System status, data freshness, findings summary, quick actions
+  - Cloud provider detection and status gathering functions
+  - 3 implementation phases (4-6 hours), 15 test scenarios
+  - Ready for implementation decision
