@@ -19,7 +19,7 @@ def test_settings_defaults():
     )
     # Note: .env file overrides the code defaults
     assert settings.dfo_idle_cpu_threshold == 1.0  # From .env
-    assert settings.dfo_idle_days == 1  # From .env
+    assert settings.dfo_idle_days == 7  # From .env
     assert settings.dfo_dry_run_default is True
     assert settings.dfo_duckdb_file == "./dfo.duckdb"
     assert settings.dfo_log_level == "INFO"

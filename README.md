@@ -16,8 +16,10 @@ dfo is a command-line tool that discovers Azure VMs, analyzes their CPU usage, i
 - 📊 **Analyze** CPU usage to identify idle or underutilized resources
 - 💰 **Estimate** potential monthly savings per VM
 - 📋 **Report** findings in rich console tables or JSON format
-- ⚡ **Execute** cost-saving actions (stop/deallocate idle VMs)
-- 🔒 **Safe by default** with dry-run mode, confirmation prompts, and full action logging
+- ⚡ **Execute** cost-saving actions via **two workflows**:
+  - **Plan-based**: Create, validate, approve, and execute optimization plans (batch operations)
+  - **Direct execution**: Quick actions on individual VMs (stop, start, resize)
+- 🔒 **Safe by default** with dry-run mode, confirmation prompts, protection tags, and comprehensive audit logging
 
 ## How It Works
 
@@ -70,12 +72,13 @@ sequenceDiagram
 - ✓ **3 VM analysis types** (Milestone 4): idle detection, low-CPU rightsizing, stopped VM cleanup
 - ✓ **Unified reporting system** (Milestone 5): 4 view types, 3 output formats (console/JSON/CSV)
 - ✓ **Complete execution system** (Milestone 6): plan management, validation, approval workflow, execution, rollback
+- ✓ **Direct execution** (Post-MVP): Quick actions on individual VMs (execute, logs commands)
 - ✓ **Azure VM SKU equivalence mapping** (29 legacy→modern mappings)
 - ✓ **Rules-driven CLI architecture** (service-based rules: vm_rules.json, storage_rules.json, etc.)
 - ✓ **Enhanced rules management** (key-based lookup, categories, smart search)
 - ✓ Multi-service optimization rules engine (VMs, databases, storage, networking, AKS)
 - ✓ Common visualization module (sparklines, charts, dashboards)
-- ✓ CLI commands: discover, analyze, report, rules, **plan** (9 execution commands)
+- ✓ CLI commands: discover, analyze, report, rules, **plan** (9 commands), **execute** (direct actions), **logs** (audit trail)
 
 ## Quick Start
 
@@ -224,6 +227,27 @@ The `dfo` wrapper script allows you to run commands from the root directory:
 ./dfo azure plan rollback <plan-id> --force        # Live rollback
 ./dfo azure plan delete <plan-id> --force          # Delete draft/validated plans
 
+# Direct execution: Quick actions on individual VMs (✓ Available now)
+./dfo azure execute vm my-vm stop -g my-rg                          # Dry-run stop (safe preview)
+./dfo azure execute vm my-vm stop -g my-rg --no-dry-run             # Live stop (with confirmation)
+./dfo azure execute vm my-vm stop -g my-rg --no-dry-run --yes       # Live stop (auto-confirm)
+./dfo azure execute vm my-vm deallocate -g my-rg --reason "Cost savings"  # Deallocate with reason
+./dfo azure execute vm my-vm restart -g my-rg                        # Restart VM
+./dfo azure execute vm my-vm downsize -g my-rg --target-sku Standard_B2s  # Downsize to smaller SKU
+./dfo azure execute vm my-vm delete -g my-rg --no-dry-run           # Delete VM (DANGEROUS!)
+
+# Action logs: View execution history (✓ Available now)
+./dfo azure logs list                              # List recent actions
+./dfo azure logs list --limit 50                   # List more actions
+./dfo azure logs list --vm-name my-vm              # Filter by VM
+./dfo azure logs list --action stop                # Filter by action type
+./dfo azure logs list --status completed           # Filter by status
+./dfo azure logs list --executed                   # Live executions only
+./dfo azure logs list --dry-run                    # Dry-run simulations only
+./dfo azure logs list --since 7d                   # Actions from last 7 days
+./dfo azure logs list --format json                # JSON output
+./dfo azure logs show <action-id>                  # Show detailed action info
+
 # Get help
 ./dfo --help
 ./dfo db --help
@@ -234,7 +258,10 @@ The `dfo` wrapper script allows you to run commands from the root directory:
 ## Documentation
 
 - **[USER_GUIDE.md](USER_GUIDE.md)** - Complete user guide with workflow, examples, and troubleshooting
+- **[QUICKSTART.md](QUICKSTART.md)** - Get started in 5 minutes
 - **[CLAUDE.md](CLAUDE.md)** - Architecture and development guidelines for Claude Code
+- **[docs/EXECUTION_WORKFLOW_GUIDE.md](docs/EXECUTION_WORKFLOW_GUIDE.md)** - Direct vs plan-based execution comparison and best practices
+- **[docs/MANUAL_TESTING_DIRECT_EXECUTION.md](docs/MANUAL_TESTING_DIRECT_EXECUTION.md)** - Manual testing guide for direct execution
 - **[docs/PLAN_STATUS.md](docs/PLAN_STATUS.md)** - Execution plan status lifecycle and behavior guide
 - **[docs/rules_driven_cli.md](docs/rules_driven_cli.md)** - Rules-driven CLI architecture guide
 - **[docs/sku_equivalence_implementation.md](docs/sku_equivalence_implementation.md)** - Azure VM SKU equivalence strategy
@@ -333,22 +360,43 @@ The `dfo` wrapper script allows you to run commands from the root directory:
 ./dfo azure plan rollback plan-20251126-001 --force
 ```
 
-### Automated Cost Optimization (Legacy Example)
+### Quick Action on Single VM (✓ Available Now - Direct Execution)
 ```bash
-# Discover and analyze
-./dfo azure discover vms
-./dfo azure analyze idle-vms
-./dfo azure analyze low-cpu
+# Scenario: Need to quickly stop a single VM
 
-# Review findings
-./dfo azure report                      # Summary view
-./dfo azure report --by-rule idle-vms --severity critical  # High-value targets
+# 1. Preview the action (dry-run, safe)
+./dfo azure execute vm expensive-vm stop -g production-rg
 
-# Export pre-execution audit
-./dfo azure report --by-rule idle-vms --format json --output pre-execution-audit.json
+# 2. Execute for real
+./dfo azure execute vm expensive-vm stop -g production-rg --no-dry-run --yes \
+  --reason "Emergency cost reduction"
 
-# Execute actions (Coming in M6)
-./dfo azure execute stop-idle-vms --no-dry-run --yes --min-severity critical
+# 3. Check action history
+./dfo azure logs list --vm-name expensive-vm
+
+# 4. View detailed log
+./dfo azure logs show act-20251127-143022-abc123
+
+# 5. Restart later
+./dfo azure execute vm expensive-vm restart -g production-rg --no-dry-run --yes
+```
+
+### Direct Execution vs Plan-Based (✓ Choose the Right Workflow)
+```bash
+# Use DIRECT EXECUTION for:
+# - Quick actions on 1-2 VMs
+# - Emergency situations
+# - Ad-hoc operations
+./dfo azure execute vm critical-vm stop -g prod-rg --no-dry-run --yes
+
+# Use PLAN-BASED for:
+# - Batch operations (10+ VMs)
+# - Scheduled maintenance
+# - Change management approval workflows
+./dfo azure plan create --from-analysis idle-vms
+./dfo azure plan validate plan-001
+./dfo azure plan approve plan-001
+./dfo azure plan execute plan-001 --force
 ```
 
 ## Project Structure
@@ -441,16 +489,26 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines (coming soon).
 ## FAQ
 
 **Q: Will dfo make changes to my Azure resources?**
-A: Only if you explicitly run `execute` commands with `--no-dry-run`. All other commands are read-only. Dry-run is enabled by default.
+A: Only if you explicitly run `execute` or `plan execute` commands with `--no-dry-run` or `--force`. All other commands are read-only. Dry-run is enabled by default for all execution workflows.
+
+**Q: What's the difference between direct execution and plan-based execution?**
+A:
+- **Direct execution** (`./dfo azure execute vm`): Quick actions on 1-2 VMs, no approval workflow, immediate execution
+- **Plan-based** (`./dfo azure plan`): Batch operations on many VMs, validation → approval → execution workflow, scheduled maintenance
+
+Use direct execution for emergency actions, plan-based for regular optimization work.
 
 **Q: What permissions does dfo need?**
-A: **Reader** role for discovery/analysis (read-only). **Contributor** role for execute actions (start/stop VMs).
+A: **Reader** role for discovery/analysis (read-only). **Virtual Machine Contributor** role for execute actions (stop/start/resize VMs). All actions respect Azure RBAC.
+
+**Q: How do I prevent accidental changes to critical VMs?**
+A: Add a protection tag: `az vm update -g rg -n vm --set tags.dfo-protected=true`. dfo will refuse to execute actions on protected VMs (unless `--no-validation` is used).
 
 **Q: Where is my data stored?**
-A: All data is stored locally in `dfo.duckdb`. No cloud storage or external services required.
+A: All data is stored locally in `dfo.duckdb`. No cloud storage or external services required. All action logs (including direct executions) are stored for audit trails.
 
 **Q: Is dfo production-ready?**
-A: **Phase 1 (MVP) is complete!** All 6 milestones are done and tested. VM discovery, 3 types of analysis (idle, low-CPU, stopped), comprehensive reporting (console/JSON/CSV), rules management, and the full execution system (plan management, validation, approval, execution, rollback) are production-ready. 589 tests passing with 70%+ coverage.
+A: **Phase 1 (MVP) is complete!** All 6 milestones are done and tested. VM discovery, 3 types of analysis (idle, low-CPU, stopped), comprehensive reporting (console/JSON/CSV), rules management, full execution system (plan-based + direct execution), and comprehensive audit logging are production-ready. 590+ tests passing with 70%+ coverage.
 
 See [USER_GUIDE.md - FAQ](USER_GUIDE.md#faq) for more questions.
 
@@ -467,7 +525,29 @@ See [USER_GUIDE.md - FAQ](USER_GUIDE.md#faq) for more questions.
 
 ## Changelog
 
-### v0.2.0 (Current - Phase 1 MVP Complete)
+### v0.3.0 (Current - Direct Execution Feature)
+- ✅ **Direct Execution System**: Quick actions on individual VMs
+  - New command: `./dfo azure execute vm <vm-name> <action>` (stop, deallocate, restart, downsize, delete)
+  - Actions: stop, deallocate, restart, downsize (resize), delete
+  - Dry-run by default with `--no-dry-run` for live execution
+  - Confirmation prompts with `--yes` to auto-confirm
+  - Comprehensive validation (resource, action state, Azure SDK)
+  - Protection tag support (`dfo-protected`)
+  - Safety flags: `--force`, `--no-validation` (dangerous operations)
+- ✅ **Action Logging System**: Comprehensive audit trail
+  - New command: `./dfo azure logs list` (view action history)
+  - New command: `./dfo azure logs show <action-id>` (detailed action info)
+  - Filters: VM name, action type, status, executed/dry-run, date range, user
+  - Output formats: table, JSON, compact
+  - Captures: user identity, command, pre/post state, timestamps, metadata
+- ✅ **Execution Workflows**: Two complementary approaches
+  - Direct execution: Quick actions on 1-2 VMs, no approval workflow
+  - Plan-based: Batch operations, validation → approval → execution
+- ✅ **Testing**: 10 integration tests, comprehensive manual testing guide
+- ✅ **Documentation**: Full user guide updates, workflow comparison, security best practices
+- ✅ **Feature Flag**: `DFO_ENABLE_DIRECT_EXECUTION` (opt-in for security)
+
+### v0.2.0 (Phase 1 MVP Complete)
 - ✅ **Milestone 6 Complete**: Full execution system with plan-based workflows
 - ✅ **Plan Management**: Create, list, show, delete execution plans
 - ✅ **Validation System**: Azure SDK validation checks before execution
