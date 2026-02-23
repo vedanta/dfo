@@ -521,7 +521,7 @@ See [USER_GUIDE.md - FAQ](USER_GUIDE.md#faq) for more questions.
 
 ## License
 
-[Add your license information here]
+This project is licensed under the [GNU Lesser General Public License v3.0](LICENSE).
 
 ## Changelog
 

@@ -67,10 +67,14 @@ Thumbs.db
 
 # misc binaries
 *.xlsx
-*.log
 *.csv
 report.csv
 
 # and generated files
 *.json
-*.log
+
+# Claude Code
+.claude/
+
+# Dev scripts
+bin/.temprompt.zsh
