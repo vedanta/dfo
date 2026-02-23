@@ -2,11 +2,19 @@
   <img src="art/dfo_logo.png" alt="dfo Logo" width="400"/>
 </p>
 
+<p align="center">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-LGPL--3.0-blue.svg" alt="License"></a>
+  <a href="https://www.python.org/"><img src="https://img.shields.io/badge/python-3.10%2B-blue.svg" alt="Python"></a>
+  <a href="https://github.com/vedanta/dfo/actions"><img src="https://img.shields.io/github/actions/workflow/status/vedanta/dfo/tests.yml?branch=main&label=tests" alt="Tests"></a>
+  <a href="https://github.com/vedanta/dfo/issues"><img src="https://img.shields.io/github/issues/vedanta/dfo" alt="Issues"></a>
+  <a href="https://github.com/vedanta/dfo"><img src="https://img.shields.io/github/last-commit/vedanta/dfo" alt="Last Commit"></a>
+</p>
+
 # dfo - DevFinOps CLI
 
-**Find and fix idle Azure VMs. Stop wasting money.**
+**Multi-cloud FinOps from the command line.**
 
-dfo discovers VMs across your Azure subscription, collects CPU metrics, identifies underutilized resources, estimates savings, and optionally stops or resizes them -- with dry-run by default.
+dfo is a modular cost optimization toolkit built on a pluggable architecture: providers, analyzers, rules, and execution engines are all independent layers connected through a local DuckDB store. Today it ships with Azure idle VM detection end-to-end -- discover, analyze, report, execute. The same pipeline is designed to extend to any cloud (AWS, GCP) and any resource type (storage, databases, networking, Kubernetes).
 
 ```
 discover → analyze → report → execute
