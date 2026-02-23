@@ -20,6 +20,32 @@ Equivalent SKU selection is based on four attributes:
 
 Equivalents must match the *intent* of the workload, not be a literal 1:1 mapping.
 
+```mermaid
+flowchart LR
+    subgraph Legacy
+        B1s[Standard_B1s]
+        A2[Standard_A2_v2]
+        D2[Standard_D2_v2]
+    end
+
+    subgraph Modern Equivalent
+        B2ls[Standard_B2ls_v2]
+        D2as[Standard_D2as_v5]
+        D2s[Standard_D2s_v5]
+    end
+
+    B1s -->|Burstable| B2ls
+    A2 -->|General Purpose| D2as
+    D2 -->|General Purpose| D2s
+
+    style B1s fill:#757575,color:#fff
+    style A2 fill:#757575,color:#fff
+    style D2 fill:#757575,color:#fff
+    style B2ls fill:#43a047,color:#fff
+    style D2as fill:#43a047,color:#fff
+    style D2s fill:#43a047,color:#fff
+```
+
 Example:
 `Standard_B1s` → No longer in Retail API → Closest compute class is **Standard_B2ls_v2**.
 
@@ -137,6 +163,33 @@ Mapping rationale: general-purpose → general-purpose v5.
 
 ## 5. Algorithm for Automated SKU Resolution
 
+```mermaid
+flowchart TD
+    A[Input: Legacy SKU] --> B{In Retail API?}
+    B -->|Yes| C[Use actual price]
+    B -->|No| D{B-series?}
+    D -->|Yes| E[Map to B*_v2]
+    D -->|No| F{A-series?}
+    F -->|Yes| G[Map to D*_v5]
+    F -->|No| H[Map to same family _v5]
+    E --> I[Lookup price for equivalent]
+    G --> I
+    H --> I
+    I --> J[Return savings estimate]
+    C --> J
+
+    style A fill:#1e88e5,color:#fff
+    style B fill:#8e24aa,color:#fff
+    style C fill:#43a047,color:#fff
+    style D fill:#fb8c00,color:#fff
+    style E fill:#43a047,color:#fff
+    style F fill:#fb8c00,color:#fff
+    style G fill:#43a047,color:#fff
+    style H fill:#43a047,color:#fff
+    style I fill:#1e88e5,color:#fff
+    style J fill:#2e7d32,color:#fff
+```
+
 ### Pseudocode
 ```python
 def resolve_equivalent_vm(sku):
@@ -197,16 +250,133 @@ INSERT INTO vm_equivalence VALUES
 
 ---
 
-## 8. Summary
+## 8. Pricing Strategy
+
+### 8.1. Pricing Data Flow
+
+```mermaid
+flowchart TD
+    subgraph Azure
+        API[Azure Retail Prices API]
+    end
+
+    subgraph dfo CLI
+        FETCH[fetch_vm_price]
+        CACHE[(vm_pricing_cache)]
+        EQUIV[resolve_equivalent_sku]
+        ANALYZE[Analysis Modules]
+    end
+
+    subgraph DuckDB
+        EQTBL[(vm_equivalence)]
+        RESULTS[(Analysis Tables)]
+    end
+
+    API -->|hourly price| FETCH
+    FETCH -->|cache miss| API
+    FETCH -->|store| CACHE
+    CACHE -->|cache hit| FETCH
+    FETCH -->|SKU not found| EQUIV
+    EQUIV -->|lookup| EQTBL
+    EQUIV -->|equivalent SKU| FETCH
+    FETCH -->|monthly cost| ANALYZE
+    ANALYZE -->|savings estimate| RESULTS
+
+    style API fill:#1e88e5,color:#fff
+    style FETCH fill:#fb8c00,color:#fff
+    style CACHE fill:#8e24aa,color:#fff
+    style EQUIV fill:#43a047,color:#fff
+    style EQTBL fill:#43a047,color:#fff
+    style ANALYZE fill:#1e88e5,color:#fff
+    style RESULTS fill:#2e7d32,color:#fff
+```
+
+### 8.2. Pricing Lookup Chain
+
+The pricing system uses a fallback chain to ensure reliable cost estimates:
+
+```mermaid
+flowchart LR
+    A[Request Price] --> B{In Cache?}
+    B -->|Yes + Fresh| C[Return Cached]
+    B -->|No/Expired| D[Call Azure API]
+    D --> E{Found?}
+    E -->|Yes| F[Cache & Return]
+    E -->|No| G[Try Equivalent SKU]
+    G --> H{Found?}
+    H -->|Yes| F
+    H -->|No| I[Return $0 + Warning]
+
+    style A fill:#1e88e5,color:#fff
+    style B fill:#8e24aa,color:#fff
+    style C fill:#43a047,color:#fff
+    style D fill:#fb8c00,color:#fff
+    style E fill:#8e24aa,color:#fff
+    style F fill:#43a047,color:#fff
+    style G fill:#fb8c00,color:#fff
+    style H fill:#8e24aa,color:#fff
+    style I fill:#e53935,color:#fff
+```
+
+### 8.3. Key Components
+
+| Component | Location | Purpose |
+|-----------|----------|---------|
+| `fetch_vm_price()` | `providers/azure/pricing.py` | Calls Azure Retail Prices API |
+| `get_vm_monthly_cost_with_metadata()` | `providers/azure/pricing.py` | Main pricing function with cache + fallback |
+| `resolve_equivalent_sku()` | `analyze/compute_mapper.py` | Maps legacy SKUs to modern equivalents |
+| `vm_pricing_cache` | `db/schema.sql` | DuckDB cache table (7-day TTL) |
+| `vm_equivalence` | `db/init_data.sql` | Pre-populated SKU mappings |
+
+### 8.4. Monthly Cost Calculation
+
+```
+monthly_cost = hourly_price × 730 hours
+```
+
+The 730-hour constant represents average hours per month (365 days ÷ 12 months × 24 hours).
+
+### 8.5. Savings Estimates by Action
+
+| Action | Savings Formula | Rationale |
+|--------|-----------------|-----------|
+| **Delete** | 100% × monthly_cost | Remove entire VM |
+| **Deallocate** | 90% × monthly_cost | Keep storage (~10%), eliminate compute |
+| **Downsize** | 50% × monthly_cost | Conservative estimate |
+| **Right-size** | current - recommended | Actual difference between SKUs |
+
+### 8.6. Caching Strategy
+
+- **Cache Location**: `vm_pricing_cache` table in DuckDB
+- **TTL**: 7 days (configurable via `DFO_PRICING_CACHE_TTL_DAYS`)
+- **Key**: Composite of `(vm_size, region, os_type)`
+- **Refresh**: Automatic on expiration, or manual via `refresh_pricing_cache()`
+
+### 8.7. Azure Retail Prices API
+
+- **Endpoint**: `https://prices.azure.com/api/retail/prices`
+- **Authentication**: None required (public API)
+- **Filters Used**:
+  - `serviceName eq 'Virtual Machines'`
+  - `armRegionName eq '<region>'`
+  - `armSkuName eq '<vm_size>'`
+  - `priceType eq 'Consumption'`
+- **Returns**: Retail/list pricing (not EA discounts or reservations)
+
+---
+
+## 9. Summary
 - Many older Azure SKUs are intentionally missing from the Retail Prices API.
 - A deterministic mapping strategy ensures stable right-sizing logic.
 - Equivalent compute is determined by workload class, vCPU, memory, and generation.
 - B-series v1 → B-series v2 is the correct migration path.
 - Zero-dollar-savings fallbacks prevent errors in automation pipelines.
+- Pricing is cached locally (7-day TTL) to reduce API calls.
+- The fallback chain ensures cost estimates even for legacy SKUs.
 
 ---
 
-## 9. Optional Enhancements
+## 10. Optional Enhancements
 Available on request:
 
 - Complete JSON mapping of all Azure SKUs

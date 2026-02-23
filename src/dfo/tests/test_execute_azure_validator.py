@@ -268,7 +268,9 @@ class TestAzureVMValidation:
 
     def test_validate_azure_vm_action_convenience_function(self, sample_vm_action):
         """Test convenience function wraps validator correctly."""
-        with patch.object(AzureResourceValidator, 'validate_vm_action') as mock_validate:
+        with patch('dfo.execute.azure_validator.get_azure_credential'), \
+             patch('dfo.execute.azure_validator.get_settings'), \
+             patch.object(AzureResourceValidator, 'validate_vm_action') as mock_validate:
             mock_validate.return_value = Mock(status=ValidationStatus.SUCCESS)
 
             result = validate_azure_vm_action(sample_vm_action)

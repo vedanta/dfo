@@ -2,10 +2,120 @@
 
 > **A User-Friendly Guide to Safely Executing Cost Optimization Actions**
 >
-> This guide explains how to safely execute cost-saving actions in your Azure environment using dfo's plan-based execution system.
+> This guide explains how to safely execute cost-saving actions in your Azure environment using dfo's execution systems: plan-based and direct execution.
 
-**Version:** v0.2.0
-**Last Updated:** 2025-01-26
+**Version:** v0.3.0
+**Last Updated:** 2025-11-27
+
+---
+
+## Table of Contents
+
+1. [Choosing the Right Execution Workflow](#choosing-the-right-execution-workflow)
+2. [Why Plan-Based Execution?](#why-plan-based-execution)
+3. [The Execution Workflow](#the-execution-workflow)
+4. [Quick Start Example](#quick-start-example)
+5. [Step-by-Step Walkthrough](#step-by-step-walkthrough)
+6. [Direct Execution Quick Actions](#direct-execution-quick-actions)
+7. [State Diagram](#state-diagram)
+8. [Common Commands Reference](#common-commands-reference)
+9. [Analysis Types](#analysis-types)
+10. [Safety Features](#safety-features)
+11. [Security & Access Control](#security--access-control)
+12. [Filtering Plans](#filtering-plans)
+13. [Troubleshooting](#troubleshooting)
+14. [Best Practices](#best-practices)
+15. [Example Workflows](#example-workflows)
+16. [Quick Reference Card](#quick-reference-card)
+
+---
+
+## Choosing the Right Execution Workflow
+
+dfo offers **two complementary execution workflows** optimized for different scenarios:
+
+### 🚀 Direct Execution - Quick Actions
+
+**Use when:**
+- ✅ Need to act on 1-2 VMs immediately
+- ✅ Emergency cost reduction (high-cost VM running unintended)
+- ✅ Ad-hoc operations (restart a specific VM)
+- ✅ Testing/development environments
+
+**Commands:**
+```bash
+./dfo azure execute vm <vm-name> <action> -g <resource-group>
+./dfo azure logs list  # View action history
+```
+
+**Characteristics:**
+- ⚡ **Fast**: No approval workflow, immediate execution
+- 🎯 **Targeted**: Acts on single VMs you specify
+- 🔒 **Safe**: Dry-run by default, confirmation prompts
+- 📝 **Logged**: Full audit trail captured
+
+---
+
+### 📋 Plan-Based Execution - Batch Operations
+
+**Use when:**
+- ✅ Optimizing 10+ VMs at once
+- ✅ Scheduled maintenance windows
+- ✅ Change management approval required
+- ✅ Batch operations from analysis results
+
+**Commands:**
+```bash
+./dfo azure plan create --from-analysis idle-vms
+./dfo azure plan execute <plan-id> --force
+```
+
+**Characteristics:**
+- 🛡️ **Structured**: Validation → Approval → Execution workflow
+- 📦 **Batch**: Multiple VMs in one coordinated operation
+- ✅ **Validated**: Azure SDK checks before execution
+- 👥 **Collaborative**: Supports approval attribution
+
+---
+
+### Comparison Table
+
+| Factor | Direct Execution | Plan-Based |
+|--------|------------------|------------|
+| **Speed** | Immediate (1 command) | Multi-step (create → validate → approve → execute) |
+| **Scope** | Single VM | Multiple VMs (bulk operations) |
+| **Approval** | Confirmation prompt only | Formal approval workflow |
+| **Use Case** | Emergency / ad-hoc | Scheduled / change management |
+| **Best For** | 1-2 VMs | 10+ VMs |
+| **Workflow** | `execute` → confirm → done | `create` → `validate` → `approve` → `execute` |
+| **Audit Trail** | Action logs | Plan + action logs |
+| **Rollback** | Manual (use opposite action) | Built-in rollback command |
+
+---
+
+### Decision Tree
+
+```mermaid
+flowchart TD
+    Start[Need to Take Action] --> Q1{How many VMs?}
+    Q1 -->|1-2 VMs| Q2{Is it urgent?}
+    Q1 -->|10+ VMs| PlanBased[Use Plan-Based Execution]
+
+    Q2 -->|Yes / Emergency| DirectExec[Use Direct Execution]
+    Q2 -->|No / Scheduled| Q3{Need approval workflow?}
+
+    Q3 -->|Yes| PlanBased
+    Q3 -->|No| DirectExec
+
+    DirectExec --> Direct[./dfo azure execute vm]
+    PlanBased --> Plan[./dfo azure plan create]
+
+    style Start fill:#1e88e5,color:#fff
+    style DirectExec fill:#43a047,color:#fff
+    style PlanBased fill:#fb8c00,color:#fff
+    style Direct fill:#2e7d32,color:#fff
+    style Plan fill:#e65100,color:#fff
+```
 
 ---
 
@@ -33,58 +143,26 @@ This prevents accidents like:
 
 ### Visual Overview
 
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                     EXECUTION WORKFLOW                              │
-└─────────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    A[Analyze: Find idle VMs] --> B[Create Plan]
+    B --> C{Validate with Azure}
+    C -->|VMs exist?| D[Approve Plan]
+    D --> E[Dry-Run - Safe!]
+    E --> F{Review Results}
+    F -->|Looks good| G[Execute --force]
+    G --> H[VMs Stopped - Saving!]
+    H -->|If needed| I[Rollback]
 
-Step 1: ANALYZE                    Step 2: CREATE PLAN
-┌──────────────┐                   ┌──────────────┐
-│  Find idle   │  ──────────────>  │  Plan with   │
-│  VMs that    │   Create plan     │  12 actions  │
-│  waste $$$   │   from findings   │  (draft)     │
-└──────────────┘                   └──────────────┘
-                                          │
-                                          ▼
-Step 3: VALIDATE                   ┌──────────────┐
-┌──────────────┐                   │  Check with  │
-│  Azure says  │  <────────────    │  Azure:      │
-│  "All VMs    │   Validation      │  VMs exist?  │
-│  exist ✓"    │                   │  Correct     │
-└──────────────┘                   │  state?      │
-                                   └──────────────┘
-        │                                 │
-        ▼                                 ▼
-Step 4: APPROVE                    Step 5: DRY-RUN
-┌──────────────┐                   ┌──────────────┐
-│  You review  │                   │  Simulate    │
-│  and approve │  ──────────────>  │  execution   │
-│  the plan    │   Ready to test   │  (safe!)     │
-└──────────────┘                   └──────────────┘
-                                          │
-                                          ▼
-                                   ┌──────────────┐
-                                   │  Review      │
-                                   │  dry-run     │
-                                   │  results     │
-                                   └──────────────┘
-                                          │
-                                          ▼
-Step 6: EXECUTE (LIVE)             ┌──────────────┐
-┌──────────────┐                   │  Make real   │
-│  VMs are     │  <────────────    │  changes to  │
-│  stopped     │   --force flag    │  Azure       │
-│  💰 Saving!  │                   │  (WARNING!)  │
-└──────────────┘                   └──────────────┘
-        │
-        │  (if needed)
-        ▼
-Step 7: ROLLBACK
-┌──────────────┐
-│  Restart     │
-│  stopped VMs │
-│  (undo)      │
-└──────────────┘
+    style A fill:#1e88e5,color:#fff
+    style B fill:#fb8c00,color:#fff
+    style C fill:#8e24aa,color:#fff
+    style D fill:#43a047,color:#fff
+    style E fill:#43a047,color:#fff
+    style F fill:#5e35b1,color:#fff
+    style G fill:#e53935,color:#fff
+    style H fill:#2e7d32,color:#fff
+    style I fill:#c62828,color:#fff
 ```
 
 ---
@@ -509,51 +587,236 @@ VMs Started:
 
 ---
 
+## Direct Execution Quick Actions
+
+For quick, ad-hoc actions on individual VMs, use direct execution instead of the full plan workflow.
+
+### When to Use Direct Execution
+
+✅ **Use direct execution when:**
+- Acting on 1-2 VMs only
+- Emergency cost reduction needed
+- Quick restart/stop required
+- Testing or development environments
+
+❌ **Don't use direct execution when:**
+- Acting on 10+ VMs (use plans for efficiency)
+- Formal approval workflow required
+- Need coordinated batch operations
+- Scheduled maintenance windows
+
+### Direct Execution Workflow
+
+```mermaid
+flowchart LR
+    A[Identify VM] --> B[Preview Action - Dry-Run]
+    B --> C{Looks Good?}
+    C -->|Yes| D[Execute Live]
+    C -->|No| E[Cancel]
+    D --> F[View Logs]
+
+    style A fill:#1e88e5,color:#fff
+    style B fill:#43a047,color:#fff
+    style D fill:#e53935,color:#fff
+    style F fill:#2e7d32,color:#fff
+```
+
+### Basic Example
+
+```bash
+# 1. Preview action (dry-run, safe)
+./dfo azure execute vm expensive-vm stop -g production-rg
+
+# Output shows:
+#   [DRY RUN] Would execute stop on VM expensive-vm
+#   Pre-state: running
+#   Expected result: VM will be stopped
+#   Monthly savings: $120
+
+# 2. Execute for real (with confirmation)
+./dfo azure execute vm expensive-vm stop -g production-rg --no-dry-run
+
+# Prompt appears:
+#   [LIVE EXECUTION] This will modify Azure resources
+#   Action: stop
+#   VM: expensive-vm
+#   Resource Group: production-rg
+#
+#   Are you sure you want to proceed? [y/N]: y
+
+# 3. Execute with auto-confirm (skip prompt)
+./dfo azure execute vm expensive-vm stop -g production-rg --no-dry-run --yes \
+  --reason "Emergency cost reduction"
+
+# Output:
+#   ✓ VM expensive-vm stopped successfully
+#   Duration: 15.3 seconds
+#   Action ID: act-20251127-143022-abc123
+```
+
+### Supported Actions
+
+| Action | Description | Reversible | Notes |
+|--------|-------------|------------|-------|
+| `stop` | Stop VM (keeps billing for storage) | ✅ Yes (use `restart`) | Fast, preserves everything |
+| `deallocate` | Deallocate VM (stops compute billing) | ✅ Yes (use `restart`) | Stops most billing |
+| `restart` | Restart stopped/deallocated VM | N/A | Brings VM back online |
+| `downsize` | Resize to smaller SKU | ⚠️ Partial (manual upsize) | Requires `--target-sku` |
+| `delete` | Permanently delete VM | ❌ No | **DANGEROUS!** Cannot be undone |
+
+### Action Examples
+
+#### Stop a VM
+```bash
+# Dry-run (preview only)
+./dfo azure execute vm my-vm stop -g my-rg
+
+# Live execution
+./dfo azure execute vm my-vm stop -g my-rg --no-dry-run --yes
+```
+
+#### Deallocate a VM
+```bash
+./dfo azure execute vm my-vm deallocate -g my-rg \
+  --reason "Weekend cost savings"
+```
+
+#### Restart a VM
+```bash
+./dfo azure execute vm my-vm restart -g my-rg --no-dry-run --yes
+```
+
+#### Downsize a VM
+```bash
+# Note: VM must be stopped first
+./dfo azure execute vm my-vm stop -g my-rg --no-dry-run --yes
+./dfo azure execute vm my-vm downsize -g my-rg \
+  --target-sku Standard_B2s \
+  --no-dry-run --yes \
+  --reason "Rightsizing based on analysis"
+```
+
+#### Delete a VM (DANGEROUS!)
+```bash
+# Preview deletion
+./dfo azure execute vm old-test-vm delete -g test-rg
+
+# Delete (cannot be undone!)
+./dfo azure execute vm old-test-vm delete -g test-rg \
+  --no-dry-run --yes \
+  --reason "Decommissioning test environment"
+```
+
+### Viewing Action Logs
+
+All direct execution actions are logged for audit trails:
+
+```bash
+# List recent actions
+./dfo azure logs list
+
+# Filter by VM
+./dfo azure logs list --vm-name my-vm
+
+# Filter by action type
+./dfo azure logs list --action stop
+
+# Show live executions only
+./dfo azure logs list --executed
+
+# Show dry-runs only
+./dfo azure logs list --dry-run
+
+# Show actions from last 7 days
+./dfo azure logs list --since 7d
+
+# Show detailed action info
+./dfo azure logs show act-20251127-143022-abc123
+```
+
+### Safety Features
+
+Direct execution includes multiple safety layers:
+
+1. **Dry-Run by Default**
+   - All commands default to dry-run (preview only)
+   - Must explicitly use `--no-dry-run` for live execution
+
+2. **Confirmation Prompts**
+   - Live executions require confirmation
+   - Use `--yes` to skip (for automation/scripts)
+
+3. **Feature Flag**
+   - Must enable `DFO_ENABLE_DIRECT_EXECUTION=true` in `.env`
+   - Disabled by default for security
+
+4. **Protection Tags**
+   - VMs tagged with `dfo-protected=true` cannot be modified
+   - Prevents accidental actions on critical resources
+
+5. **Validation**
+   - Resource validation (VM exists?)
+   - Action validation (appropriate for current state?)
+   - Azure SDK validation (unless `--no-validation` used)
+
+6. **Comprehensive Logging**
+   - Every action logged (dry-run and live)
+   - Captures: user, command, pre/post state, timestamps
+   - Full audit trail for compliance
+
+### Protection Tags
+
+Protect critical VMs from accidental actions:
+
+```bash
+# Add protection tag via Azure CLI
+az vm update -g production-rg -n critical-db-vm \
+  --set tags.dfo-protected=true
+
+# Now dfo will refuse to act on this VM
+./dfo azure execute vm critical-db-vm stop -g production-rg
+# Error: Validation Failed
+# VM is protected (tag: dfo-protected=true)
+
+# Override with --no-validation (use with extreme caution!)
+./dfo azure execute vm critical-db-vm stop -g production-rg \
+  --no-validation --no-dry-run --yes
+```
+
+---
+
 ## State Diagram
 
 Here's how plan status changes through the workflow:
 
-```
-                ┌─────────┐
-                │  START  │
-                └────┬────┘
-                     │
-                     ▼
-           ┌──────────────────┐
-           │      draft       │  ← Created from analysis
-           └────┬─────────────┘
-                │
-                │ ./dfo azure plan validate <plan-id>
-                ▼
-           ┌──────────────────┐
-           │    validated     │  ← Checked against Azure
-           └────┬─────────────┘
-                │
-                │ ./dfo azure plan approve <plan-id>
-                ▼
-           ┌──────────────────┐
-           │    approved      │  ← Ready for execution
-           └────┬─────────────┘
-                │
-                │ ./dfo azure plan execute <plan-id>
-                ▼
-           ┌──────────────────┐
-           │   executing      │  ← Running actions
-           └────┬─────────────┘
-                │
-                ├──────────┬──────────┐
-                │          │          │
-                ▼          ▼          ▼
-         ┌──────────┐ ┌──────────┐ ┌──────────┐
-         │completed │ │  failed  │ │cancelled │
-         └──────────┘ └──────────┘ └──────────┘
-                │
-                │ (if needed)
-                │ ./dfo azure plan rollback <plan-id> --force
-                ▼
-         ┌──────────────┐
-         │  rolled_back │
-         └──────────────┘
+```mermaid
+stateDiagram-v2
+    [*] --> draft: plan create
+    draft --> validated: plan validate
+    validated --> approved: plan approve
+    approved --> executing: plan execute
+    executing --> completed: Success
+    executing --> failed: Error
+    executing --> cancelled: User cancel
+    completed --> rolled_back: plan rollback --force
+
+    classDef draftStyle fill:#fb8c00,color:#fff
+    classDef validStyle fill:#8e24aa,color:#fff
+    classDef approveStyle fill:#43a047,color:#fff
+    classDef execStyle fill:#1e88e5,color:#fff
+    classDef doneStyle fill:#2e7d32,color:#fff
+    classDef failStyle fill:#e53935,color:#fff
+    classDef cancelStyle fill:#757575,color:#fff
+    classDef rollStyle fill:#c62828,color:#fff
+
+    class draft draftStyle
+    class validated validStyle
+    class approved approveStyle
+    class executing execStyle
+    class completed doneStyle
+    class failed failStyle
+    class cancelled cancelStyle
+    class rolled_back rollStyle
 ```
 
 ---
@@ -659,6 +922,209 @@ You can create plans from these analysis types:
 - Can undo stop actions
 - Restores VMs to running state
 - Also dry-run first
+
+---
+
+## Security & Access Control
+
+dfo respects Azure's security model and adds additional safety layers for cost optimization operations.
+
+### Azure RBAC Integration
+
+dfo uses Azure Role-Based Access Control (RBAC) - your Azure permissions determine what actions you can perform.
+
+**Required Azure Permissions:**
+
+| Operation | Required Azure Role | Scope |
+|-----------|-------------------|-------|
+| **Discovery** | `Reader` | Subscription or Resource Group |
+| **Analysis** | `Reader` | Subscription or Resource Group |
+| **Reporting** | `Reader` | Subscription or Resource Group |
+| **Stop/Deallocate VMs** | `Virtual Machine Contributor` | Resource Group or specific VMs |
+| **Resize VMs** | `Virtual Machine Contributor` | Resource Group or specific VMs |
+| **Delete VMs** | `Contributor` | Resource Group or specific VMs |
+
+**Best Practice**: Use service principals with least-privilege access, not personal accounts.
+
+```bash
+# Example: Create service principal with VM Contributor role
+az ad sp create-for-rbac \
+  --name "dfo-cost-optimization" \
+  --role "Virtual Machine Contributor" \
+  --scopes /subscriptions/{subscription-id}/resourceGroups/production-rg
+```
+
+### Authentication Methods
+
+dfo supports multiple authentication methods (via Azure DefaultAzureCredential):
+
+1. **Service Principal** (Recommended for production)
+   ```bash
+   # Set in .env
+   AZURE_TENANT_ID=your-tenant-id
+   AZURE_CLIENT_ID=your-client-id
+   AZURE_CLIENT_SECRET=your-client-secret
+   AZURE_SUBSCRIPTION_ID=your-subscription-id
+   ```
+
+2. **Azure CLI** (Good for development)
+   ```bash
+   az login
+   ./dfo azure discover  # Uses CLI credentials
+   ```
+
+3. **Managed Identity** (For VMs/containers running in Azure)
+   - Automatically detected when running on Azure resources
+   - No credentials needed in .env
+
+### Feature Flag Security
+
+Direct execution is disabled by default for security. Must explicitly enable:
+
+```bash
+# In .env file
+DFO_ENABLE_DIRECT_EXECUTION=false   # Default (safe)
+DFO_ENABLE_DIRECT_EXECUTION=true    # Enable direct execution
+```
+
+**Recommendations by Environment:**
+
+| Environment | Setting | Rationale |
+|-------------|---------|-----------|
+| **Production** | `false` or restricted | Use plan-based workflow for change management |
+| **Staging** | `true` (limited users) | Allow quick fixes, but log everything |
+| **Development** | `true` | Enable for developer productivity |
+
+### Protection Tags
+
+Protect critical VMs from optimization actions:
+
+```bash
+# Protect a VM
+az vm update -g prod-rg -n critical-database-vm \
+  --set tags.dfo-protected=true
+
+# Protect multiple VMs
+az vm list -g prod-rg --query "[?starts_with(name, 'critical-')].name" -o tsv | \
+  xargs -I {} az vm update -g prod-rg -n {} --set tags.dfo-protected=true
+```
+
+**Protection behavior:**
+- ✅ Discovery and analysis: **Always allowed**
+- ✅ Reports: **Shows findings** (VM appears in reports)
+- ❌ Execution (plan-based): **Blocked** (action skipped with warning)
+- ❌ Execution (direct): **Blocked** (validation fails)
+
+**Override protection** (use with extreme caution):
+```bash
+# Direct execution only
+./dfo azure execute vm critical-vm stop -g prod-rg \
+  --no-validation --no-dry-run --yes
+```
+
+### Audit Trail
+
+All execution actions (plan-based and direct) are logged for compliance:
+
+**Logged Information:**
+- Action ID (unique identifier)
+- Timestamp (execution time)
+- User (Azure identity or local user)
+- Service Principal (if using SP auth)
+- Command (full command line)
+- VM details (name, resource group, ID)
+- Action type (stop, deallocate, delete, etc.)
+- Status (pending, executing, completed, failed)
+- Execution type (live vs dry-run)
+- Pre-state (VM state before action)
+- Post-state (VM state after action)
+- Result message (success/failure details)
+- Reason (if provided via `--reason`)
+- Metadata (environment, subscription, etc.)
+
+**Query audit logs:**
+```bash
+# All live executions in last 30 days
+./dfo azure logs list --executed --since 30d
+
+# Actions by specific user
+./dfo azure logs list --user john.doe@company.com
+
+# Failed actions
+./dfo azure logs list --status failed
+
+# Export for compliance
+./dfo azure logs list --format json --since 90d > audit-trail-q4-2025.json
+```
+
+### Per-Environment Configuration
+
+Configure dfo differently for each environment:
+
+**Production Environment:**
+```bash
+# .env.production
+DFO_ENABLE_DIRECT_EXECUTION=false
+DFO_DRY_RUN_DEFAULT=true
+AZURE_CLIENT_ID=prod-sp-id-read-only
+```
+
+**Staging Environment:**
+```bash
+# .env.staging
+DFO_ENABLE_DIRECT_EXECUTION=true
+DFO_DRY_RUN_DEFAULT=true
+AZURE_CLIENT_ID=staging-sp-id-contributor
+```
+
+**Development Environment:**
+```bash
+# .env.development
+DFO_ENABLE_DIRECT_EXECUTION=true
+DFO_DRY_RUN_DEFAULT=false  # Allow quick actions
+AZURE_CLIENT_ID=dev-sp-id-contributor
+```
+
+### Compliance Considerations
+
+For regulated environments:
+
+1. **Separation of Duties**
+   - Use different service principals for discovery vs execution
+   - Require approval workflow for production (use plan-based)
+
+2. **Audit Retention**
+   - Export logs regularly: `./dfo azure logs list --format json > monthly-audit.json`
+   - Store exported logs in tamper-proof storage (Azure Storage with immutability)
+
+3. **Change Management**
+   - Use plan-based execution for production workloads
+   - Require `--approved-by` attribution: `./dfo azure plan approve <plan-id> --approved-by "manager@company.com"`
+   - Document all live executions with `--reason` flag
+
+4. **Access Reviews**
+   - Regularly review Azure RBAC assignments
+   - Rotate service principal credentials quarterly
+   - Audit who has `DFO_ENABLE_DIRECT_EXECUTION=true` access
+
+### Security Best Practices
+
+✅ **Do:**
+- Use service principals with least-privilege RBAC
+- Enable `dfo-protected` tags on critical VMs
+- Always provide `--reason` for live executions
+- Export audit logs monthly for compliance
+- Use plan-based workflow for production changes
+- Test with dry-run first
+- Review validation warnings before proceeding
+
+❌ **Don't:**
+- Share service principal credentials
+- Use `--no-validation` in production
+- Skip confirmation prompts (`--yes`) without good reason
+- Enable direct execution globally in production
+- Ignore protection tags
+- Execute without documented reason
 
 ---
 

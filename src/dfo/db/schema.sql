@@ -206,15 +206,42 @@ CREATE INDEX IF NOT EXISTS idx_history_action_id ON action_history(action_id);
 CREATE INDEX IF NOT EXISTS idx_history_plan_id ON action_history(plan_id);
 CREATE INDEX IF NOT EXISTS idx_history_timestamp ON action_history(timestamp);
 
--- Legacy VM action execution logs (deprecated, replaced by plan_actions)
+-- Unified action execution logs (for both direct and plan-based executions)
+-- Comprehensive logging with audit trail support
 CREATE TABLE IF NOT EXISTS vm_actions (
+    -- Identity
+    action_id TEXT PRIMARY KEY,
+    plan_id TEXT,  -- NULL for direct execution, plan ID for plan-based
+
+    -- Resource identification
     vm_id TEXT,
-    action TEXT,
-    status TEXT,
-    dry_run BOOLEAN,
-    executed_at TIMESTAMP,
-    notes TEXT
+    vm_name TEXT NOT NULL,
+    resource_group TEXT NOT NULL,
+
+    -- Action details
+    action_type TEXT NOT NULL,  -- stop, deallocate, delete, downsize, restart
+    action_status TEXT NOT NULL DEFAULT 'pending',  -- pending, executing, completed, failed, rolled_back
+
+    -- Execution tracking
+    executed BOOLEAN NOT NULL,  -- true = live, false = dry-run
+    execution_time TIMESTAMP NOT NULL,
+    duration_seconds DOUBLE,
+
+    -- Results
+    result_message TEXT,
+    reason TEXT,
+
+    -- Metadata (JSON for flexible storage)
+    metadata JSON  -- {"source": "direct_execution|plan_execution", "command": "...", "user": "...", "pre_state": {...}, "post_state": {...}}
 );
+
+-- Indexes for action logs
+CREATE INDEX IF NOT EXISTS idx_vm_actions_action_id ON vm_actions(action_id);
+CREATE INDEX IF NOT EXISTS idx_vm_actions_plan_id ON vm_actions(plan_id);
+CREATE INDEX IF NOT EXISTS idx_vm_actions_vm_name ON vm_actions(vm_name);
+CREATE INDEX IF NOT EXISTS idx_vm_actions_execution_time ON vm_actions(execution_time);
+CREATE INDEX IF NOT EXISTS idx_vm_actions_executed ON vm_actions(executed);
+CREATE INDEX IF NOT EXISTS idx_vm_actions_status ON vm_actions(action_status);
 
 -- ============================================================================
 -- CACHE TABLES

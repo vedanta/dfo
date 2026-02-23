@@ -7,6 +7,9 @@ import typer
 from rich.console import Console
 from rich.columns import Columns
 
+# Internal - Import subcommand modules
+from dfo.cmd import azure_execute, azure_logs
+
 app = typer.Typer(help="Azure cloud provider commands")
 console = Console()
 
@@ -1991,60 +1994,18 @@ def report(
         raise typer.Exit(1)
 
 
-@app.command()
-def execute(
-    action: str = typer.Argument(
-        ...,
-        help="Action to execute (e.g., 'stop-idle-vms')"
-    ),
-    dry_run: bool = typer.Option(
-        True,
-        "--dry-run/--no-dry-run",
-        help="Dry run mode (no actual changes)"
-    ),
-    yes: bool = typer.Option(
-        False,
-        "--yes", "-y",
-        help="Skip confirmation prompt"
-    ),
-    min_severity: str = typer.Option(
-        "low",
-        "--min-severity",
-        help="Minimum severity level: low, medium, high, critical"
-    )
-):
-    """Execute remediation actions on Azure resources.
-
-    Executes optimization actions based on analysis results.
-
-    Safety features:
-    - Dry run mode enabled by default (use --no-dry-run for real execution)
-    - Confirmation prompt required (use --yes to skip)
-    - Severity filtering to control scope
-    - All actions logged to vm_actions table
-
-    Supported actions:
-    - stop-idle-vms: Stop or deallocate idle virtual machines
-
-    This command will be implemented in Milestone 6.
-
-    Example:
-        dfo azure execute stop-idle-vms
-        dfo azure execute stop-idle-vms --no-dry-run --yes
-        dfo azure execute stop-idle-vms --min-severity high
-    """
-    console.print(f"[yellow]TODO:[/yellow] Execute {action}")
-    console.print(f"[yellow]Mode:[/yellow] {'DRY RUN' if dry_run else 'LIVE'}")
-    console.print(f"[yellow]Min Severity:[/yellow] {min_severity}")
-    console.print("This command will be implemented in Milestone 6")
-
-
 # ============================================================================
 # PLAN COMMANDS (Milestone 6)
 # ============================================================================
 
 plan_app = typer.Typer(help="Execution plan management")
 app.add_typer(plan_app, name="plan")
+
+# Direct Execution Commands (Milestone 7 - Phase 3)
+app.add_typer(azure_execute.app, name="execute")
+
+# Action Logs Commands (Milestone 7 - Phase 3)
+app.add_typer(azure_logs.app, name="logs")
 
 
 @plan_app.command(name="create")

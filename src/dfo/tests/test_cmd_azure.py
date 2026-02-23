@@ -609,19 +609,18 @@ def test_azure_report_all_resources_and_by_resource_exclusive(setup_env):
     assert "Cannot combine multiple view types" in result.stdout
 
 
-def test_azure_execute_stub(setup_env):
-    """Test azure execute stub command."""
-    result = runner.invoke(app, ["azure", "execute", "stop-idle-vms"])
+def test_azure_execute_subcommand_help(setup_env):
+    """Test azure execute subcommand shows help."""
+    result = runner.invoke(app, ["azure", "execute", "--help"])
     assert result.exit_code == 0
-    assert "TODO" in result.stdout
-    assert "DRY RUN" in result.stdout  # default dry run
+    assert "vm" in result.stdout
 
 
-def test_azure_execute_live_mode(setup_env):
-    """Test azure execute with live mode."""
-    result = runner.invoke(app, ["azure", "execute", "stop-idle-vms", "--no-dry-run"])
+def test_azure_execute_vm_help(setup_env):
+    """Test azure execute vm subcommand shows help."""
+    result = runner.invoke(app, ["azure", "execute", "vm", "--help"])
     assert result.exit_code == 0
-    assert "LIVE" in result.stdout
+    assert "vm-name" in result.stdout.lower() or "VM" in result.stdout
 
 
 def test_azure_help():

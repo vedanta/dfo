@@ -294,6 +294,45 @@ DRY-RUN SUMMARY:
 
 ---
 
+## 9. Quick Actions (Alternative: Direct Execution)
+
+For quick, one-off actions on 1-2 VMs, use direct execution instead of the full plan workflow:
+
+```bash
+# Enable direct execution (add to .env)
+echo "DFO_ENABLE_DIRECT_EXECUTION=true" >> .env
+
+# Preview action (dry-run, safe)
+./dfo azure execute vm expensive-test-vm stop -g test-rg
+
+# Execute with confirmation
+./dfo azure execute vm expensive-test-vm stop -g test-rg --no-dry-run
+
+# Execute with auto-confirm
+./dfo azure execute vm expensive-test-vm stop -g test-rg --no-dry-run --yes \
+  --reason "Cost optimization - unused test VM"
+
+# View action history
+./dfo azure logs list
+
+# View specific action details
+./dfo azure logs show act-20251127-143022-abc123
+```
+
+**When to use Direct Execution:**
+- ✅ Acting on 1-2 VMs only
+- ✅ Emergency cost reduction
+- ✅ Quick restart needed
+- ✅ Development/test environments
+
+**When to use Plan-Based (steps 6-8):**
+- ✅ Acting on 10+ VMs
+- ✅ Scheduled maintenance
+- ✅ Need approval workflow
+- ✅ Production environments
+
+---
+
 ## Common Commands Cheat Sheet
 
 ```bash
@@ -322,7 +361,7 @@ DRY-RUN SUMMARY:
 ./dfo azure report --format csv        # CSV export
 ./dfo azure report --severity critical # Filter by severity
 
-# Execution
+# Execution (Plan-Based - for multiple VMs)
 ./dfo azure plan create --from-analysis idle-vms  # Create plan
 ./dfo azure plan list                              # List plans
 ./dfo azure plan show <plan-id>                    # Show plan
@@ -332,6 +371,19 @@ DRY-RUN SUMMARY:
 ./dfo azure plan execute <plan-id> --force         # Live (WARNING!)
 ./dfo azure plan status <plan-id>                  # Check status
 ./dfo azure plan rollback <plan-id> --force        # Rollback
+
+# Direct Execution (Quick Actions - for 1-2 VMs)
+./dfo azure execute vm <vm-name> stop -g <rg>              # Stop VM (dry-run)
+./dfo azure execute vm <vm-name> deallocate -g <rg>        # Deallocate VM
+./dfo azure execute vm <vm-name> restart -g <rg>           # Restart VM
+./dfo azure execute vm <vm-name> downsize -g <rg> -t <sku> # Resize VM
+./dfo azure execute vm <vm-name> stop -g <rg> --no-dry-run --yes  # Live execution
+
+# Action Logs
+./dfo azure logs list                        # List recent actions
+./dfo azure logs list --vm-name <vm>         # Filter by VM
+./dfo azure logs list --executed             # Live executions only
+./dfo azure logs show <action-id>            # Show action details
 
 # Configuration
 ./dfo config               # Show config (secrets masked)
