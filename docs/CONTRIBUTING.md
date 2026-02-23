@@ -689,11 +689,15 @@ See [ROADMAP.md](/docs/ROADMAP.md) for details.
 
 Thank you to all contributors! Your contributions are greatly appreciated.
 
+### License Agreement
+
+By submitting a pull request, you agree to license your contribution under the [LGPL-3.0-or-later](../LICENSE) license.
+
 ### Attribution
 
 When you contribute to dfo:
 - You retain copyright to your contributions
-- Your contributions are licensed under the project's license
+- Your contributions are licensed under the LGPL-3.0-or-later license
 - You will be added to CONTRIBUTORS.md (future)
 - Significant contributions will be highlighted in release notes
 
