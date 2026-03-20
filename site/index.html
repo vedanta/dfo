@@ -1,0 +1,1368 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>dfo — DevFinOps CLI</title>
+  <meta name="description" content="Multi-cloud FinOps from the command line. Discover idle resources, analyze waste, and execute cost savings." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #050508;
+      --bg-2: #0a0a0f;
+      --bg-card: rgba(255,255,255,0.03);
+      --bg-card-hover: rgba(255,255,255,0.06);
+      --bg-code: #0c0c12;
+      --border: rgba(255,255,255,0.06);
+      --border-hover: rgba(255,255,255,0.12);
+      --text: #f0f0f5;
+      --text-2: #c0c0cc;
+      --text-muted: #6b6b80;
+      --blue: #4d9eff;
+      --purple: #9d7aff;
+      --green: #3ddc84;
+      --orange: #ff9d42;
+      --pink: #ff6baa;
+      --cyan: #42e8d5;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      overflow-x: hidden;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    ::selection { background: rgba(77, 158, 255, 0.3); }
+
+    /* ── Animated grid background ── */
+    .grid-bg {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      pointer-events: none;
+      background-image:
+        linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px);
+      background-size: 60px 60px;
+      mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, black 30%, transparent 100%);
+      -webkit-mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, black 30%, transparent 100%);
+    }
+
+    /* ── Orbs ── */
+    .orb {
+      position: fixed;
+      border-radius: 50%;
+      filter: blur(120px);
+      pointer-events: none;
+      z-index: 0;
+      animation: orb-drift 20s ease-in-out infinite alternate;
+    }
+    .orb-1 {
+      width: 600px; height: 600px;
+      top: -200px; left: -100px;
+      background: radial-gradient(circle, rgba(77,158,255,0.12), transparent 70%);
+    }
+    .orb-2 {
+      width: 500px; height: 500px;
+      top: -100px; right: -150px;
+      background: radial-gradient(circle, rgba(157,122,255,0.10), transparent 70%);
+      animation-delay: -7s;
+    }
+    .orb-3 {
+      width: 400px; height: 400px;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      background: radial-gradient(circle, rgba(61,220,132,0.06), transparent 70%);
+      animation-delay: -13s;
+    }
+    @keyframes orb-drift {
+      0% { transform: translate(0, 0) scale(1); }
+      100% { transform: translate(30px, 20px) scale(1.1); }
+    }
+
+    /* ── Shared ── */
+    section { position: relative; z-index: 1; }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 0 2rem;
+    }
+
+    .section-eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.15em;
+      margin-bottom: 1.25rem;
+    }
+
+    .section-eyebrow .dot {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+
+    .section-title {
+      font-size: clamp(2rem, 5vw, 3.5rem);
+      font-weight: 800;
+      letter-spacing: -0.035em;
+      line-height: 1.1;
+      margin-bottom: 1.25rem;
+    }
+
+    .section-subtitle {
+      font-size: 1.125rem;
+      color: var(--text-2);
+      line-height: 1.7;
+      max-width: 560px;
+    }
+
+    /* ── Nav ── */
+    nav {
+      position: fixed;
+      top: 0; width: 100%;
+      z-index: 1000;
+      padding: 0.75rem 2rem;
+      transition: all 0.3s;
+    }
+    nav.scrolled {
+      backdrop-filter: blur(24px) saturate(180%);
+      background: rgba(5,5,8,0.75);
+      border-bottom: 1px solid var(--border);
+    }
+    nav .inner {
+      max-width: 1200px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 48px;
+    }
+    .nav-logo {
+      font-size: 1.2rem;
+      font-weight: 900;
+      letter-spacing: -0.04em;
+      color: var(--text);
+      text-decoration: none;
+    }
+    .nav-logo span { color: var(--blue); }
+    .nav-links { display: flex; gap: 2.5rem; align-items: center; }
+    .nav-links a {
+      color: var(--text-muted);
+      text-decoration: none;
+      font-size: 0.8125rem;
+      font-weight: 500;
+      transition: color 0.2s;
+    }
+    .nav-links a:hover { color: var(--text); }
+    .nav-cta {
+      background: white !important;
+      color: var(--bg) !important;
+      padding: 0.45rem 1.2rem;
+      border-radius: 8px;
+      font-weight: 650 !important;
+      font-size: 0.8125rem !important;
+      transition: opacity 0.2s !important;
+    }
+    .nav-cta:hover { opacity: 0.85; }
+
+    /* ── Hero ── */
+    .hero {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      padding: 8rem 2rem 4rem;
+    }
+
+    .hero .container {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 4rem;
+      align-items: center;
+    }
+
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.625rem;
+      padding: 0.4rem 1rem 0.4rem 0.5rem;
+      border-radius: 100px;
+      border: 1px solid var(--border);
+      background: var(--bg-card);
+      font-size: 0.75rem;
+      color: var(--text-2);
+      font-weight: 500;
+      margin-bottom: 2rem;
+      width: fit-content;
+    }
+    .hero-badge .badge-dot {
+      width: 22px; height: 22px;
+      border-radius: 50%;
+      background: rgba(61,220,132,0.15);
+      display: flex; align-items: center; justify-content: center;
+    }
+    .hero-badge .badge-dot::after {
+      content: '';
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: var(--green);
+      animation: pulse-dot 2s ease-in-out infinite;
+    }
+    @keyframes pulse-dot {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.5; transform: scale(0.8); }
+    }
+
+    .hero h1 {
+      font-size: clamp(3rem, 5.5vw, 4.5rem);
+      font-weight: 900;
+      line-height: 1.05;
+      letter-spacing: -0.04em;
+      margin-bottom: 1.5rem;
+    }
+    .hero h1 .line-2 {
+      background: linear-gradient(135deg, var(--blue) 0%, var(--purple) 50%, var(--pink) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .hero-desc {
+      font-size: 1.125rem;
+      color: var(--text-2);
+      line-height: 1.75;
+      margin-bottom: 2.5rem;
+      max-width: 480px;
+    }
+    .hero-actions { display: flex; gap: 0.75rem; flex-wrap: wrap; }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.625rem;
+      padding: 0.8rem 1.75rem;
+      border-radius: 12px;
+      font-size: 0.9375rem;
+      font-weight: 600;
+      text-decoration: none;
+      border: none;
+      cursor: pointer;
+      transition: all 0.25s;
+      font-family: inherit;
+    }
+    .btn-white {
+      background: white;
+      color: var(--bg);
+    }
+    .btn-white:hover { transform: translateY(-2px); box-shadow: 0 8px 30px rgba(255,255,255,0.1); }
+    .btn-ghost {
+      background: transparent;
+      color: var(--text-2);
+      border: 1px solid var(--border);
+    }
+    .btn-ghost:hover { border-color: var(--border-hover); color: var(--text); background: var(--bg-card); }
+    .btn-ghost svg { opacity: 0.7; }
+
+    /* Hero terminal */
+    .hero-terminal {
+      background: var(--bg-code);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      overflow: hidden;
+      box-shadow:
+        0 0 0 1px rgba(255,255,255,0.03),
+        0 20px 60px rgba(0,0,0,0.5),
+        0 0 120px rgba(77,158,255,0.04);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.8rem;
+      line-height: 2;
+      position: relative;
+    }
+    .hero-terminal::before {
+      content: '';
+      position: absolute;
+      inset: -1px;
+      border-radius: 16px;
+      padding: 1px;
+      background: linear-gradient(160deg, rgba(77,158,255,0.15), transparent 40%, transparent 60%, rgba(157,122,255,0.1));
+      -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+      -webkit-mask-composite: xor;
+      mask-composite: exclude;
+      pointer-events: none;
+    }
+    .term-bar {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 14px 18px;
+      background: rgba(255,255,255,0.02);
+      border-bottom: 1px solid var(--border);
+    }
+    .term-dot { width: 10px; height: 10px; border-radius: 50%; }
+    .term-dot-r { background: #ff5f57; }
+    .term-dot-y { background: #febc2e; }
+    .term-dot-g { background: #28c840; }
+    .term-title {
+      flex: 1;
+      text-align: center;
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      margin-right: 40px;
+    }
+    .term-body {
+      padding: 1.25rem 1.5rem;
+      overflow: hidden;
+    }
+    .term-line { white-space: nowrap; }
+    .t-prompt { color: var(--green); }
+    .t-cmd { color: var(--text); font-weight: 500; }
+    .t-flag { color: var(--purple); }
+    .t-comment { color: #3a3a50; }
+    .t-out { color: var(--text-muted); }
+    .t-val { color: var(--blue); }
+    .t-warn { color: var(--orange); }
+    .t-ok { color: var(--green); }
+    .t-dim { opacity: 0.4; }
+
+    .term-cursor {
+      display: inline-block;
+      width: 8px; height: 16px;
+      background: var(--blue);
+      vertical-align: text-bottom;
+      animation: blink 1.1s step-end infinite;
+    }
+    @keyframes blink {
+      50% { opacity: 0; }
+    }
+
+    /* Typing animation */
+    .type-line { overflow: hidden; white-space: nowrap; width: 0; }
+    .type-line.animate { animation: type-in 0.6s steps(30) forwards; }
+    @keyframes type-in { to { width: 100%; } }
+
+    /* ── Social proof bar ── */
+    .proof-bar {
+      padding: 3rem 2rem;
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+      background: var(--bg-card);
+    }
+    .proof-bar .container {
+      display: flex;
+      justify-content: center;
+      gap: 4rem;
+      flex-wrap: wrap;
+    }
+    .proof-stat {
+      text-align: center;
+    }
+    .proof-stat .num {
+      font-size: 2rem;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      background: linear-gradient(135deg, var(--text), var(--text-2));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .proof-stat .label {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      font-weight: 500;
+      margin-top: 0.25rem;
+    }
+
+    /* ── Pipeline ── */
+    .pipeline-section {
+      padding: 8rem 2rem;
+    }
+
+    .pipeline-section .container {
+      text-align: center;
+    }
+
+    .pipeline-visual {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0;
+      margin: 4rem auto 0;
+      max-width: 850px;
+      position: relative;
+    }
+
+    .pipe-stage {
+      flex: 1;
+      position: relative;
+    }
+
+    .pipe-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 2rem 1rem;
+      text-align: center;
+      transition: all 0.3s;
+      position: relative;
+      overflow: hidden;
+    }
+    .pipe-card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 2px;
+    }
+    .pipe-card:hover {
+      border-color: var(--border-hover);
+      background: var(--bg-card-hover);
+      transform: translateY(-4px);
+    }
+    .pipe-card:hover .pipe-icon { transform: scale(1.1); }
+
+    .pipe-stage:nth-child(1) .pipe-card::before { background: linear-gradient(90deg, transparent, var(--blue)); }
+    .pipe-stage:nth-child(2) .pipe-card::before { background: linear-gradient(90deg, transparent, var(--purple)); }
+    .pipe-stage:nth-child(3) .pipe-card::before { background: linear-gradient(90deg, transparent, var(--green)); }
+    .pipe-stage:nth-child(4) .pipe-card::before { background: linear-gradient(90deg, transparent, var(--orange)); }
+
+    .pipe-icon {
+      width: 48px; height: 48px;
+      border-radius: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 1rem;
+      font-size: 1.25rem;
+      transition: transform 0.3s;
+    }
+    .pipe-stage:nth-child(1) .pipe-icon { background: rgba(77,158,255,0.1); color: var(--blue); }
+    .pipe-stage:nth-child(2) .pipe-icon { background: rgba(157,122,255,0.1); color: var(--purple); }
+    .pipe-stage:nth-child(3) .pipe-icon { background: rgba(61,220,132,0.1); color: var(--green); }
+    .pipe-stage:nth-child(4) .pipe-icon { background: rgba(255,157,66,0.1); color: var(--orange); }
+
+    .pipe-card h3 {
+      font-size: 1rem;
+      font-weight: 700;
+      margin-bottom: 0.5rem;
+    }
+    .pipe-card p {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      line-height: 1.5;
+    }
+
+    .pipe-arrow {
+      flex-shrink: 0;
+      width: 40px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--text-muted);
+      opacity: 0.25;
+      font-size: 1.25rem;
+    }
+
+    .pipe-connector {
+      text-align: center;
+      margin-top: 2rem;
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.75rem;
+    }
+    .pipe-connector svg { opacity: 0.4; }
+
+    /* ── Features bento ── */
+    .features {
+      padding: 8rem 2rem;
+    }
+
+    .bento {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      grid-template-rows: auto auto;
+      gap: 1rem;
+      margin-top: 4rem;
+    }
+
+    .bento-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 2.25rem;
+      transition: all 0.35s;
+      position: relative;
+      overflow: hidden;
+    }
+    .bento-card::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border-radius: 20px;
+      opacity: 0;
+      transition: opacity 0.35s;
+      pointer-events: none;
+    }
+    .bento-card:hover {
+      border-color: var(--border-hover);
+      transform: translateY(-2px);
+    }
+    .bento-card:hover::after { opacity: 1; }
+
+    .bento-card.wide { grid-column: span 2; }
+    .bento-card.tall { grid-row: span 2; }
+
+    .bento-card .card-icon {
+      width: 44px; height: 44px;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 1.25rem;
+    }
+
+    .bento-card h3 {
+      font-size: 1.125rem;
+      font-weight: 700;
+      margin-bottom: 0.625rem;
+      letter-spacing: -0.01em;
+    }
+    .bento-card p {
+      font-size: 0.875rem;
+      color: var(--text-2);
+      line-height: 1.65;
+    }
+    .bento-card .card-detail {
+      margin-top: 1.25rem;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      background: rgba(255,255,255,0.02);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1rem 1.25rem;
+      line-height: 1.8;
+    }
+    .card-detail .cd-prompt { color: var(--green); }
+    .card-detail .cd-cmd { color: var(--text-2); }
+    .card-detail .cd-flag { color: var(--purple); }
+
+    .bento-card.card-blue .card-icon { background: rgba(77,158,255,0.1); }
+    .bento-card.card-blue::after { background: radial-gradient(600px circle at var(--mouse-x, 50%) var(--mouse-y, 50%), rgba(77,158,255,0.04), transparent 40%); }
+    .bento-card.card-purple .card-icon { background: rgba(157,122,255,0.1); }
+    .bento-card.card-purple::after { background: radial-gradient(600px circle at var(--mouse-x, 50%) var(--mouse-y, 50%), rgba(157,122,255,0.04), transparent 40%); }
+    .bento-card.card-green .card-icon { background: rgba(61,220,132,0.1); }
+    .bento-card.card-green::after { background: radial-gradient(600px circle at var(--mouse-x, 50%) var(--mouse-y, 50%), rgba(61,220,132,0.04), transparent 40%); }
+    .bento-card.card-orange .card-icon { background: rgba(255,157,66,0.1); }
+    .bento-card.card-orange::after { background: radial-gradient(600px circle at var(--mouse-x, 50%) var(--mouse-y, 50%), rgba(255,157,66,0.04), transparent 40%); }
+    .bento-card.card-pink .card-icon { background: rgba(255,107,170,0.1); }
+    .bento-card.card-pink::after { background: radial-gradient(600px circle at var(--mouse-x, 50%) var(--mouse-y, 50%), rgba(255,107,170,0.04), transparent 40%); }
+    .bento-card.card-cyan .card-icon { background: rgba(66,232,213,0.1); }
+    .bento-card.card-cyan::after { background: radial-gradient(600px circle at var(--mouse-x, 50%) var(--mouse-y, 50%), rgba(66,232,213,0.04), transparent 40%); }
+
+    /* ── Safety section ── */
+    .safety {
+      padding: 8rem 2rem;
+    }
+    .safety .container {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 4rem;
+      align-items: center;
+    }
+    .safety-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 1.25rem;
+      margin-top: 2.5rem;
+    }
+    .safety-item {
+      display: flex;
+      gap: 1rem;
+      align-items: flex-start;
+    }
+    .safety-check {
+      flex-shrink: 0;
+      width: 28px; height: 28px;
+      border-radius: 8px;
+      background: rgba(61,220,132,0.1);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-top: 2px;
+    }
+    .safety-check svg { color: var(--green); }
+    .safety-item h4 {
+      font-size: 0.95rem;
+      font-weight: 600;
+      margin-bottom: 0.2rem;
+    }
+    .safety-item p {
+      font-size: 0.825rem;
+      color: var(--text-muted);
+      line-height: 1.5;
+    }
+
+    .safety-visual {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 2.5rem;
+      position: relative;
+      overflow: hidden;
+    }
+    .safety-visual::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, var(--green), var(--cyan));
+    }
+    .safety-flow {
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+    .sf-step {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      padding: 0.875rem 1.25rem;
+      border-radius: 12px;
+      background: rgba(255,255,255,0.02);
+      border: 1px solid var(--border);
+      font-size: 0.825rem;
+      transition: all 0.25s;
+    }
+    .sf-step:hover {
+      background: rgba(255,255,255,0.04);
+      border-color: var(--border-hover);
+    }
+    .sf-num {
+      width: 24px; height: 24px;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.7rem;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+    .sf-step:nth-child(1) .sf-num { background: rgba(77,158,255,0.15); color: var(--blue); }
+    .sf-step:nth-child(2) .sf-num { background: rgba(157,122,255,0.15); color: var(--purple); }
+    .sf-step:nth-child(3) .sf-num { background: rgba(255,157,66,0.15); color: var(--orange); }
+    .sf-step:nth-child(4) .sf-num { background: rgba(61,220,132,0.15); color: var(--green); }
+    .sf-step:nth-child(5) .sf-num { background: rgba(66,232,213,0.15); color: var(--cyan); }
+    .sf-label { color: var(--text-2); flex: 1; }
+    .sf-tag {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.65rem;
+      padding: 0.2rem 0.6rem;
+      border-radius: 6px;
+      font-weight: 600;
+    }
+    .sf-tag-safe { background: rgba(61,220,132,0.1); color: var(--green); }
+    .sf-tag-gate { background: rgba(255,157,66,0.1); color: var(--orange); }
+    .sf-tag-log { background: rgba(77,158,255,0.1); color: var(--blue); }
+
+    .sf-connector {
+      width: 1px; height: 12px;
+      background: var(--border);
+      margin-left: 2rem;
+    }
+
+    /* ── Roadmap ── */
+    .roadmap {
+      padding: 8rem 2rem;
+    }
+    .roadmap .container { text-align: center; }
+    .roadmap-grid {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 0;
+      margin-top: 4rem;
+      position: relative;
+    }
+    .roadmap-grid::before {
+      content: '';
+      position: absolute;
+      top: 28px;
+      left: 10%;
+      right: 10%;
+      height: 2px;
+      background: linear-gradient(90deg, var(--green), var(--border) 25%, var(--border));
+    }
+    .rm-item {
+      text-align: center;
+      position: relative;
+      padding: 0 0.5rem;
+    }
+    .rm-dot {
+      width: 18px; height: 18px;
+      border-radius: 50%;
+      margin: 20px auto 1.5rem;
+      position: relative;
+      z-index: 2;
+    }
+    .rm-item:nth-child(1) .rm-dot {
+      background: var(--green);
+      box-shadow: 0 0 20px rgba(61,220,132,0.4);
+    }
+    .rm-item:not(:first-child) .rm-dot {
+      background: var(--bg-2);
+      border: 2px solid rgba(255,255,255,0.12);
+    }
+    .rm-tag {
+      display: inline-block;
+      font-size: 0.65rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      padding: 0.2rem 0.6rem;
+      border-radius: 6px;
+      margin-bottom: 0.75rem;
+    }
+    .rm-tag-done { background: rgba(61,220,132,0.1); color: var(--green); }
+    .rm-tag-next { background: rgba(77,158,255,0.1); color: var(--blue); }
+    .rm-tag-plan { background: rgba(255,255,255,0.04); color: var(--text-muted); }
+    .rm-item h4 {
+      font-size: 0.9rem;
+      font-weight: 700;
+      margin-bottom: 0.4rem;
+    }
+    .rm-item p {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      line-height: 1.5;
+    }
+
+    /* ── Tech ── */
+    .tech {
+      padding: 4rem 2rem 8rem;
+    }
+    .tech .container { text-align: center; }
+    .tech-row {
+      display: flex;
+      justify-content: center;
+      gap: 1rem;
+      margin-top: 3rem;
+      flex-wrap: wrap;
+    }
+    .tech-pill {
+      display: flex;
+      align-items: center;
+      gap: 0.625rem;
+      padding: 0.6rem 1.25rem;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: var(--bg-card);
+      font-size: 0.85rem;
+      font-weight: 500;
+      color: var(--text-2);
+      transition: all 0.25s;
+    }
+    .tech-pill:hover {
+      border-color: var(--border-hover);
+      background: var(--bg-card-hover);
+    }
+    .tech-pill .tp-icon {
+      width: 28px; height: 28px;
+      border-radius: 7px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.9rem;
+    }
+    .tp-py { background: rgba(77,158,255,0.1); }
+    .tp-ty { background: rgba(157,122,255,0.1); }
+    .tp-dk { background: rgba(255,157,66,0.1); }
+    .tp-az { background: rgba(66,232,213,0.1); }
+    .tp-pd { background: rgba(255,107,170,0.1); }
+    .tp-pt { background: rgba(61,220,132,0.1); }
+
+    /* ── CTA ── */
+    .cta {
+      padding: 8rem 2rem 10rem;
+      text-align: center;
+      position: relative;
+    }
+    .cta::before {
+      content: '';
+      position: absolute;
+      bottom: 0; left: 50%;
+      transform: translateX(-50%);
+      width: 600px; height: 400px;
+      background: radial-gradient(ellipse, rgba(77,158,255,0.06), transparent 70%);
+      pointer-events: none;
+    }
+    .cta .section-title { margin: 0 auto 1rem; }
+    .cta .section-subtitle { margin: 0 auto 3rem; }
+    .cta-install {
+      display: inline-flex;
+      align-items: center;
+      gap: 1rem;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.9rem;
+      background: var(--bg-code);
+      padding: 1rem 1.75rem;
+      border-radius: 14px;
+      border: 1px solid var(--border);
+      margin-bottom: 2rem;
+      position: relative;
+    }
+    .cta-install .ci-dollar { color: var(--green); }
+    .cta-install .ci-copy {
+      background: none; border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      padding: 0.25rem;
+      border-radius: 6px;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+    }
+    .cta-install .ci-copy:hover { color: var(--text); background: rgba(255,255,255,0.05); }
+    .cta-buttons { display: flex; gap: 0.75rem; justify-content: center; flex-wrap: wrap; }
+
+    /* ── Footer ── */
+    footer {
+      border-top: 1px solid var(--border);
+      padding: 2rem;
+    }
+    footer .inner {
+      max-width: 1200px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 1rem;
+    }
+    footer .f-logo {
+      font-weight: 900;
+      font-size: 1rem;
+      letter-spacing: -0.04em;
+    }
+    footer .f-logo span { color: var(--blue); }
+    footer .f-links { display: flex; gap: 2rem; }
+    footer .f-links a {
+      color: var(--text-muted);
+      text-decoration: none;
+      font-size: 0.8rem;
+      font-weight: 500;
+      transition: color 0.2s;
+    }
+    footer .f-links a:hover { color: var(--text); }
+    footer .f-copy { color: var(--text-muted); font-size: 0.75rem; }
+
+    /* ── Scroll animations ── */
+    .reveal {
+      opacity: 0;
+      transform: translateY(30px);
+      transition: opacity 0.7s ease-out, transform 0.7s ease-out;
+    }
+    .reveal.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    /* ── Responsive ── */
+    @media (max-width: 1024px) {
+      .hero .container { grid-template-columns: 1fr; gap: 3rem; }
+      .bento { grid-template-columns: 1fr 1fr; }
+      .bento-card.wide { grid-column: span 2; }
+      .safety .container { grid-template-columns: 1fr; gap: 3rem; }
+      .roadmap-grid { grid-template-columns: repeat(3, 1fr); gap: 1.5rem; }
+      .roadmap-grid::before { display: none; }
+      .rm-item:nth-child(n+4) { margin-top: 1rem; }
+    }
+
+    @media (max-width: 768px) {
+      .hero { padding: 7rem 1.5rem 3rem; min-height: auto; }
+      .pipeline-visual { flex-direction: column; gap: 0.75rem; }
+      .pipe-arrow { transform: rotate(90deg); }
+      .bento { grid-template-columns: 1fr; }
+      .bento-card.wide { grid-column: span 1; }
+      .roadmap-grid { grid-template-columns: 1fr; gap: 1rem; }
+      .proof-bar .container { gap: 2rem; }
+      .nav-links a:not(.nav-cta) { display: none; }
+      footer .inner { flex-direction: column; text-align: center; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Background -->
+  <div class="grid-bg"></div>
+  <div class="orb orb-1"></div>
+  <div class="orb orb-2"></div>
+  <div class="orb orb-3"></div>
+
+  <!-- Nav -->
+  <nav id="nav">
+    <div class="inner">
+      <a href="#" class="nav-logo"><span>d</span>fo</a>
+      <div class="nav-links">
+        <a href="#features">Features</a>
+        <a href="#safety">Safety</a>
+        <a href="#roadmap">Roadmap</a>
+        <a href="https://github.com/vedanta/dfo" class="nav-cta">GitHub</a>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Hero -->
+  <section class="hero">
+    <div class="container">
+      <div class="hero-left">
+        <div class="hero-badge">
+          <span class="badge-dot"></span>
+          Phase 1 shipped &mdash; Azure idle VM detection
+        </div>
+        <h1>
+          Stop paying for<br/>
+          <span class="line-2">idle cloud resources.</span>
+        </h1>
+        <p class="hero-desc">
+          dfo is a CLI toolkit that discovers waste across your cloud, analyzes it, and safely executes savings &mdash; all from your terminal. No SaaS. No infra. Just results.
+        </p>
+        <div class="hero-actions">
+          <a href="https://github.com/vedanta/dfo#install" class="btn btn-white">Get Started</a>
+          <a href="https://github.com/vedanta/dfo" class="btn btn-ghost">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+            View on GitHub
+          </a>
+        </div>
+      </div>
+
+      <div class="hero-terminal">
+        <div class="term-bar">
+          <div class="term-dot term-dot-r"></div>
+          <div class="term-dot term-dot-y"></div>
+          <div class="term-dot term-dot-g"></div>
+          <div class="term-title">dfo &mdash; ~/projects/infra</div>
+        </div>
+        <div class="term-body">
+          <div class="term-line"><span class="t-comment"># Discover VMs across your subscription</span></div>
+          <div class="term-line"><span class="t-prompt">$</span> <span class="t-cmd">dfo azure discover vms</span></div>
+          <div class="term-line"><span class="t-out">Discovered <span class="t-val">47 VMs</span> across 3 resource groups</span></div>
+          <div class="term-line"><span class="t-out">Collected <span class="t-val">14 days</span> of CPU metrics</span></div>
+          <div class="term-line">&nbsp;</div>
+          <div class="term-line"><span class="t-comment"># Find the waste</span></div>
+          <div class="term-line"><span class="t-prompt">$</span> <span class="t-cmd">dfo azure analyze idle-vms</span></div>
+          <div class="term-line"><span class="t-out">Found <span class="t-warn">12 idle VMs</span> &mdash; avg CPU &lt;5% over 14 days</span></div>
+          <div class="term-line">&nbsp;</div>
+          <div class="term-line"><span class="t-comment"># See what you'll save</span></div>
+          <div class="term-line"><span class="t-prompt">$</span> <span class="t-cmd">dfo azure report</span></div>
+          <div class="term-line"><span class="t-out">Estimated monthly savings: <span class="t-ok">$2,340.00</span></span></div>
+          <div class="term-line">&nbsp;</div>
+          <div class="term-line"><span class="t-comment"># Safe by default</span></div>
+          <div class="term-line"><span class="t-prompt">$</span> <span class="t-cmd">dfo azure execute vm idle-web-03 stop</span> <span class="t-flag">-g prod-rg</span></div>
+          <div class="term-line"><span class="t-out"><span class="t-dim">[dry-run]</span> Would stop <span class="t-val">idle-web-03</span></span></div>
+          <div class="term-line">&nbsp;</div>
+          <div class="term-line"><span class="t-prompt">$</span> <span class="term-cursor"></span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Proof bar -->
+  <section class="proof-bar">
+    <div class="container">
+      <div class="proof-stat">
+        <div class="num">35+</div>
+        <div class="label">CLI Commands</div>
+      </div>
+      <div class="proof-stat">
+        <div class="num">700+</div>
+        <div class="label">Tests Passing</div>
+      </div>
+      <div class="proof-stat">
+        <div class="num">3</div>
+        <div class="label">Analyzers</div>
+      </div>
+      <div class="proof-stat">
+        <div class="num">4</div>
+        <div class="label">Report Formats</div>
+      </div>
+      <div class="proof-stat">
+        <div class="num">0</div>
+        <div class="label">External Dependencies</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Pipeline -->
+  <section class="pipeline-section reveal">
+    <div class="container">
+      <div class="section-eyebrow" style="color: var(--cyan); justify-content: center;">
+        <span class="dot" style="background: var(--cyan);"></span>
+        Architecture
+      </div>
+      <div class="section-title" style="text-align: center;">A pipeline that makes sense</div>
+      <p class="section-subtitle" style="text-align: center; margin: 0 auto;">
+        Four stages, each independent, each writing to a local DuckDB store. No stage directly calls another &mdash; data flows through the database.
+      </p>
+
+      <div class="pipeline-visual">
+        <div class="pipe-stage">
+          <div class="pipe-card">
+            <div class="pipe-icon">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            </div>
+            <h3>Discover</h3>
+            <p>Inventory VMs, pull CPU metrics from Azure Monitor</p>
+          </div>
+        </div>
+        <div class="pipe-arrow">&rarr;</div>
+        <div class="pipe-stage">
+          <div class="pipe-card">
+            <div class="pipe-icon">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20V10"/><path d="M18 20V4"/><path d="M6 20v-4"/></svg>
+            </div>
+            <h3>Analyze</h3>
+            <p>Flag idle, low-CPU, and stopped VMs with savings estimates</p>
+          </div>
+        </div>
+        <div class="pipe-arrow">&rarr;</div>
+        <div class="pipe-stage">
+          <div class="pipe-card">
+            <div class="pipe-icon">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+            </div>
+            <h3>Report</h3>
+            <p>Console tables, JSON, or CSV &mdash; filter by rule or resource</p>
+          </div>
+        </div>
+        <div class="pipe-arrow">&rarr;</div>
+        <div class="pipe-stage">
+          <div class="pipe-card">
+            <div class="pipe-icon">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+            </div>
+            <h3>Execute</h3>
+            <p>Stop or resize VMs with dry-run, approvals, and rollback</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="pipe-connector">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
+        All data stored locally in DuckDB &mdash; zero external infrastructure
+      </div>
+    </div>
+  </section>
+
+  <!-- Features -->
+  <section class="features reveal" id="features">
+    <div class="container">
+      <div class="section-eyebrow" style="color: var(--blue);">
+        <span class="dot" style="background: var(--blue);"></span>
+        Features
+      </div>
+      <div class="section-title">Built for engineers<br/>who hate waste.</div>
+      <p class="section-subtitle">Not another dashboard you'll forget to check. dfo lives in your terminal, runs in seconds, and shows you exactly where money is burning.</p>
+
+      <div class="bento">
+        <!-- Card 1: Idle Detection (wide) -->
+        <div class="bento-card wide card-blue">
+          <div class="card-icon" style="color: var(--blue);">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          </div>
+          <h3>Three Analyzers, One Pipeline</h3>
+          <p>Idle VM detection (&lt;5% CPU), low-CPU rightsizing (&lt;20% CPU), and stopped VM cleanup (30+ days). Each analyzer writes to its own table. Run one, run all &mdash; they never interfere.</p>
+          <div class="card-detail">
+            <span class="cd-prompt">$</span> <span class="cd-cmd">dfo azure analyze idle-vms</span><br/>
+            <span class="cd-prompt">$</span> <span class="cd-cmd">dfo azure analyze low-cpu</span><br/>
+            <span class="cd-prompt">$</span> <span class="cd-cmd">dfo azure analyze stopped-vms</span>
+          </div>
+        </div>
+
+        <!-- Card 2: Reports -->
+        <div class="bento-card card-green">
+          <div class="card-icon" style="color: var(--green);">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+          </div>
+          <h3>Flexible Reports</h3>
+          <p>Console, JSON, CSV. Filter by rule, by resource, or see everything. Pipe to jq, export for stakeholders, or feed into your own scripts.</p>
+          <div class="card-detail">
+            <span class="cd-prompt">$</span> <span class="cd-cmd">dfo azure report</span> <span class="cd-flag">--format csv</span>
+          </div>
+        </div>
+
+        <!-- Card 3: Local-first -->
+        <div class="bento-card card-orange">
+          <div class="card-icon" style="color: var(--orange);">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
+          </div>
+          <h3>100% Local</h3>
+          <p>DuckDB embedded database. No cloud accounts, no SaaS subscriptions, no data leaving your machine. Install and run in under 5 minutes.</p>
+        </div>
+
+        <!-- Card 4: Execution -->
+        <div class="bento-card card-purple">
+          <div class="card-icon" style="color: var(--purple);">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+          </div>
+          <h3>Direct or Planned</h3>
+          <p>Quick-stop a single VM, or create batch plans with validation, approval gates, and one-click rollback. Your call.</p>
+        </div>
+
+        <!-- Card 5: Audit -->
+        <div class="bento-card card-cyan">
+          <div class="card-icon" style="color: var(--cyan);">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          </div>
+          <h3>Full Audit Trail</h3>
+          <p>Every action &mdash; including dry-runs &mdash; is logged with timestamp, user, and result. Query the log anytime.</p>
+          <div class="card-detail">
+            <span class="cd-prompt">$</span> <span class="cd-cmd">dfo azure logs list</span> <span class="cd-flag">--vm-name my-vm</span>
+          </div>
+        </div>
+
+        <!-- Card 6: Pricing -->
+        <div class="bento-card card-pink">
+          <div class="card-icon" style="color: var(--pink);">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+          </div>
+          <h3>Real Pricing</h3>
+          <p>Savings estimates use the Azure Retail Pricing API &mdash; not hardcoded guesses. See actual dollars before you act.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Safety -->
+  <section class="safety reveal" id="safety">
+    <div class="container">
+      <div>
+        <div class="section-eyebrow" style="color: var(--green);">
+          <span class="dot" style="background: var(--green);"></span>
+          Safety First
+        </div>
+        <div class="section-title">Designed so you<br/>can't break prod.</div>
+        <p class="section-subtitle">
+          Cloud cost tools that skip safety end up costing more than the waste they find. dfo puts guardrails at every step.
+        </p>
+
+        <ul class="safety-list">
+          <li class="safety-item">
+            <div class="safety-check">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
+            </div>
+            <div>
+              <h4>Dry-run by default</h4>
+              <p>Every execution command is a dry-run unless you explicitly opt in.</p>
+            </div>
+          </li>
+          <li class="safety-item">
+            <div class="safety-check">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
+            </div>
+            <div>
+              <h4>Protection tags</h4>
+              <p>Tag any VM with <code style="color:var(--green); font-family:'JetBrains Mono',monospace; font-size:0.8rem;">dfo-protected=true</code> to block all actions.</p>
+            </div>
+          </li>
+          <li class="safety-item">
+            <div class="safety-check">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
+            </div>
+            <div>
+              <h4>Approval workflows</h4>
+              <p>Batch plans require explicit validation and approval before execution.</p>
+            </div>
+          </li>
+          <li class="safety-item">
+            <div class="safety-check">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
+            </div>
+            <div>
+              <h4>Instant rollback</h4>
+              <p>Undo any action with a single command. Every change is reversible.</p>
+            </div>
+          </li>
+        </ul>
+      </div>
+
+      <div class="safety-visual">
+        <div class="safety-flow">
+          <div class="sf-step">
+            <div class="sf-num">1</div>
+            <div class="sf-label">Create execution plan from analysis</div>
+            <div class="sf-tag sf-tag-safe">safe</div>
+          </div>
+          <div class="sf-connector"></div>
+          <div class="sf-step">
+            <div class="sf-num">2</div>
+            <div class="sf-label">Validate &mdash; check VM state, tags, permissions</div>
+            <div class="sf-tag sf-tag-gate">gate</div>
+          </div>
+          <div class="sf-connector"></div>
+          <div class="sf-step">
+            <div class="sf-num">3</div>
+            <div class="sf-label">Approve &mdash; explicit human sign-off</div>
+            <div class="sf-tag sf-tag-gate">gate</div>
+          </div>
+          <div class="sf-connector"></div>
+          <div class="sf-step">
+            <div class="sf-num">4</div>
+            <div class="sf-label">Execute with full audit logging</div>
+            <div class="sf-tag sf-tag-log">logged</div>
+          </div>
+          <div class="sf-connector"></div>
+          <div class="sf-step">
+            <div class="sf-num">5</div>
+            <div class="sf-label">Rollback available at any time</div>
+            <div class="sf-tag sf-tag-safe">safe</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Roadmap -->
+  <section class="roadmap reveal" id="roadmap">
+    <div class="container">
+      <div class="section-eyebrow" style="color: var(--orange); justify-content: center;">
+        <span class="dot" style="background: var(--orange);"></span>
+        Roadmap
+      </div>
+      <div class="section-title">Where we're headed</div>
+
+      <div class="roadmap-grid">
+        <div class="rm-item">
+          <div class="rm-dot"></div>
+          <div class="rm-tag rm-tag-done">Complete</div>
+          <h4>MVP</h4>
+          <p>Azure idle VMs, DuckDB, analysis, reports, safe execution</p>
+        </div>
+        <div class="rm-item">
+          <div class="rm-dot"></div>
+          <div class="rm-tag rm-tag-next">Next</div>
+          <h4>Enhanced Azure</h4>
+          <p>Resource Graph, storage, unattached disks, Advisor</p>
+        </div>
+        <div class="rm-item">
+          <div class="rm-dot"></div>
+          <div class="rm-tag rm-tag-plan">Planned</div>
+          <h4>Multi-Cloud</h4>
+          <p>AWS EC2, CloudWatch, Cost Explorer, unified schema</p>
+        </div>
+        <div class="rm-item">
+          <div class="rm-dot"></div>
+          <div class="rm-tag rm-tag-plan">Planned</div>
+          <h4>Automation</h4>
+          <p>YAML pipelines, scheduling, Slack &amp; Teams alerts</p>
+        </div>
+        <div class="rm-item">
+          <div class="rm-dot"></div>
+          <div class="rm-tag rm-tag-plan">Planned</div>
+          <h4>Platform</h4>
+          <p>Web dashboard, REST API, LLM-powered insights</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Tech -->
+  <section class="tech reveal">
+    <div class="container">
+      <div class="section-eyebrow" style="color: var(--text-muted); justify-content: center;">
+        <span class="dot" style="background: var(--text-muted);"></span>
+        Stack
+      </div>
+      <div class="section-title" style="text-align: center; font-size: clamp(1.5rem, 3vw, 2rem);">Minimal. Modern. No bloat.</div>
+      <div class="tech-row">
+        <div class="tech-pill"><div class="tp-icon tp-py">&#x1f40d;</div> Python 3.10+</div>
+        <div class="tech-pill"><div class="tp-icon tp-ty">&#x2328;</div> Typer + Rich</div>
+        <div class="tech-pill"><div class="tp-icon tp-dk">&#x1f986;</div> DuckDB</div>
+        <div class="tech-pill"><div class="tp-icon tp-az">&#x2601;</div> Azure SDK</div>
+        <div class="tech-pill"><div class="tp-icon tp-pd">&#x2699;</div> Pydantic</div>
+        <div class="tech-pill"><div class="tp-icon tp-pt">&#x2705;</div> pytest</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CTA -->
+  <section class="cta reveal">
+    <div class="container">
+      <div class="section-title">Start saving in five minutes.</div>
+      <p class="section-subtitle">
+        Open source. Runs on your machine. No accounts. No data leaves your environment.
+      </p>
+      <div class="cta-install">
+        <span class="ci-dollar">$</span>
+        <span>pip install -e .</span>
+        <button class="ci-copy" onclick="navigator.clipboard.writeText('pip install -e .');this.innerHTML='&#10003;';setTimeout(()=>this.innerHTML='&#x2398;',1500)" title="Copy to clipboard">&#x2398;</button>
+      </div>
+      <br/>
+      <div class="cta-buttons">
+        <a href="https://github.com/vedanta/dfo#install" class="btn btn-white">Read the Quickstart</a>
+        <a href="https://github.com/vedanta/dfo" class="btn btn-ghost">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+          Star on GitHub
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer>
+    <div class="inner">
+      <div class="f-logo"><span>d</span>fo</div>
+      <div class="f-links">
+        <a href="https://github.com/vedanta/dfo">GitHub</a>
+        <a href="https://github.com/vedanta/dfo/blob/main/QUICKSTART.md">Quickstart</a>
+        <a href="https://github.com/vedanta/dfo/blob/main/USER_GUIDE.md">Docs</a>
+        <a href="https://github.com/vedanta/dfo/blob/main/LICENSE">License</a>
+      </div>
+      <div class="f-copy">LGPL-3.0 &middot; Built by engineers, for engineers</div>
+    </div>
+  </footer>
+
+  <script>
+    // Navbar scroll effect
+    const nav = document.getElementById('nav');
+    window.addEventListener('scroll', () => {
+      nav.classList.toggle('scrolled', window.scrollY > 20);
+    }, { passive: true });
+
+    // Scroll reveal
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(e => {
+        if (e.isIntersecting) {
+          e.target.classList.add('visible');
+          observer.unobserve(e.target);
+        }
+      });
+    }, { threshold: 0.1, rootMargin: '0px 0px -60px 0px' });
+
+    document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+
+    // Bento card mouse glow
+    document.querySelectorAll('.bento-card').forEach(card => {
+      card.addEventListener('mousemove', (e) => {
+        const r = card.getBoundingClientRect();
+        card.style.setProperty('--mouse-x', `${e.clientX - r.left}px`);
+        card.style.setProperty('--mouse-y', `${e.clientY - r.top}px`);
+      });
+    });
+  </script>
+</body>
+</html>
